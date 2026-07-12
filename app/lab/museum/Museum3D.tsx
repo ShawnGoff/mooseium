@@ -1,0 +1,987 @@
+"use client";
+
+// The 3D museum as ONE connected, walkable world.
+// Structure: Entrance → Atrium → Wings → Galleries → Art.
+//   • The atrium is the central hall you walk into. Up to three wings open off
+//     it (left / ahead / right), each reached down a short corridor.
+//   • Each wing is a room; its galleries (the curator's collections) open off
+//     its outward walls as rooms you walk into.
+//   • Everything is a single continuous space — no scene swaps. The Directory
+//     teleports you straight to any gallery.
+// Isolated under /lab; reads ?u=<handle>.
+
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Canvas, useFrame } from "@react-three/fiber";
+import { Text, MeshReflectorMaterial } from "@react-three/drei";
+import {
+  Player,
+  ProxyArtwork,
+  JoystickPad,
+  EYE_Y,
+  ART_Y,
+  MUSEUM_LABEL,
+  type Piece,
+  type GalleryPiece,
+  type Constrain,
+} from "../gallery3d";
+
+type Collection = { name: string; slug: string; count: number };
+type Wing = { name: string; collections: Collection[]; isDefault?: boolean };
+type Museum = { name: string; curator: string; handle: string; wings: Wing[] };
+
+// ---- dimensions (metres) ----
+const A = 7; // atrium half-size
+const H = 6; // wall height
+const DOORH = 3.6; // doorway height
+const CORR_HALF = 1.8; // corridor half-width
+const DOOR_HALF = 1.5; // doorway half-width
+const WING_HALF = 5; // wing room half-size
+const COLL_HALF = 4.5; // gallery room half-size
+const ATR_WING_CORR = 10; // atrium→wing corridor length (spaces the wings out)
+const WING_COLL_CORR = 3; // wing→gallery corridor length
+const VEST_HALF = 4; // entrance vestibule half-width
+const VEST_LEN = 10; // entrance vestibule depth
+const ENTR_HALF = 2; // entrance doorway half-width
+const EPS = 0.03; // wall inset so shared walls don't z-fight
+const INSET = 0.4; // walkable inset from walls
+const BRIDGE = 0.75; // half-depth of a doorway's walkable bridge
+
+type Side = "N" | "S" | "E" | "W"; // N=-z, S=+z, E=+x, W=-x
+type AABB = { x0: number; x1: number; z0: number; z1: number };
+type Room = { rect: AABB; gaps: { side: Side; lo: number; hi: number }[] };
+type LabelSpec = { text: string; pos: [number, number, number]; rot: [number, number, number]; size: number };
+// A gallery room: its slug, the room rectangle, which wall is the doorway
+// (entrySide) and which is the far/feature wall, plus where the single preview
+// piece hangs when the full collection isn't loaded.
+type GalleryBuild = {
+  slug: string;
+  name: string;
+  room: AABB;
+  entrySide: Side;
+  previewPos: [number, number, number];
+  previewRot: [number, number, number];
+};
+type Nav = { wing: string; name: string; spawn: [number, number, number]; yaw: number };
+type Hint = { pos: [number, number, number]; rot: [number, number, number] };
+type Layout = {
+  rooms: Room[];
+  walk: AABB[];
+  labels: LabelSpec[];
+  galleries: GalleryBuild[];
+  lights: [number, number][];
+  nav: Nav[];
+  hints: Hint[];
+};
+
+// Roman inscriptional serif for the signage — the lettering carved over real
+// museum entrances. troika loads this .woff at runtime (falls back gracefully).
+const MUSEUM_FONT =
+  "https://cdn.jsdelivr.net/npm/@fontsource/cinzel@5.2.8/files/cinzel-latin-600-normal.woff";
+
+const rect = (x0: number, x1: number, z0: number, z1: number): AABB => ({ x0, x1, z0, z1 });
+const inset = (a: AABB, d: number): AABB => rect(a.x0 + d, a.x1 - d, a.z0 + d, a.z1 - d);
+const ctrX = (a: AABB) => (a.x0 + a.x1) / 2;
+const ctrZ = (a: AABB) => (a.z0 + a.z1) / 2;
+const opp = (s: Side): Side => (s === "N" ? "S" : s === "S" ? "N" : s === "W" ? "E" : "W");
+
+function neighbor(from: AABB, side: Side, len: number, half: number): AABB {
+  const mx = ctrX(from);
+  const mz = ctrZ(from);
+  if (side === "N") return rect(mx - half, mx + half, from.z0 - len, from.z0);
+  if (side === "S") return rect(mx - half, mx + half, from.z1, from.z1 + len);
+  if (side === "W") return rect(from.x0 - len, from.x0, mz - half, mz + half);
+  return rect(from.x1, from.x1 + len, mz - half, mz + half); // E
+}
+
+// Cut a doorway between two adjacent rooms and add a walkable bridge across it.
+function open(a: Room, b: Room, side: Side, half: number, walk: AABB[]) {
+  if (side === "N" || side === "S") {
+    const c = (Math.max(a.rect.x0, b.rect.x0) + Math.min(a.rect.x1, b.rect.x1)) / 2;
+    const boundary = side === "N" ? a.rect.z0 : a.rect.z1;
+    a.gaps.push({ side, lo: c - half, hi: c + half });
+    b.gaps.push({ side: opp(side), lo: c - half, hi: c + half });
+    walk.push(rect(c - (half - 0.2), c + (half - 0.2), boundary - BRIDGE, boundary + BRIDGE));
+  } else {
+    const c = (Math.max(a.rect.z0, b.rect.z0) + Math.min(a.rect.z1, b.rect.z1)) / 2;
+    const boundary = side === "W" ? a.rect.x0 : a.rect.x1;
+    a.gaps.push({ side, lo: c - half, hi: c + half });
+    b.gaps.push({ side: opp(side), lo: c - half, hi: c + half });
+    walk.push(rect(boundary - BRIDGE, boundary + BRIDGE, c - (half - 0.2), c + (half - 0.2)));
+  }
+}
+
+// A corridor poking out of `from`, opening into a room. Returns the room.
+function connect(
+  rooms: Room[],
+  walk: AABB[],
+  from: Room,
+  side: Side,
+  corrLen: number,
+  roomHalf: number
+): Room {
+  const corr: Room = { rect: neighbor(from.rect, side, corrLen, CORR_HALF), gaps: [] };
+  const room: Room = { rect: neighbor(corr.rect, side, 2 * roomHalf, roomHalf), gaps: [] };
+  rooms.push(corr, room);
+  open(from, corr, side, DOOR_HALF, walk);
+  open(corr, room, side, DOOR_HALF, walk);
+  walk.push(inset(corr.rect, 0.4));
+  walk.push(inset(room.rect, INSET));
+  return room;
+}
+
+// Which outward walls of a wing hold galleries (never the wall facing the atrium).
+function collectionSides(wingSide: Side): Side[] {
+  if (wingSide === "W") return ["W", "N", "S"];
+  if (wingSide === "N") return ["N", "W", "E"];
+  return ["E", "N", "S"]; // E
+}
+
+const faceRot = (side: Side): [number, number, number] =>
+  side === "N"
+    ? [0, 0, 0]
+    : side === "S"
+    ? [0, Math.PI, 0]
+    : side === "W"
+    ? [0, Math.PI / 2, 0]
+    : [0, -Math.PI / 2, 0];
+
+const outwardYaw = (side: Side) =>
+  side === "N" ? 0 : side === "S" ? Math.PI : side === "W" ? Math.PI / 2 : -Math.PI / 2;
+
+function buildMuseum(m: Museum): Layout {
+  const rooms: Room[] = [];
+  const walk: AABB[] = [];
+  const labels: LabelSpec[] = [];
+  const galleries: GalleryBuild[] = [];
+  const lights: [number, number][] = [[0, 0]];
+  const nav: Nav[] = [];
+
+  const atrium: Room = { rect: rect(-A, A, -A, A), gaps: [] };
+  rooms.push(atrium);
+  walk.push(inset(atrium.rect, INSET));
+
+  // entrance vestibule (south)
+  const vest: Room = { rect: neighbor(atrium.rect, "S", VEST_LEN, VEST_HALF), gaps: [] };
+  rooms.push(vest);
+  open(atrium, vest, "S", ENTR_HALF, walk);
+  walk.push(inset(vest.rect, INSET));
+
+  // museum name above the entrance, facing the arriving visitor
+  labels.push({
+    text: m.name.toUpperCase(),
+    pos: [0, DOORH + 0.5, A + 0.06],
+    rot: [0, 0, 0],
+    size: 0.4,
+  });
+
+  // Placement: the default wing (unfiled collections) always anchors the centre;
+  // named wings open to the left, then the right. (Extra named wings beyond that
+  // spill into the Directory.) If there's no default wing, named wings fill
+  // left / centre / right.
+  const defaultWing = m.wings.find((w) => w.isDefault) ?? null;
+  const namedWings = m.wings.filter((w) => !w.isDefault);
+  const placements: { wing: Wing; side: Side }[] = [];
+  if (defaultWing) {
+    placements.push({ wing: defaultWing, side: "N" });
+    (["W", "E"] as Side[]).forEach((s, i) => {
+      if (namedWings[i]) placements.push({ wing: namedWings[i], side: s });
+    });
+  } else {
+    (["W", "N", "E"] as Side[]).forEach((s, i) => {
+      if (namedWings[i]) placements.push({ wing: namedWings[i], side: s });
+    });
+  }
+
+  // A placard on each atrium wall that isn't a wing yet, guiding the curator to
+  // open it by creating another wing.
+  const hints: Hint[] = [];
+  const usedSides = new Set<Side>(placements.map((p) => p.side));
+  (["W", "N", "E"] as Side[]).forEach((side) => {
+    if (usedSides.has(side)) return;
+    const y = 2.35;
+    if (side === "W") hints.push({ pos: [-A + 0.06, y, 0], rot: [0, Math.PI / 2, 0] });
+    else if (side === "N") hints.push({ pos: [0, y, -A + 0.06], rot: [0, 0, 0] });
+    else hints.push({ pos: [A - 0.06, y, 0], rot: [0, -Math.PI / 2, 0] });
+  });
+
+  placements.forEach(({ wing, side }) => {
+    const wingRoom = connect(rooms, walk, atrium, side, ATR_WING_CORR, WING_HALF);
+    lights.push([ctrX(wingRoom.rect), ctrZ(wingRoom.rect)]);
+
+    // wing name above its atrium door, facing the atrium interior
+    const wl =
+      side === "W"
+        ? { pos: [-A + 0.06, DOORH + 0.4, 0] as [number, number, number], rot: [0, Math.PI / 2, 0] as [number, number, number] }
+        : side === "N"
+        ? { pos: [0, DOORH + 0.4, -A + 0.06] as [number, number, number], rot: [0, 0, 0] as [number, number, number] }
+        : { pos: [A - 0.06, DOORH + 0.4, 0] as [number, number, number], rot: [0, -Math.PI / 2, 0] as [number, number, number] };
+    labels.push({ text: wing.name.toUpperCase(), pos: wl.pos, rot: wl.rot, size: 0.34 });
+
+    const cSides = collectionSides(side);
+    wing.collections.forEach((coll, j) => {
+      if (j >= 3) {
+        // overflow: teleport to the wing itself
+        nav.push({
+          wing: wing.name,
+          name: coll.name,
+          spawn: [ctrX(wingRoom.rect), EYE_Y, ctrZ(wingRoom.rect)],
+          yaw: outwardYaw(side),
+        });
+        return;
+      }
+      const cs = cSides[j];
+      const room = connect(rooms, walk, wingRoom, cs, WING_COLL_CORR, COLL_HALF);
+      lights.push([ctrX(room.rect), ctrZ(room.rect)]);
+      const r = room.rect;
+
+      // gallery name on the wing wall, over the doorway, facing into the wing
+      const wr = wingRoom.rect;
+      const gl: LabelSpec =
+        cs === "N"
+          ? { text: coll.name, pos: [ctrX(wr), DOORH + 0.3, wr.z0 + 0.06], rot: [0, 0, 0], size: 0.28 }
+          : cs === "S"
+          ? { text: coll.name, pos: [ctrX(wr), DOORH + 0.3, wr.z1 - 0.06], rot: [0, Math.PI, 0], size: 0.28 }
+          : cs === "W"
+          ? { text: coll.name, pos: [wr.x0 + 0.06, DOORH + 0.3, ctrZ(wr)], rot: [0, Math.PI / 2, 0], size: 0.28 }
+          : { text: coll.name, pos: [wr.x1 - 0.06, DOORH + 0.3, ctrZ(wr)], rot: [0, -Math.PI / 2, 0], size: 0.28 };
+      labels.push(gl);
+
+      // preview artwork on the gallery's far wall (shown until the full
+      // collection streams in as you approach)
+      const previewPos: [number, number, number] =
+        cs === "N"
+          ? [ctrX(r), ART_Y, r.z0 + 0.12]
+          : cs === "S"
+          ? [ctrX(r), ART_Y, r.z1 - 0.12]
+          : cs === "W"
+          ? [r.x0 + 0.12, ART_Y, ctrZ(r)]
+          : [r.x1 - 0.12, ART_Y, ctrZ(r)];
+      galleries.push({
+        slug: coll.slug,
+        name: coll.name,
+        room: r,
+        entrySide: opp(cs),
+        previewPos,
+        previewRot: faceRot(cs),
+      });
+
+      // teleport target: just inside the doorway, facing the far wall
+      const spawn: [number, number, number] =
+        cs === "N"
+          ? [ctrX(r), EYE_Y, r.z1 - 1.8]
+          : cs === "S"
+          ? [ctrX(r), EYE_Y, r.z0 + 1.8]
+          : cs === "W"
+          ? [r.x1 - 1.8, EYE_Y, ctrZ(r)]
+          : [r.x0 + 1.8, EYE_Y, ctrZ(r)];
+      nav.push({ wing: wing.name, name: coll.name, spawn, yaw: outwardYaw(cs) });
+    });
+  });
+
+  return { rooms, walk, labels, galleries, lights, nav, hints };
+}
+
+// Distribute a collection's pieces across the three non-doorway walls of a
+// gallery room, spacing by each piece's real width, centred per wall.
+function hangRoom(
+  room: AABB,
+  entrySide: Side,
+  pieces: GalleryPiece[]
+): { position: [number, number, number]; rotation: [number, number, number] }[] {
+  const M = 1.1; // corner margin
+  const sides = (["N", "S", "W", "E"] as Side[]).filter((s) => s !== entrySide);
+  const bins = sides.map((side) => {
+    const horiz = side === "N" || side === "S";
+    const a = horiz ? room.x0 + M : room.z0 + M;
+    const b = horiz ? room.x1 - M : room.z1 - M;
+    const place = (c: number, y: number) => {
+      const position: [number, number, number] =
+        side === "N"
+          ? [c, y, room.z0 + 0.12]
+          : side === "S"
+          ? [c, y, room.z1 - 0.12]
+          : side === "W"
+          ? [room.x0 + 0.12, y, c]
+          : [room.x1 - 0.12, y, c];
+      return { position, rotation: faceRot(side) };
+    };
+    return { a, b, len: b - a, place, items: [] as number[], used: 0 };
+  });
+  const sizeOf = (p: GalleryPiece) =>
+    p.realW && p.realH
+      ? { w: Math.min(4.2, Math.max(0.35, p.realW)), h: Math.min(3.6, Math.max(0.35, p.realH)) }
+      : { w: 2.0, h: 1.6 };
+  const GAP = 1.1;
+  pieces.forEach((p, i) => {
+    const w = sizeOf(p).w;
+    let best = 0;
+    let bestScore = Infinity;
+    bins.forEach((bin, k) => {
+      const need = bin.used + (bin.items.length ? GAP : 0) + w;
+      const score = need / bin.len;
+      if (score < bestScore) {
+        bestScore = score;
+        best = k;
+      }
+    });
+    bins[best].used += (bins[best].items.length ? GAP : 0) + w;
+    bins[best].items.push(i);
+  });
+  const out: { position: [number, number, number]; rotation: [number, number, number] }[] =
+    new Array(pieces.length);
+  bins.forEach((bin) => {
+    const total =
+      bin.items.reduce((s, i) => s + sizeOf(pieces[i]).w, 0) +
+      GAP * Math.max(0, bin.items.length - 1);
+    let cursor = (bin.a + bin.b) / 2 - total / 2;
+    for (const i of bin.items) {
+      const { w, h } = sizeOf(pieces[i]);
+      const c = cursor + w / 2;
+      cursor += w + GAP;
+      out[i] = bin.place(c, Math.max(ART_Y, h / 2 + 0.35));
+    }
+  });
+  return out;
+}
+
+// Full-collection loader for one gallery. Fetches (and caches) the pieces and
+// hangs them; ProxyArtwork disposes its textures on unmount, freeing VRAM.
+const pieceCache = new Map<string, GalleryPiece[]>();
+function GalleryFull({
+  gallery,
+  onSelect,
+}: {
+  gallery: GalleryBuild;
+  onSelect: (p: Piece) => void;
+}) {
+  const [pieces, setPieces] = useState<GalleryPiece[] | null>(
+    pieceCache.get(gallery.slug) ?? null
+  );
+  useEffect(() => {
+    if (pieceCache.has(gallery.slug)) {
+      setPieces(pieceCache.get(gallery.slug)!);
+      return;
+    }
+    let cancelled = false;
+    fetch(`/api/gallery-pieces?slug=${encodeURIComponent(gallery.slug)}`)
+      .then((r) => r.json())
+      .then((d) => {
+        if (cancelled) return;
+        const ps = ((d.pieces ?? []) as GalleryPiece[]).slice(0, 9);
+        pieceCache.set(gallery.slug, ps);
+        setPieces(ps);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [gallery.slug]);
+  const spots = useMemo(
+    () => (pieces ? hangRoom(gallery.room, gallery.entrySide, pieces) : []),
+    [pieces, gallery]
+  );
+  if (!pieces) return null;
+  return (
+    <>
+      {pieces.map((p, i) => (
+        <ProxyArtwork
+          key={i}
+          piece={p}
+          position={spots[i].position}
+          rotation={spots[i].rotation}
+          onSelect={onSelect}
+        />
+      ))}
+    </>
+  );
+}
+
+// Watches the player's position and decides which galleries are "hot" (full
+// collection mounted). Hysteresis + a hot-count cap keep VRAM bounded.
+function Streamer({
+  galleries,
+  posRef,
+  cap,
+  onChange,
+}: {
+  galleries: GalleryBuild[];
+  posRef: React.MutableRefObject<{ x: number; z: number }>;
+  cap: number;
+  onChange: (slugs: string[]) => void;
+}) {
+  const acc = useRef(0);
+  const cur = useRef("");
+  useFrame((_, dt) => {
+    acc.current += dt;
+    if (acc.current < 0.25) return;
+    acc.current = 0;
+    const p = posRef.current;
+    const LOAD_IN = 14;
+    const LOAD_OUT = 22;
+    const withD = galleries.map((g) => ({
+      slug: g.slug,
+      d: Math.hypot(p.x - ctrX(g.room), p.z - ctrZ(g.room)),
+    }));
+    const prev = new Set(cur.current ? cur.current.split("|") : []);
+    const next = new Set<string>();
+    withD.forEach((w) => {
+      if (prev.has(w.slug) && w.d < LOAD_OUT) next.add(w.slug);
+      if (w.d < LOAD_IN) next.add(w.slug);
+    });
+    let arr = [...next];
+    if (arr.length > cap) {
+      arr = arr
+        .map((s) => ({ s, d: withD.find((w) => w.slug === s)!.d }))
+        .sort((a, b) => a.d - b.d)
+        .slice(0, cap)
+        .map((x) => x.s);
+    }
+    const key = [...arr].sort().join("|");
+    if (key !== cur.current) {
+      cur.current = key;
+      onChange(arr);
+    }
+  });
+  return null;
+}
+
+// Wall segments around any number of doorway gaps along a straight wall.
+function segmentsMulti(a: number, b: number, gaps: { lo: number; hi: number }[]) {
+  const sorted = [...gaps].sort((p, q) => p.lo - q.lo);
+  const segs: { center: number; len: number }[] = [];
+  let cur = a;
+  for (const g of sorted) {
+    if (g.lo - cur > 0.1) segs.push({ center: (cur + g.lo) / 2, len: g.lo - cur });
+    cur = Math.max(cur, g.hi);
+  }
+  if (b - cur > 0.1) segs.push({ center: (cur + b) / 2, len: b - cur });
+  return segs;
+}
+
+function WallSide({
+  axis,
+  fixed,
+  a,
+  b,
+  gaps,
+}: {
+  axis: "x" | "z";
+  fixed: number;
+  a: number;
+  b: number;
+  gaps: { lo: number; hi: number }[];
+}) {
+  const segs = segmentsMulti(a, b, gaps);
+  return (
+    <>
+      {segs.map((s, i) =>
+        axis === "x" ? (
+          <group key={i}>
+            <mesh position={[s.center, H / 2, fixed]}>
+              <planeGeometry args={[s.len, H]} />
+              <meshStandardMaterial color="#e7e3db" side={2} />
+            </mesh>
+            <mesh position={[s.center, 0.09, fixed]}>
+              <boxGeometry args={[s.len, 0.18, 0.07]} />
+              <meshStandardMaterial color="#c9c2b6" />
+            </mesh>
+            <mesh position={[s.center, H - 0.1, fixed]}>
+              <boxGeometry args={[s.len, 0.14, 0.07]} />
+              <meshStandardMaterial color="#f2efe8" />
+            </mesh>
+          </group>
+        ) : (
+          <group key={i}>
+            <mesh position={[fixed, H / 2, s.center]} rotation={[0, Math.PI / 2, 0]}>
+              <planeGeometry args={[s.len, H]} />
+              <meshStandardMaterial color="#e7e3db" side={2} />
+            </mesh>
+            <mesh position={[fixed, 0.09, s.center]}>
+              <boxGeometry args={[0.07, 0.18, s.len]} />
+              <meshStandardMaterial color="#c9c2b6" />
+            </mesh>
+            <mesh position={[fixed, H - 0.1, s.center]}>
+              <boxGeometry args={[0.07, 0.14, s.len]} />
+              <meshStandardMaterial color="#f2efe8" />
+            </mesh>
+          </group>
+        )
+      )}
+      {gaps.map((g, i) => {
+        const c = (g.lo + g.hi) / 2;
+        const w = g.hi - g.lo;
+        return axis === "x" ? (
+          <mesh key={"l" + i} position={[c, (DOORH + H) / 2, fixed]}>
+            <planeGeometry args={[w, H - DOORH]} />
+            <meshStandardMaterial color="#e7e3db" side={2} />
+          </mesh>
+        ) : (
+          <mesh key={"l" + i} position={[fixed, (DOORH + H) / 2, c]} rotation={[0, Math.PI / 2, 0]}>
+            <planeGeometry args={[w, H - DOORH]} />
+            <meshStandardMaterial color="#e7e3db" side={2} />
+          </mesh>
+        );
+      })}
+    </>
+  );
+}
+
+function RoomMesh({ room }: { room: Room }) {
+  const R = room.rect;
+  const r = inset(R, EPS);
+  const g = (s: Side) => room.gaps.filter((x) => x.side === s).map((x) => ({ lo: x.lo, hi: x.hi }));
+  return (
+    <>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[ctrX(R), 0, ctrZ(R)]}>
+        <planeGeometry args={[R.x1 - R.x0, R.z1 - R.z0]} />
+        <meshStandardMaterial color="#cfc9c0" roughness={0.6} metalness={0} />
+      </mesh>
+      <mesh rotation={[Math.PI / 2, 0, 0]} position={[ctrX(R), H, ctrZ(R)]}>
+        <planeGeometry args={[R.x1 - R.x0, R.z1 - R.z0]} />
+        <meshStandardMaterial color="#efece6" />
+      </mesh>
+      <WallSide axis="x" fixed={r.z0} a={r.x0} b={r.x1} gaps={g("N")} />
+      <WallSide axis="x" fixed={r.z1} a={r.x0} b={r.x1} gaps={g("S")} />
+      <WallSide axis="z" fixed={r.x0} a={r.z0} b={r.z1} gaps={g("W")} />
+      <WallSide axis="z" fixed={r.x1} a={r.z0} b={r.z1} gaps={g("E")} />
+    </>
+  );
+}
+
+// A wall placard on an unopened wing wall, nudging the curator to create a wing.
+function HintSign({ pos, rot }: Hint) {
+  return (
+    <group position={pos} rotation={rot}>
+      <mesh position={[0, 0, 0.02]}>
+        <planeGeometry args={[3.9, 2.0]} />
+        <meshStandardMaterial color="#c7b892" />
+      </mesh>
+      <mesh position={[0, 0, 0.03]}>
+        <planeGeometry args={[3.6, 1.7]} />
+        <meshStandardMaterial color="#f3eee2" emissive="#caa25c" emissiveIntensity={0.18} />
+      </mesh>
+      <Text
+        font={MUSEUM_FONT}
+        position={[0, 0.28, 0.06]}
+        fontSize={0.24}
+        color="#3a332e"
+        anchorX="center"
+        anchorY="middle"
+        maxWidth={3.0}
+        textAlign="center"
+        letterSpacing={0.02}
+        lineHeight={1.25}
+      >
+        Add more galleries to open up this wing
+      </Text>
+      <Text position={[0, -0.55, 0.06]} fontSize={0.15} color="#6a6157" anchorX="center" anchorY="middle" maxWidth={3.3} textAlign="center">
+        Assign a collection to a new wing on its page
+      </Text>
+    </group>
+  );
+}
+
+function Scene({
+  layout,
+  previews,
+  hot,
+  reflect,
+  onSelect,
+}: {
+  layout: Layout;
+  previews: Record<string, GalleryPiece | null>;
+  hot: string[];
+  reflect: boolean;
+  onSelect: (p: Piece) => void;
+}) {
+  return (
+    <>
+      {/* Sky-vs-floor gradient (cool top, warm bounce) replaces flat ambient */}
+      <hemisphereLight args={["#e9ecf2", "#bdb4a6", 0.55]} />
+      {/* Key + cool fill to model form */}
+      <directionalLight position={[0, 12, 8]} intensity={2.2} color="#fff3e0" />
+      <directionalLight position={[-8, 10, -6]} intensity={0.6} color="#dfe6f0" />
+      {/* Per-room warmth: atrium neutral & bright, galleries warm */}
+      {layout.lights.map(([x, z], i) => (
+        <pointLight
+          key={i}
+          position={[x, H - 0.6, z]}
+          intensity={i === 0 ? 18 : 14}
+          distance={i === 0 ? 44 : 26}
+          decay={2}
+          color={i === 0 ? "#fff4e4" : "#ffe6bd"}
+        />
+      ))}
+      {/* Atrium skylight: a glowing ceiling panel over the entrance hall */}
+      <mesh position={[0, H - 0.03, 0]} rotation={[Math.PI / 2, 0, 0]}>
+        <planeGeometry args={[6, 6]} />
+        <meshStandardMaterial color="#f4f8ff" emissive="#dfeaff" emissiveIntensity={0.7} />
+      </mesh>
+      {/* Polished atrium floor — one reflection pass, desktop only */}
+      {reflect && (
+        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.012, 0]}>
+          <planeGeometry args={[A * 2 - 0.4, A * 2 - 0.4]} />
+          <MeshReflectorMaterial
+            resolution={512}
+            mixBlur={8}
+            mixStrength={0.35}
+            blur={[300, 80]}
+            minDepthThreshold={0.9}
+            maxDepthThreshold={1.1}
+            depthScale={1}
+            roughness={0.9}
+            color="#cfc9c0"
+            metalness={0}
+          />
+        </mesh>
+      )}
+
+      {layout.rooms.map((room, i) => (
+        <RoomMesh key={i} room={room} />
+      ))}
+
+      {layout.hints.map((h, i) => (
+        <HintSign key={i} pos={h.pos} rot={h.rot} />
+      ))}
+
+      {layout.labels.map((l, i) => (
+        <Text
+          key={i}
+          font={MUSEUM_FONT}
+          position={l.pos}
+          rotation={l.rot}
+          fontSize={l.size}
+          color="#2a2320"
+          anchorX="center"
+          anchorY="middle"
+          maxWidth={6}
+          textAlign="center"
+          letterSpacing={0.04}
+        >
+          {l.text}
+        </Text>
+      ))}
+
+      {layout.galleries.map((g) => {
+        if (hot.includes(g.slug)) {
+          return <GalleryFull key={g.slug} gallery={g} onSelect={onSelect} />;
+        }
+        const piece = previews[g.slug];
+        if (!piece) return null;
+        return (
+          <ProxyArtwork
+            key={g.slug}
+            piece={{ ...piece, realW: undefined, realH: undefined }}
+            position={g.previewPos}
+            rotation={g.previewRot}
+            onSelect={onSelect}
+          />
+        );
+      })}
+    </>
+  );
+}
+
+function Directory({ nav, onPick, onHome }: { nav: Nav[]; onPick: (i: number) => void; onHome: () => void }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div style={{ position: "absolute", top: 14, right: 14, textAlign: "right" }}>
+      <button onClick={() => setOpen((o) => !o)} style={dirBtnStyle}>
+        Directory {open ? "▴" : "▾"}
+      </button>
+      {open && (
+        <div style={dirPanelStyle}>
+          <button onClick={onHome} style={{ ...dirItemStyle, color: "#d8bd85" }}>
+            ⌂ Entrance
+          </button>
+          {nav.map((n, i) => (
+            <button key={i} onClick={() => onPick(i)} style={dirItemStyle}>
+              <span style={{ color: "#a8a09a", fontSize: 11 }}>{n.wing}</span>
+              <span>{n.name}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+const ENTRANCE_SPAWN: [number, number, number] = [0, EYE_Y, A + VEST_LEN - 2];
+
+export default function Museum3D({ handle }: { handle?: string } = {}) {
+  const [museum, setMuseum] = useState<Museum | null>(null);
+  const [view, setView] = useState<"loading" | "ready" | "empty">("loading");
+  const [previews, setPreviews] = useState<Record<string, GalleryPiece | null>>({});
+  const [selected, setSelected] = useState<Piece | null>(null);
+  const [isTouch, setIsTouch] = useState(false);
+  const [hot, setHot] = useState<string[]>([]);
+  const [tp, setTp] = useState<{ spawn: [number, number, number]; yaw: number; k: number }>({
+    spawn: ENTRANCE_SPAWN,
+    yaw: 0,
+    k: 0,
+  });
+  const dragRef = useRef(false);
+  const joyRef = useRef({ x: 0, y: 0 });
+  const posRef = useRef({ x: ENTRANCE_SPAWN[0], z: ENTRANCE_SPAWN[2] });
+
+  const layout = useMemo(() => (museum ? buildMuseum(museum) : null), [museum]);
+  const constrain: Constrain = useMemo(() => {
+    if (!layout) return (nx, nz) => ({ x: nx, z: nz });
+    const walk = layout.walk;
+    const ok = (x: number, z: number) =>
+      walk.some((a) => x > a.x0 && x < a.x1 && z > a.z0 && z < a.z1);
+    return (nx, nz, px, pz) => {
+      if (ok(nx, nz)) return { x: nx, z: nz };
+      if (ok(nx, pz)) return { x: nx, z: pz };
+      if (ok(px, nz)) return { x: px, z: nz };
+      return { x: px, z: pz };
+    };
+  }, [layout]);
+
+  useEffect(() => {
+    setIsTouch("ontouchstart" in window || navigator.maxTouchPoints > 0);
+    const h = handle ?? new URLSearchParams(window.location.search).get("u");
+    if (!h) {
+      setView("empty");
+      return;
+    }
+    fetch(`/api/museum?u=${encodeURIComponent(h)}`)
+      .then((r) => r.json())
+      .then((d) => {
+        const m = d.museum as Museum | null;
+        if (m && Array.isArray(m.wings) && m.wings.length > 0) {
+          setMuseum(m);
+          setView("ready");
+        } else {
+          setView("empty");
+        }
+      })
+      .catch(() => setView("empty"));
+  }, [handle]);
+
+  // Load one preview piece per gallery room.
+  useEffect(() => {
+    if (!layout) return;
+    let cancelled = false;
+    const slugs = Array.from(new Set(layout.galleries.map((g) => g.slug)));
+    slugs.forEach((slug) => {
+      fetch(`/api/gallery-pieces?slug=${encodeURIComponent(slug)}`)
+        .then((r) => r.json())
+        .then((pd) => {
+          if (cancelled) return;
+          setPreviews((p) => ({ ...p, [slug]: (pd.pieces?.[0] as GalleryPiece) ?? null }));
+        })
+        .catch(() => {});
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [layout]);
+
+  const handleSelect = (p: Piece) => {
+    if (!dragRef.current) setSelected(p);
+  };
+  const teleport = (spawn: [number, number, number], yaw: number) => {
+    // Update the tracked position immediately so the streamer loads the
+    // destination gallery before the remounted Player starts reporting.
+    posRef.current = { x: spawn[0], z: spawn[2] };
+    setTp((t) => ({ spawn, yaw, k: t.k + 1 }));
+  };
+
+  return (
+    <div
+      style={{
+        position: "relative",
+        width: "100%",
+        height: "calc(100vh - 60px)",
+        touchAction: "none",
+        background: "#eceae4",
+      }}
+    >
+      <Canvas camera={{ fov: 52, position: tp.spawn }} gl={{ toneMappingExposure: 1.08 }}>
+        <color attach="background" args={["#eceae4"]} />
+        <fogExp2 attach="fog" args={["#e6e3dc", 0.014]} />
+        {layout && (
+          <Scene
+            layout={layout}
+            previews={previews}
+            hot={hot}
+            reflect={!isTouch}
+            onSelect={handleSelect}
+          />
+        )}
+        {layout && (
+          <Streamer
+            galleries={layout.galleries}
+            posRef={posRef}
+            cap={isTouch ? 1 : 2}
+            onChange={setHot}
+          />
+        )}
+        {layout && (
+          <Player
+            key={tp.k}
+            dragRef={dragRef}
+            joyRef={joyRef}
+            spawn={tp.spawn}
+            spawnYaw={tp.yaw}
+            constrain={constrain}
+            posRef={posRef}
+          />
+        )}
+      </Canvas>
+
+      {isTouch && view === "ready" && <JoystickPad joyRef={joyRef} />}
+
+      <div style={panelStyle}>
+        <strong>{museum?.name ?? "Museum"}</strong>
+        <div style={{ opacity: 0.85 }}>
+          {view === "ready"
+            ? `${isTouch ? "Joystick to walk · drag to look" : "WASD to walk · drag to look"} · wings open left, ahead & right · Directory jumps anywhere`
+            : "Loading…"}
+        </div>
+      </div>
+
+      {view === "ready" && layout && layout.nav.length > 0 && (
+        <Directory
+          nav={layout.nav}
+          onPick={(i) => teleport(layout.nav[i].spawn, layout.nav[i].yaw)}
+          onHome={() => teleport(ENTRANCE_SPAWN, 0)}
+        />
+      )}
+
+      {view === "empty" && (
+        <div style={centerStyle}>
+          No public galleries here yet. Publish a collection to open this museum.
+        </div>
+      )}
+      {view === "loading" && <div style={centerStyle}>Loading the museum…</div>}
+
+      {selected && (
+        <div style={cardStyle}>
+          <div style={{ fontWeight: 700, fontSize: 16, lineHeight: 1.25 }}>{selected.title}</div>
+          {selected.artist && (
+            <div style={{ color: "#d8bd85", fontSize: 14, marginTop: 2 }}>{selected.artist}</div>
+          )}
+          {(selected.dateText || selected.culture || selected.medium) && (
+            <div style={{ color: "#a8a09a", fontSize: 13, marginTop: 6 }}>
+              {[selected.dateText, selected.culture, selected.medium].filter(Boolean).join("  ·  ")}
+            </div>
+          )}
+          {selected.description && (
+            <div
+              style={{
+                fontSize: 13,
+                lineHeight: 1.5,
+                marginTop: 10,
+                maxHeight: 150,
+                overflowY: "auto",
+                color: "#ece6da",
+              }}
+            >
+              {selected.description}
+            </div>
+          )}
+          <div style={{ display: "flex", alignItems: "center", gap: 14, marginTop: 12 }}>
+            <button onClick={() => setSelected(null)} style={closeBtnStyle}>
+              Close
+            </button>
+            {selected.sourceUrl && (
+              <a
+                href={selected.sourceUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ color: "#d8bd85", fontSize: 13 }}
+              >
+                View at{" "}
+                {selected.museum ? MUSEUM_LABEL[selected.museum] ?? "the museum" : "the museum"} ↗
+              </a>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+const panelStyle: React.CSSProperties = {
+  position: "absolute",
+  top: 14,
+  left: 14,
+  background: "rgba(20,18,16,0.72)",
+  color: "#f3efe9",
+  padding: "10px 14px",
+  borderRadius: 10,
+  fontSize: 13,
+  maxWidth: 320,
+  lineHeight: 1.5,
+};
+const dirBtnStyle: React.CSSProperties = {
+  background: "rgba(20,18,16,0.72)",
+  color: "#f3efe9",
+  border: "1px solid #4a423b",
+  borderRadius: 8,
+  padding: "8px 14px",
+  cursor: "pointer",
+  fontSize: 14,
+};
+const dirPanelStyle: React.CSSProperties = {
+  marginTop: 8,
+  background: "rgba(20,18,16,0.92)",
+  border: "1px solid #4a423b",
+  borderRadius: 10,
+  padding: 6,
+  maxHeight: "62vh",
+  overflowY: "auto",
+  minWidth: 210,
+  display: "flex",
+  flexDirection: "column",
+  gap: 2,
+};
+const dirItemStyle: React.CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  alignItems: "flex-start",
+  gap: 1,
+  background: "none",
+  border: "none",
+  color: "#f3efe9",
+  textAlign: "left",
+  padding: "8px 12px",
+  borderRadius: 7,
+  cursor: "pointer",
+  fontSize: 14,
+  width: "100%",
+};
+const centerStyle: React.CSSProperties = {
+  position: "absolute",
+  top: "50%",
+  left: "50%",
+  transform: "translate(-50%, -50%)",
+  background: "rgba(20,18,16,0.82)",
+  color: "#f3efe9",
+  padding: "14px 20px",
+  borderRadius: 12,
+  fontSize: 14,
+  textAlign: "center",
+  maxWidth: "80%",
+};
+const cardStyle: React.CSSProperties = {
+  position: "absolute",
+  bottom: 20,
+  left: "50%",
+  transform: "translateX(-50%)",
+  background: "rgba(20,18,16,0.9)",
+  color: "#f3efe9",
+  padding: "16px 20px",
+  borderRadius: 14,
+  width: "min(460px, 90vw)",
+};
+const closeBtnStyle: React.CSSProperties = {
+  background: "none",
+  border: "1px solid #4a423b",
+  color: "#f3efe9",
+  borderRadius: 8,
+  padding: "5px 14px",
+  cursor: "pointer",
+};

@@ -174,23 +174,17 @@ function buildMuseum(m: Museum): Layout {
     size: 0.4,
   });
 
-  // Placement: the default wing (unfiled collections) always anchors the centre;
-  // named wings open to the left, then the right. (Extra named wings beyond that
-  // spill into the Directory.) If there's no default wing, named wings fill
-  // left / centre / right.
+  // Placement: the CENTRE door fills first, so the first wing is straight ahead
+  // as you walk in; left and right open up as more wings are added. The default
+  // "unfiled" wing takes the centre when it exists; otherwise the first wing the
+  // curator created does. (A 4th+ wing spills into the Directory.)
   const defaultWing = m.wings.find((w) => w.isDefault) ?? null;
   const namedWings = m.wings.filter((w) => !w.isDefault);
-  const placements: { wing: Wing; side: Side }[] = [];
-  if (defaultWing) {
-    placements.push({ wing: defaultWing, side: "N" });
-    (["W", "E"] as Side[]).forEach((s, i) => {
-      if (namedWings[i]) placements.push({ wing: namedWings[i], side: s });
-    });
-  } else {
-    (["W", "N", "E"] as Side[]).forEach((s, i) => {
-      if (namedWings[i]) placements.push({ wing: namedWings[i], side: s });
-    });
-  }
+  const ordered = defaultWing ? [defaultWing, ...namedWings] : namedWings;
+  const CENTER_FIRST: Side[] = ["N", "W", "E"];
+  const placements: { wing: Wing; side: Side }[] = ordered
+    .slice(0, 3)
+    .map((wing, i) => ({ wing, side: CENTER_FIRST[i] }));
 
   // A placard on each atrium wall that isn't a wing yet, guiding the curator to
   // open it by creating another wing.

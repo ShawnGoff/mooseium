@@ -18,7 +18,12 @@ export async function PATCH(
     return NextResponse.json({ error: "Supabase is not configured." }, { status: 500 });
   }
 
-  let body: { name?: string; guestbookEnabled?: boolean; wing?: string | null };
+  let body: {
+    name?: string;
+    guestbookEnabled?: boolean;
+    wing?: string | null;
+    inMuseum?: boolean;
+  };
   try {
     body = await req.json();
   } catch {
@@ -38,6 +43,9 @@ export async function PATCH(
   }
   if (typeof body.wing === "string" || body.wing === null) {
     patch.wing = (body.wing ?? "").trim() || null;
+  }
+  if (typeof body.inMuseum === "boolean") {
+    patch.in_museum = body.inMuseum;
   }
 
   const supabase = await createClient();

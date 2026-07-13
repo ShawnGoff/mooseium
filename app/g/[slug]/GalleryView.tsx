@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Placard, { type PlacardArtwork } from "@/app/components/Placard";
 import ReportModal from "@/app/components/ReportModal";
+import SaveModal, { type SaveCard } from "@/app/components/SaveModal";
 import GuestBook, { type GuestEntry } from "./GuestBook";
 
 export type GalleryPiece = PlacardArtwork & {
@@ -40,6 +41,7 @@ export default function GalleryView({
   savedByViewer: boolean;
 }) {
   const [selected, setSelected] = useState<GalleryPiece | null>(null);
+  const [saveCard, setSaveCard] = useState<SaveCard | null>(null);
   const [notes, setNotes] = useState<Record<string, string | undefined>>({});
   const [saved, setSaved] = useState(savedByViewer);
   const [savingGallery, setSavingGallery] = useState(false);
@@ -160,9 +162,23 @@ export default function GalleryView({
           onNoteSaved={(note) =>
             setNotes((n) => ({ ...n, [selected.artworkId]: note }))
           }
+          onSave={
+            signedIn && !editable && selected.sourceMuseum && selected.museumObjectId
+              ? () => {
+                  setSaveCard({
+                    sourceMuseum: selected.sourceMuseum!,
+                    museumObjectId: selected.museumObjectId!,
+                    title: selected.title,
+                  });
+                  setSelected(null);
+                }
+              : undefined
+          }
           onClose={() => setSelected(null)}
         />
       )}
+
+      {saveCard && <SaveModal card={saveCard} onClose={() => setSaveCard(null)} />}
 
       {reportOpen && (
         <ReportModal

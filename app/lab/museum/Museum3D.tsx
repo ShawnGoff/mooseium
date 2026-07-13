@@ -11,6 +11,7 @@
 // Isolated under /lab; reads ?u=<handle>.
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import * as THREE from "three";
 import { Canvas, useFrame } from "@react-three/fiber";
 import { Text, MeshReflectorMaterial } from "@react-three/drei";
 import {
@@ -520,15 +521,59 @@ function WallSide({
   );
 }
 
+// Procedural hardwood floor texture (warm oak planks), generated once.
+let _wood: THREE.Texture | null = null;
+function woodTexture(): THREE.Texture {
+  if (_wood) return _wood;
+  const c = document.createElement("canvas");
+  c.width = 256;
+  c.height = 256;
+  const ctx = c.getContext("2d")!;
+  const shade = ["#6e4d31", "#664729", "#725033", "#5e4028"];
+  for (let i = 0; i < 4; i++) {
+    ctx.fillStyle = shade[i % shade.length];
+    ctx.fillRect(i * 64, 0, 64, 256);
+    ctx.strokeStyle = "rgba(0,0,0,0.28)";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(i * 64, 0);
+    ctx.lineTo(i * 64, 256);
+    ctx.stroke();
+    ctx.strokeStyle = "rgba(0,0,0,0.07)";
+    ctx.lineWidth = 1;
+    for (let g = 0; g < 8; g++) {
+      const x = i * 64 + 5 + g * 7;
+      ctx.beginPath();
+      ctx.moveTo(x, 0);
+      ctx.bezierCurveTo(x + 3, 90, x - 3, 170, x + 2, 256);
+      ctx.stroke();
+    }
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.anisotropy = 8;
+  _wood = t;
+  return t;
+}
+
 function RoomMesh({ room }: { room: Room }) {
   const R = room.rect;
   const r = inset(R, EPS);
+  const floorTex = useMemo(() => {
+    const t = woodTexture().clone();
+    t.wrapS = t.wrapT = THREE.RepeatWrapping;
+    t.repeat.set((R.x1 - R.x0) / 2.2, (R.z1 - R.z0) / 2.2);
+    t.needsUpdate = true;
+    return t;
+  }, [R.x0, R.x1, R.z0, R.z1]);
+  useEffect(() => () => floorTex.dispose(), [floorTex]);
   const g = (s: Side) => room.gaps.filter((x) => x.side === s).map((x) => ({ lo: x.lo, hi: x.hi }));
   return (
     <>
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[ctrX(R), 0, ctrZ(R)]}>
         <planeGeometry args={[R.x1 - R.x0, R.z1 - R.z0]} />
-        <meshStandardMaterial color="#cfc9c0" roughness={0.6} metalness={0} />
+        <meshStandardMaterial map={floorTex} roughness={0.55} metalness={0} />
       </mesh>
       <mesh rotation={[Math.PI / 2, 0, 0]} position={[ctrX(R), H, ctrZ(R)]}>
         <planeGeometry args={[R.x1 - R.x0, R.z1 - R.z0]} />
@@ -580,23 +625,26 @@ function Scene({
   previews,
   hot,
   reflect,
+  lowPower,
   onSelect,
 }: {
   layout: Layout;
   previews: Record<string, GalleryPiece | null>;
   hot: string[];
   reflect: boolean;
+  lowPower: boolean;
   onSelect: (p: Piece) => void;
 }) {
   return (
     <>
       {/* Sky-vs-floor gradient (cool top, warm bounce) replaces flat ambient */}
-      <hemisphereLight args={["#e9ecf2", "#bdb4a6", 0.55]} />
+      <hemisphereLight args={["#e9ecf2", "#bdb4a6", lowPower ? 0.78 : 0.55]} />
       {/* Key + cool fill to model form */}
       <directionalLight position={[0, 12, 8]} intensity={2.2} color="#fff3e0" />
       <directionalLight position={[-8, 10, -6]} intensity={0.6} color="#dfe6f0" />
-      {/* Per-room warmth: atrium neutral & bright, galleries warm */}
-      {layout.lights.map(([x, z], i) => (
+      {/* Per-room warmth: atrium neutral & bright, galleries warm. On phones we
+          cap the point-light count (ambient is lifted to compensate). */}
+      {(lowPower ? layout.lights.slice(0, 6) : layout.lights).map(([x, z], i) => (
         <pointLight
           key={i}
           position={[x, H - 0.6, z]}
@@ -623,8 +671,8 @@ function Scene({
             minDepthThreshold={0.9}
             maxDepthThreshold={1.1}
             depthScale={1}
-            roughness={0.9}
-            color="#cfc9c0"
+            roughness={0.85}
+            color="#5c3f28"
             metalness={0}
           />
         </mesh>
@@ -707,7 +755,11 @@ export default function Museum3D({ handle }: { handle?: string } = {}) {
   const [view, setView] = useState<"loading" | "ready" | "empty">("loading");
   const [previews, setPreviews] = useState<Record<string, GalleryPiece | null>>({});
   const [selected, setSelected] = useState<Piece | null>(null);
-  const [isTouch, setIsTouch] = useState(false);
+  const [isTouch] = useState(
+    () =>
+      typeof window !== "undefined" &&
+      ("ontouchstart" in window || navigator.maxTouchPoints > 0)
+  );
   const [hot, setHot] = useState<string[]>([]);
   const [tp, setTp] = useState<{ spawn: [number, number, number]; yaw: number; k: number }>({
     spawn: ENTRANCE_SPAWN,
@@ -717,6 +769,19 @@ export default function Museum3D({ handle }: { handle?: string } = {}) {
   const dragRef = useRef(false);
   const joyRef = useRef({ x: 0, y: 0 });
   const posRef = useRef({ x: ENTRANCE_SPAWN[0], z: ENTRANCE_SPAWN[2] });
+  const audioRef = useRef<HTMLAudioElement>(null);
+  const [musicOn, setMusicOn] = useState(false);
+  const toggleMusic = () => {
+    const a = audioRef.current;
+    if (!a) return;
+    if (musicOn) {
+      a.pause();
+      setMusicOn(false);
+    } else {
+      a.volume = 0.32;
+      a.play().then(() => setMusicOn(true)).catch(() => {});
+    }
+  };
 
   const layout = useMemo(() => (museum ? buildMuseum(museum) : null), [museum]);
   const constrain: Constrain = useMemo(() => {
@@ -733,7 +798,6 @@ export default function Museum3D({ handle }: { handle?: string } = {}) {
   }, [layout]);
 
   useEffect(() => {
-    setIsTouch("ontouchstart" in window || navigator.maxTouchPoints > 0);
     const h = handle ?? new URLSearchParams(window.location.search).get("u");
     if (!h) {
       setView("empty");
@@ -792,7 +856,11 @@ export default function Museum3D({ handle }: { handle?: string } = {}) {
         background: "#eceae4",
       }}
     >
-      <Canvas camera={{ fov: 52, position: tp.spawn }} gl={{ toneMappingExposure: 1.08 }}>
+      <Canvas
+        camera={{ fov: 52, position: tp.spawn }}
+        gl={{ toneMappingExposure: 1.08, powerPreference: "high-performance" }}
+        dpr={isTouch ? 1 : [1, 2]}
+      >
         <color attach="background" args={["#eceae4"]} />
         <fogExp2 attach="fog" args={["#e6e3dc", 0.014]} />
         {layout && (
@@ -801,6 +869,7 @@ export default function Museum3D({ handle }: { handle?: string } = {}) {
             previews={previews}
             hot={hot}
             reflect={!isTouch}
+            lowPower={isTouch}
             onSelect={handleSelect}
           />
         )}
@@ -827,11 +896,19 @@ export default function Museum3D({ handle }: { handle?: string } = {}) {
 
       {isTouch && view === "ready" && <JoystickPad joyRef={joyRef} />}
 
+      {/* Soft background music — add a file at public/museum-music.mp3 */}
+      <audio ref={audioRef} loop preload="none" src="/museum-music.mp3" />
+      {view === "ready" && (
+        <button onClick={toggleMusic} style={musicBtnStyle} aria-label="Toggle music">
+          {musicOn ? "🔊 Music on" : "🔈 Music off"}
+        </button>
+      )}
+
       <div style={panelStyle}>
         <strong>{museum?.name ?? "Museum"}</strong>
         <div style={{ opacity: 0.85 }}>
           {view === "ready"
-            ? `${isTouch ? "Joystick to walk · drag to look" : "WASD to walk · drag to look"} · wings open left, ahead & right · Directory jumps anywhere`
+            ? `${isTouch ? "Joystick to walk · drag to look" : "WASD to walk · drag to look"} · wings open ahead, then left & right · Directory jumps anywhere`
             : "Loading…"}
         </div>
       </div>
@@ -852,7 +929,28 @@ export default function Museum3D({ handle }: { handle?: string } = {}) {
       {view === "loading" && <div style={centerStyle}>Loading the museum…</div>}
 
       {selected && (
-        <div style={cardStyle}>
+        <div
+          style={
+            isTouch
+              ? { ...cardStyle, bottom: 150, maxHeight: "58vh", width: "92vw" }
+              : cardStyle
+          }
+        >
+          {selected.image && (
+            /* eslint-disable-next-line @next/next/no-img-element */
+            <img
+              src={`/api/img?url=${encodeURIComponent(selected.image)}`}
+              alt={selected.title}
+              style={{
+                width: "100%",
+                maxHeight: isTouch ? "34vh" : "48vh",
+                objectFit: "contain",
+                borderRadius: 8,
+                background: "#0d0b09",
+                marginBottom: 12,
+              }}
+            />
+          )}
           <div style={{ fontWeight: 700, fontSize: 16, lineHeight: 1.25 }}>{selected.title}</div>
           {selected.artist && (
             <div style={{ color: "#d8bd85", fontSize: 14, marginTop: 2 }}>{selected.artist}</div>
@@ -909,6 +1007,18 @@ const panelStyle: React.CSSProperties = {
   fontSize: 13,
   maxWidth: 320,
   lineHeight: 1.5,
+};
+const musicBtnStyle: React.CSSProperties = {
+  position: "absolute",
+  bottom: 14,
+  right: 14,
+  background: "rgba(20,18,16,0.72)",
+  color: "#f3efe9",
+  border: "1px solid #4a423b",
+  borderRadius: 8,
+  padding: "8px 14px",
+  cursor: "pointer",
+  fontSize: 14,
 };
 const dirBtnStyle: React.CSSProperties = {
   background: "rgba(20,18,16,0.72)",
@@ -970,6 +1080,8 @@ const cardStyle: React.CSSProperties = {
   padding: "16px 20px",
   borderRadius: 14,
   width: "min(460px, 90vw)",
+  maxHeight: "88vh",
+  overflowY: "auto",
 };
 const closeBtnStyle: React.CSSProperties = {
   background: "none",

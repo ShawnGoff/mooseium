@@ -12,6 +12,7 @@ import { isSupabaseConfigured } from "@/lib/supabase/client";
 type GalRow = {
   name: string;
   user_id: string;
+  in_museum: boolean | null;
   updated_at: string | null;
   placed_artworks: {
     sort_order: number;
@@ -39,7 +40,7 @@ export async function GET() {
   const { data: gals } = await supabase
     .from("galleries")
     .select(
-      "name, user_id, updated_at, placed_artworks(sort_order, section, artworks(image_thumb_url, image_medium_url))"
+      "name, user_id, in_museum, updated_at, placed_artworks(sort_order, section, artworks(image_thumb_url, image_medium_url))"
     )
     .eq("is_public", true)
     .not("share_slug", "is", null)
@@ -56,7 +57,7 @@ export async function GET() {
   for (const g of rows) {
     const uid = g.user_id;
     const pieces = g.placed_artworks ?? [];
-    if (!uid || pieces.length === 0) continue;
+    if (!uid || pieces.length === 0 || g.in_museum === false) continue;
     let m = byUser.get(uid);
     if (!m) {
       m = { galleryCount: 0, pieceCount: 0 };

@@ -63,7 +63,7 @@ export default async function CollectionDetailPage({
 
   const { data: gallery } = await supabase
     .from("galleries")
-    .select("id, name, is_public, share_slug, guestbook_enabled, wing")
+    .select("id, name, is_public, share_slug, guestbook_enabled, wing, in_museum")
     .eq("id", id)
     .eq("user_id", user.id)
     .single();
@@ -128,6 +128,7 @@ export default async function CollectionDetailPage({
       initialSlug={gallery.share_slug ?? null}
       initialGuestbookEnabled={gallery.guestbook_enabled ?? true}
       initialWing={(gallery as { wing: string | null }).wing ?? null}
+      initialInMuseum={(gallery as { in_museum: boolean | null }).in_museum ?? true}
       existingWings={wingNames}
       initialPieces={pieces}
     />

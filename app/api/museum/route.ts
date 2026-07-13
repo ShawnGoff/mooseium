@@ -21,6 +21,7 @@ type GalleryRow = {
   name: string;
   share_slug: string | null;
   wing: string | null;
+  in_museum: boolean | null;
   created_at: string;
   placed_artworks: { id: string }[];
 };
@@ -52,7 +53,7 @@ export async function GET(req: NextRequest) {
 
   const { data: galleries } = await supabase
     .from("galleries")
-    .select("name, share_slug, wing, created_at, placed_artworks(id)")
+    .select("name, share_slug, wing, in_museum, created_at, placed_artworks(id)")
     .eq("user_id", profile.id)
     .eq("is_public", true)
     .not("share_slug", "is", null)
@@ -67,7 +68,7 @@ export async function GET(req: NextRequest) {
   const unfiled: Collection[] = [];
   for (const g of (galleries as GalleryRow[] | null) ?? []) {
     const count = g.placed_artworks?.length ?? 0;
-    if (count === 0 || !g.share_slug) continue;
+    if (count === 0 || !g.share_slug || g.in_museum === false) continue;
     const collection: Collection = { name: g.name, slug: g.share_slug, count };
     const wingName = (g.wing ?? "").trim();
     if (wingName) {

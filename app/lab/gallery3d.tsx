@@ -7,6 +7,11 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useFrame, useThree, type ThreeEvent } from "@react-three/fiber";
 import * as THREE from "three";
 
+// Coarse touch check for mobile quality tiers (smaller textures on phones).
+const IS_TOUCH =
+  typeof window !== "undefined" &&
+  ("ontouchstart" in window || navigator.maxTouchPoints > 0);
+
 export const EYE_Y = 1.8; // player standing eye height
 export const ART_Y = 1.5; // artwork centerline (museum standard ~145–150cm)
 const FRAME_W = 1.6;
@@ -22,6 +27,7 @@ export type Piece = {
   description?: string;
   museum?: string;
   sourceUrl?: string;
+  image?: string;
 };
 export type GalleryPiece = {
   title: string;
@@ -284,7 +290,7 @@ export function ProxyArtwork({
     img.crossOrigin = "anonymous";
     img.onload = () => {
       if (cancelled) return;
-      const maxDim = 1600;
+      const maxDim = IS_TOUCH ? 1024 : 1600;
       const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
       const cw = Math.max(1, Math.round(img.width * scale));
       const ch = Math.max(1, Math.round(img.height * scale));
@@ -346,6 +352,7 @@ export function ProxyArtwork({
           description: piece.description,
           museum: piece.museum,
           sourceUrl: piece.sourceUrl,
+          image: piece.image,
         }}
         onSelect={onSelect}
       />
@@ -365,38 +372,79 @@ export function ProxyArtwork({
   );
 }
 
-// An engraved wall label mounted below a framed piece.
+// Shrink the font until the text fits maxW; truncate with an ellipsis only if it
+// still doesn't fit at the smallest size.
+function fitLine(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  maxW: number,
+  startPx: number,
+  minPx: number,
+  style: string
+): number {
+  let px = startPx;
+  ctx.font = `${style} ${px}px Georgia, 'Times New Roman', serif`;
+  while (px > minPx && ctx.measureText(text).width > maxW) {
+    px -= 2;
+    ctx.font = `${style} ${px}px Georgia, 'Times New Roman', serif`;
+  }
+  return px;
+}
+
+// An engraved brass wall label mounted below a framed piece.
 function Nameplate({ title, artist, y }: { title: string; artist?: string; y: number }) {
   const tex = useMemo(() => {
+    const W = 680;
+    const H = 190;
+    const PAD = 44;
+    const maxW = W - PAD * 2;
     const c = document.createElement("canvas");
-    c.width = 512;
-    c.height = 150;
+    c.width = W;
+    c.height = H;
     const ctx = c.getContext("2d")!;
-    ctx.fillStyle = "#efe9dd";
-    ctx.fillRect(0, 0, 512, 150);
-    ctx.strokeStyle = "#cbbfa4";
-    ctx.lineWidth = 4;
-    ctx.strokeRect(2, 2, 508, 146);
+    // brushed-bronze plate
+    const g = ctx.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, "#3a2f24");
+    g.addColorStop(1, "#271f18");
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, W, H);
+    ctx.strokeStyle = "#8a6f42";
+    ctx.lineWidth = 5;
+    ctx.strokeRect(4, 4, W - 8, H - 8);
     ctx.textAlign = "center";
-    const t = title.length > 40 ? title.slice(0, 38) + "…" : title;
-    ctx.fillStyle = "#3a332e";
-    ctx.font = "bold 34px Georgia, 'Times New Roman', serif";
-    ctx.fillText(t, 256, artist ? 64 : 88);
+
+    const drawFit = (
+      text: string,
+      cy: number,
+      startPx: number,
+      minPx: number,
+      style: string,
+      color: string
+    ) => {
+      const px = fitLine(ctx, text, maxW, startPx, minPx, style);
+      let t = text;
+      if (ctx.measureText(t).width > maxW) {
+        while (t.length > 1 && ctx.measureText(t + "…").width > maxW) t = t.slice(0, -1);
+        t = t.trimEnd() + "…";
+      }
+      ctx.fillStyle = color;
+      ctx.fillText(t, W / 2, cy);
+      return px;
+    };
+
+    drawFit(title, artist ? 78 : 108, 46, 26, "bold", "#e6d3a3");
     if (artist) {
-      const a = artist.length > 46 ? artist.slice(0, 44) + "…" : artist;
-      ctx.fillStyle = "#6a6157";
-      ctx.font = "italic 26px Georgia, 'Times New Roman', serif";
-      ctx.fillText(a, 256, 106);
+      drawFit(artist, 130, 34, 20, "italic", "#c1a86e");
     }
     const texture = new THREE.CanvasTexture(c);
     texture.colorSpace = THREE.SRGBColorSpace;
-    texture.anisotropy = 4;
+    texture.anisotropy = 8;
     return texture;
   }, [title, artist]);
   useEffect(() => () => tex.dispose(), [tex]);
   return (
     <mesh position={[0, y, 0.04]}>
-      <planeGeometry args={[0.62, 0.18]} />
+      <planeGeometry args={[0.82, 0.23]} />
       <meshBasicMaterial map={tex} toneMapped={false} />
     </mesh>
   );

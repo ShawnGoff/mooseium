@@ -20,6 +20,7 @@ export default function CollectionView({
   initialSlug,
   initialGuestbookEnabled,
   initialWing,
+  initialInMuseum,
   existingWings,
   initialPieces,
 }: {
@@ -29,6 +30,7 @@ export default function CollectionView({
   initialSlug: string | null;
   initialGuestbookEnabled: boolean;
   initialWing: string | null;
+  initialInMuseum: boolean;
   existingWings: string[];
   initialPieces: Piece[];
 }) {
@@ -49,6 +51,22 @@ export default function CollectionView({
   const [guestbookOn, setGuestbookOn] = useState(initialGuestbookEnabled);
 
   // Wing assignment: the collection lives in a named wing of the 3D museum.
+  const [inMuseum, setInMuseum] = useState(initialInMuseum);
+  async function toggleInMuseum() {
+    const next = !inMuseum;
+    setInMuseum(next);
+    try {
+      const res = await fetch(`/api/collections/${galleryId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ inMuseum: next }),
+      });
+      if (!res.ok) throw new Error();
+    } catch {
+      setInMuseum(!next);
+    }
+  }
+
   const [wing, setWing] = useState<string | null>(initialWing);
   const [wingOptions, setWingOptions] = useState<string[]>(existingWings);
   const [addingWing, setAddingWing] = useState(false);
@@ -376,6 +394,12 @@ export default function CollectionView({
           </>
         )}
       </div>
+
+      <label className="guestbook-toggle">
+        <input type="checkbox" checked={inMuseum} onChange={toggleInMuseum} />
+        Show this collection in your 3D museum (up to 9 rooms fit — turn some off to
+        swap others in)
+      </label>
 
       {error && <p className="status error">{error}</p>}
 

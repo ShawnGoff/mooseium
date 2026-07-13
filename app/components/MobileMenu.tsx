@@ -44,6 +44,9 @@ export default function MobileMenu({
             <Link href="/museums">Museums</Link>
             {signedIn && <Link href="/collections">Collections</Link>}
             {signedIn && username && (
+              <Link href={`/@${username}/museum`}>🏛 My Museum</Link>
+            )}
+            {signedIn && username && (
               <Link href={`/@${username}`}>My Profile</Link>
             )}
             {signedIn ? (

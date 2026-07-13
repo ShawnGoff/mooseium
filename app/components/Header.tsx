@@ -45,6 +45,11 @@ export default async function Header() {
               Collections
             </Link>
           )}
+          {signedIn && username && (
+            <Link href={`/@${username}/museum`} className="topbar-link">
+              🏛 My Museum
+            </Link>
+          )}
         </nav>
       </div>
       <nav className="topbar-auth">

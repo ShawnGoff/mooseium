@@ -86,6 +86,7 @@ export default async function Image({
           )
           .eq("user_id", profile.id)
           .eq("is_public", true)
+          .eq("in_museum", true)
           .not("share_slug", "is", null)
           .order("updated_at", { ascending: false })
           .limit(40);

@@ -706,22 +706,11 @@ function Scene({
         </Text>
       ))}
 
-      {layout.galleries.map((g) => {
-        if (hot.includes(g.slug)) {
-          return <GalleryFull key={g.slug} gallery={g} onSelect={onSelect} />;
-        }
-        const piece = previews[g.slug];
-        if (!piece) return null;
-        return (
-          <ProxyArtwork
-            key={g.slug}
-            piece={{ ...piece, realW: undefined, realH: undefined }}
-            position={g.previewPos}
-            rotation={g.previewRot}
-            onSelect={onSelect}
-          />
-        );
-      })}
+      {layout.galleries.map((g) =>
+        hot.includes(g.slug) ? (
+          <GalleryFull key={g.slug} gallery={g} onSelect={onSelect} />
+        ) : null
+      )}
     </>
   );
 }

@@ -19,19 +19,23 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Unsupported image source." }, { status: 400 });
   }
 
+  // Bound oversized IIIF originals (Harvard's full-size images are huge and fail
+  // to decode on phone GPUs) to a sane max dimension.
+  const target = url.replace(/\/full\/(?:full|max)\//i, "/full/!2000,2000/");
+
   // Some museum CDNs (e.g. the Art Institute) reject plain server-side requests
   // that don't look like a browser. Send a real User-Agent + a same-origin
   // Referer so hotlink protection lets the image through.
   let origin = "";
   try {
-    origin = new URL(url).origin;
+    origin = new URL(target).origin;
   } catch {
     return NextResponse.json({ error: "Bad url." }, { status: 400 });
   }
 
   let upstream: Response;
   try {
-    upstream = await fetch(url, {
+    upstream = await fetch(target, {
       headers: {
         "User-Agent":
           "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",

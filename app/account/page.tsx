@@ -5,7 +5,12 @@ import { isSupabaseConfigured } from "@/lib/supabase/client";
 import { createClient } from "@/lib/supabase/server";
 import AccountForm from "./AccountForm";
 
-export default async function AccountPage() {
+export default async function AccountPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ welcome?: string }>;
+}) {
+  const { welcome } = await searchParams;
   if (!isSupabaseConfigured()) {
     return (
       <main className="container">
@@ -40,10 +45,18 @@ export default async function AccountPage() {
   return (
     <main className="container">
       <div className="brand">
-        <h1>Account</h1>
+        <h1>{welcome ? "Welcome to Mooseium" : "Account"}</h1>
       </div>
-      <p className="status">Signed in as {user.email}</p>
+      {welcome ? (
+        <p className="status">
+          Almost there — pick a handle and name to claim your public profile and
+          3D museum. You can change these anytime.
+        </p>
+      ) : (
+        <p className="status">Signed in as {user.email}</p>
+      )}
       <AccountForm
+        welcome={!!welcome}
         userId={user.id}
         initialName={profile?.display_name ?? ""}
         initialHandle={profile?.username ?? ""}

@@ -23,7 +23,9 @@ export default function LoginPage() {
       if (error) throw error;
       setSent(true);
     } catch (err) {
-      setError((err as Error).message);
+      console.error("magic link error:", err);
+      const msg = err instanceof Error ? err.message : "";
+      setError(msg || "Couldn't send the link — check the email or try again shortly.");
     } finally {
       setBusy(false);
     }

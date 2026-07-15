@@ -12,6 +12,7 @@ export default function AccountForm({
   initialBio,
   initialMuseumName,
   initialCenterWing,
+  welcome = false,
 }: {
   userId: string;
   initialName: string;
@@ -19,6 +20,7 @@ export default function AccountForm({
   initialBio: string;
   initialMuseumName: string;
   initialCenterWing: string;
+  welcome?: boolean;
 }) {
   const [name, setName] = useState(initialName);
   const [handle, setHandle] = useState(initialHandle);
@@ -35,11 +37,15 @@ export default function AccountForm({
     setSaved(false);
 
     const h = handle.trim().toLowerCase();
-    if (h && !/^[a-z0-9_]{3,20}$/.test(h)) {
+    if (!h) {
+      setError("Pick a handle so people can find your profile and museum.");
+      return;
+    }
+    if (!/^[a-z0-9_]{3,20}$/.test(h)) {
       setError("Handle must be 3–20 characters: lowercase letters, numbers, or _.");
       return;
     }
-    if (h && RESERVED.has(h)) {
+    if (RESERVED.has(h)) {
       setError("That handle is reserved.");
       return;
     }
@@ -62,6 +68,11 @@ export default function AccountForm({
         else if (error.code === "23514")
           setError("That handle or name isn't allowed. Try another.");
         else throw error;
+        return;
+      }
+      if (welcome) {
+        // Full navigation so the server-rendered header picks up the new handle.
+        window.location.href = `/@${h}`;
         return;
       }
       setSaved(true);
@@ -95,7 +106,7 @@ export default function AccountForm({
         Handle
       </label>
       <p className="account-hint">
-        A unique @name so no one can be confused with you. Optional.
+        A unique @name for your public profile and museum URL. Required.
       </p>
       <div className="handle-field">
         <span>@</span>

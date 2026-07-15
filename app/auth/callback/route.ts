@@ -18,6 +18,21 @@ export async function GET(request: Request) {
     const supabase = await createClient();
     const { error } = await supabase.auth.exchangeCodeForSession(code);
     if (!error) {
+      // First-time users have no handle yet — send them to finish setup so they
+      // end up with a shareable profile and museum.
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (user && next === "/") {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("username")
+          .eq("id", user.id)
+          .single();
+        if (!profile?.username) {
+          return NextResponse.redirect(`${origin}/account?welcome=1`);
+        }
+      }
       return NextResponse.redirect(`${origin}${next}`);
     }
   }

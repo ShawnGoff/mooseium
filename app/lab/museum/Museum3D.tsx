@@ -304,9 +304,9 @@ function hangRoom(
   });
   const sizeOf = (p: GalleryPiece) =>
     p.realW && p.realH
-      ? { w: Math.min(4.2, Math.max(0.35, p.realW)), h: Math.min(3.6, Math.max(0.35, p.realH)) }
-      : { w: 2.0, h: 1.6 };
-  const GAP = 1.1;
+      ? { w: Math.min(4.8, Math.max(1.2, p.realW)), h: Math.min(3.8, Math.max(0.35, p.realH)) }
+      : { w: 2.2, h: 1.6 };
+  const GAP = 1.2; // nominal, only for balancing pieces across the walls
   pieces.forEach((p, i) => {
     const w = sizeOf(p).w;
     let best = 0;
@@ -325,16 +325,18 @@ function hangRoom(
   const out: { position: [number, number, number]; rotation: [number, number, number] }[] =
     new Array(pieces.length);
   bins.forEach((bin) => {
-    const total =
-      bin.items.reduce((s, i) => s + sizeOf(pieces[i]).w, 0) +
-      GAP * Math.max(0, bin.items.length - 1);
-    let cursor = (bin.a + bin.b) / 2 - total / 2;
-    for (const i of bin.items) {
-      const { w, h } = sizeOf(pieces[i]);
-      const c = cursor + w / 2;
-      cursor += w + GAP;
-      out[i] = bin.place(c, Math.max(ART_Y, h / 2 + 0.35));
-    }
+    const n = bin.items.length;
+    const widths = bin.items.map((i) => sizeOf(pieces[i]).w);
+    const sumW = widths.reduce((s, w) => s + w, 0);
+    // Even spacing: share the leftover wall width between pieces, clamped so they
+    // never touch and never drift too far apart — regardless of size mix.
+    const gap = n > 1 ? Math.max(0.7, Math.min(2.4, (bin.len - sumW) / (n - 1))) : 0;
+    let cursor = (bin.a + bin.b) / 2 - (sumW + gap * (n - 1)) / 2;
+    bin.items.forEach((i, k) => {
+      const h = sizeOf(pieces[i]).h;
+      out[i] = bin.place(cursor + widths[k] / 2, Math.max(ART_Y, h / 2 + 0.35));
+      cursor += widths[k] + gap;
+    });
   });
   return out;
 }

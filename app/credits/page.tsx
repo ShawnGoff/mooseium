@@ -40,6 +40,8 @@ const MUSIC: { title: string; artist: string; via: string }[] = [
     artist: "ChrisDjYogi",
     via: "Pixabay",
   },
+  { title: "Timeless Love Acoustic Loop", artist: "Sonican", via: "Pixabay" },
+  { title: "Rain Sound", artist: "Boon Freak", via: "Pixabay" },
 ];
 
 function Ext({ href, children }: { href: string; children: React.ReactNode }) {
@@ -113,9 +115,9 @@ export default function CreditsPage() {
       </section>
 
       <section className="credits-section">
-        <h2>Music</h2>
+        <h2>Music &amp; sound</h2>
         <p>
-          Background music is sourced from{" "}
+          Background music and ambient sound are sourced from{" "}
           <Ext href="https://pixabay.com/music/">Pixabay</Ext>. With thanks to the
           artists:
         </p>

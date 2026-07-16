@@ -819,19 +819,6 @@ function DenFurniture({ lowPower, lightsOn }: { lowPower: boolean; lightsOn: boo
           color="#ffe6bd"
         />
       )}
-      {/* "THE DEN" carved on the back (south) wall, facing the visitor */}
-      <Text
-        font={MUSEUM_FONT}
-        position={[0, DOORH + 0.4, zS - 0.06]}
-        rotation={[0, Math.PI, 0]}
-        fontSize={0.34}
-        color="#2a2320"
-        anchorX="center"
-        anchorY="middle"
-        letterSpacing={0.04}
-      >
-        THE DEN
-      </Text>
 
       {/* rug in the middle of the room */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, zMid]}>
@@ -1170,6 +1157,7 @@ function Scene({
   showDen,
   sky,
   lightsOn,
+  denName,
   onSelect,
 }: {
   layout: Layout;
@@ -1180,6 +1168,7 @@ function Scene({
   showDen: boolean;
   sky: Sky;
   lightsOn: boolean;
+  denName: string;
   onSelect: (p: Piece) => void;
 }) {
   return (
@@ -1203,6 +1192,54 @@ function Scene({
       ))}
       {/* Atrium skylight — shares the owner's day/night/rain state */}
       <Skylight sky={sky} lowPower={lowPower} />
+
+      {/* Inlaid floor medallion anchoring the big atrium floor */}
+      <group position={[0, 0.02, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <mesh>
+          <ringGeometry args={[2.9, 3.12, 72]} />
+          <meshStandardMaterial color="#b39c76" roughness={0.5} />
+        </mesh>
+        {Array.from({ length: 8 }).map((_, i) => {
+          const ang = (i * Math.PI) / 4;
+          return (
+            <mesh key={i} position={[Math.cos(ang) * 2.15, Math.sin(ang) * 2.15, 0.001]} rotation={[0, 0, ang]}>
+              <planeGeometry args={[1.1, 0.09]} />
+              <meshStandardMaterial color="#b39c76" roughness={0.5} />
+            </mesh>
+          );
+        })}
+        <mesh position={[0, 0, 0.001]}>
+          <ringGeometry args={[1.35, 1.5, 72]} />
+          <meshStandardMaterial color="#cdb98f" roughness={0.5} />
+        </mesh>
+        <mesh position={[0, 0, 0.002]}>
+          <ringGeometry args={[0.86, 1.0, 48]} />
+          <meshStandardMaterial color="#cdb98f" roughness={0.5} />
+        </mesh>
+        <mesh position={[0, 0, 0.001]}>
+          <circleGeometry args={[0.86, 48]} />
+          <meshStandardMaterial color="#4c3420" roughness={0.6} />
+        </mesh>
+      </group>
+
+      {/* "<Curator>'s Den" over the Den doorway, facing the museum — the Den's
+          entrance sign, mirroring the museum name. Owner-only. */}
+      {showDen && denName && (
+        <Text
+          font={MUSEUM_FONT}
+          position={[0, DOORH + 0.5, A - 0.06]}
+          rotation={[0, Math.PI, 0]}
+          fontSize={0.34}
+          color="#2a2320"
+          anchorX="center"
+          anchorY="middle"
+          maxWidth={6}
+          textAlign="center"
+          letterSpacing={0.04}
+        >
+          {denName}
+        </Text>
+      )}
       {/* Polished atrium floor — one reflection pass, desktop only */}
       {reflect && (
         <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.012, 0]}>
@@ -1511,6 +1548,14 @@ export default function Museum3D({
             showDen={isOwner}
             sky={sky}
             lightsOn={lightsOn}
+            denName={
+              museum
+                ? `${(museum.curator || museum.handle || "").trim()}'s Den`.replace(
+                    /^'s Den$/,
+                    "The Den"
+                  )
+                : ""
+            }
             onSelect={handleSelect}
           />
         )}

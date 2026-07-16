@@ -57,7 +57,7 @@ export default async function BookPage({
     return (
       <main className="container">
         <p className="den-back">
-          <Link href="/den">← The Den</Link>
+          <Link href="/den">← The Library</Link>
         </p>
         <p className="status">
           Reading isn&apos;t supported for this source yet.

@@ -106,7 +106,7 @@ export default function DenPanel({
   return (
     <div className="den-panel">
       <div className="den-panel-head">
-        <span className="den-panel-title">The Den</span>
+        <span className="den-panel-title">The Library</span>
         <button className="den-panel-close" onClick={onClose} aria-label="Back to museum">
           ✕ Back to museum
         </button>

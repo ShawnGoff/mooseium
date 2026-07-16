@@ -239,7 +239,7 @@ export default function DenView({
           className={tab === "library" ? "active" : ""}
           onClick={() => setTab("library")}
         >
-          📚 Library
+          📚 Books
         </button>
         <button
           className={tab === "writing" ? "active" : ""}

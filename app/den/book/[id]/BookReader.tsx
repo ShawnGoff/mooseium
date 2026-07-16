@@ -246,7 +246,7 @@ export default function BookReader({
           </button>
         ) : (
           <Link href="/den" className="reader-back">
-            ← The Den
+            ← The Library
           </Link>
         )}
         <div className="reader-meta">

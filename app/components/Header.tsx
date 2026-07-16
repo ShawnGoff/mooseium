@@ -52,7 +52,7 @@ export default async function Header() {
           )}
           {signedIn && (
             <Link href="/den" className="topbar-link">
-              📖 The Den
+              📖 The Library
             </Link>
           )}
         </nav>

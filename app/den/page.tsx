@@ -11,8 +11,8 @@ export default async function DenPage() {
   if (!isSupabaseConfigured()) {
     return (
       <main className="container">
-        <h1>The Den</h1>
-        <p className="status">Connect Supabase to use the Den.</p>
+        <h1>The Library</h1>
+        <p className="status">Connect Supabase to use the Library.</p>
       </main>
     );
   }
@@ -25,7 +25,7 @@ export default async function DenPage() {
   if (!user) {
     return (
       <main className="container">
-        <h1>The Den</h1>
+        <h1>The Library</h1>
         <p className="status">
           Please <Link href="/login">sign in</Link> to open your study.
         </p>
@@ -51,7 +51,7 @@ export default async function DenPage() {
   return (
     <main className="container">
       <div className="brand">
-        <h1>The Den</h1>
+        <h1>The Library</h1>
         <span className="tag">your private study</span>
       </div>
       <DenView

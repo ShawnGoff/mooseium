@@ -1591,9 +1591,9 @@ export default function Museum3D({
             lightsOn={lightsOn}
             denName={
               museum
-                ? `${(museum.curator || museum.handle || "").trim()}'s Den`.replace(
-                    /^'s Den$/,
-                    "The Den"
+                ? `${(museum.curator || museum.handle || "").trim()}'s Library`.replace(
+                    /^'s Library$/,
+                    "The Library"
                   )
                 : ""
             }

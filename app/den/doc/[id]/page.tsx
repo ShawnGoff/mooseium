@@ -47,7 +47,7 @@ export default async function DocPage({
     return (
       <main className="container">
         <p className="status">
-          That document doesn&apos;t exist. <Link href="/den">Back to the Den</Link>.
+          That document doesn&apos;t exist. <Link href="/den">Back to the Library</Link>.
         </p>
       </main>
     );
@@ -56,7 +56,7 @@ export default async function DocPage({
   return (
     <main className="container">
       <p className="den-back">
-        <Link href="/den">← The Den</Link>
+        <Link href="/den">← The Library</Link>
       </p>
       <DocEditor id={doc.id} initialTitle={doc.title} initialBody={doc.body} />
     </main>

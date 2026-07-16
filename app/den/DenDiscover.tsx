@@ -28,6 +28,14 @@ const SUBJECTS = [
   "Children",
   "Short Stories",
   "Biography",
+  "Mystery",
+  "Romance",
+  "Fantasy",
+  "Horror",
+  "Fairy Tales",
+  "Travel",
+  "Nature",
+  "Humor",
 ];
 
 export default function DenDiscover({
@@ -46,6 +54,7 @@ export default function DenDiscover({
   const [heading, setHeading] = useState("");
   const [searching, setSearching] = useState(false);
   const [shelves, setShelves] = useState<Shelf[] | null>(null);
+  const [popular, setPopular] = useState<Result[] | null>(null);
   const [subjectCovers, setSubjectCovers] = useState<Record<string, string>>({});
   const [savingId, setSavingId] = useState<string | null>(null);
   const [justSaved, setJustSaved] = useState<Set<string>>(new Set());
@@ -57,6 +66,10 @@ export default function DenDiscover({
       .then((r) => r.json())
       .then((d) => setShelves(d.shelves ?? []))
       .catch(() => setShelves([]));
+    fetch("/api/den/books/popular")
+      .then((r) => r.json())
+      .then((d) => setPopular(d.results ?? []))
+      .catch(() => setPopular([]));
   }, []);
 
   // A representative cover per subject so the category cards are filled out.
@@ -209,6 +222,17 @@ export default function DenDiscover({
               ))}
             </div>
           </section>
+
+          {popular && popular.length > 0 && (
+            <section className="den-home-section">
+              <h2>Popular in the public domain</h2>
+              <div className="den-shelf-row">
+                {popular.map((r) => (
+                  <Card key={r.externalId} r={r} />
+                ))}
+              </div>
+            </section>
+          )}
 
           {shelves === null ? (
             <p className="status">Finding books connected to your art…</p>

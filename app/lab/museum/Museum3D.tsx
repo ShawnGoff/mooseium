@@ -1761,14 +1761,8 @@ export default function Museum3D({
         </button>
       )}
 
-      {/* Soft background music playlist (see MUSIC_TRACKS) */}
-      <audio
-        ref={audioRef}
-        loop={MUSIC_TRACKS.length === 1}
-        preload="none"
-        src={MUSIC_TRACKS[trackIdx]}
-        onEnded={MUSIC_TRACKS.length > 1 ? nextTrack : undefined}
-      />
+      {/* Background music — the chosen track loops; ⏭ switches which one plays */}
+      <audio ref={audioRef} loop preload="none" src={MUSIC_TRACKS[trackIdx]} />
       {/* Rain loop uses Web Audio (see the rain effect above) from public/rain.mp3 */}
 
       {view === "ready" && isOwner && (

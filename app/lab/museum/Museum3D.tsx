@@ -926,13 +926,13 @@ function RainStreaks({
     <group ref={ref}>
       {drops.map((d, i) => (
         <mesh key={i} position={[xWall + dir * 0.1, d.y, d.z]}>
-          <boxGeometry args={[0.006, 0.26, 0.006]} />
+          <boxGeometry args={[0.016, 0.34, 0.016]} />
           <meshStandardMaterial
-            color="#aebfce"
+            color="#c6d4e2"
             transparent
-            opacity={0.55}
-            emissive="#8ba0b5"
-            emissiveIntensity={0.4}
+            opacity={0.85}
+            emissive="#9db2c6"
+            emissiveIntensity={0.7}
           />
         </mesh>
       ))}
@@ -1027,7 +1027,7 @@ const SKYLIGHT_LOOK: Record<
 > = {
   day: { col: "#f4f8ff", emis: "#dfeaff", int: 0.7, opacity: 1 },
   night: { col: "#000000", emis: "#17243f", int: 0.5, opacity: 0.6 },
-  rain: { col: "#000000", emis: "#6a7078", int: 0.55, opacity: 0.6 },
+  rain: { col: "#000000", emis: "#6a7078", int: 0.55, opacity: 0.48 },
 };
 
 function SkyStars() {
@@ -1084,13 +1084,13 @@ function SkyRain({ lowPower }: { lowPower: boolean }) {
     <group ref={ref}>
       {drops.map((d, i) => (
         <mesh key={i} position={[d.x, d.y, d.z]} rotation={[0, 0, 0.35]}>
-          <boxGeometry args={[0.006, 0.24, 0.006]} />
+          <boxGeometry args={[0.024, 0.44, 0.024]} />
           <meshStandardMaterial
-            color="#aebfce"
+            color="#cdd9e6"
             transparent
-            opacity={0.55}
-            emissive="#8ba0b5"
-            emissiveIntensity={0.5}
+            opacity={0.95}
+            emissive="#b3c3d3"
+            emissiveIntensity={1.0}
           />
         </mesh>
       ))}

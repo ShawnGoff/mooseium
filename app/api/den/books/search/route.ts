@@ -29,10 +29,12 @@ export async function GET(req: NextRequest) {
   const param = topic
     ? `topic=${encodeURIComponent(topic)}`
     : `search=${encodeURIComponent(q!)}`;
+  // Only add page for "load more" — page 1 uses the bare URL that worked before.
+  const pageParam = page > 1 ? `&page=${page}` : "";
 
   let upstream: Response;
   try {
-    upstream = await fetch(`https://gutendex.com/books?${param}&page=${page}`, {
+    upstream = await fetch(`https://gutendex.com/books?${param}${pageParam}`, {
       next: { revalidate: 3600 },
     });
   } catch {

@@ -6,6 +6,7 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import BookSearch from "./BookSearch";
 
 export type DenFolder = {
   id: string;
@@ -38,10 +39,11 @@ export default function DenView({
   initialDocs: DenDoc[];
 }) {
   const [folders, setFolders] = useState<DenFolder[]>(initialFolders);
-  const [books] = useState<DenBook[]>(initialBooks);
+  const [books, setBooks] = useState<DenBook[]>(initialBooks);
   const [docs] = useState<DenDoc[]>(initialDocs);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [findBooks, setFindBooks] = useState(false);
 
   const supabase = useMemo(() => createClient(), []);
   const router = useRouter();
@@ -195,6 +197,9 @@ export default function DenView({
         <button onClick={() => createDocument(null)} disabled={busy}>
           ＋ New note
         </button>
+        <button onClick={() => setFindBooks(true)} disabled={busy}>
+          🔎 Find books
+        </button>
       </div>
       <Tree parentId={null} />
       {folders.length === 0 && books.length === 0 && docs.length === 0 && (
@@ -203,6 +208,15 @@ export default function DenView({
         </p>
       )}
       {error && <p className="status error">{error}</p>}
+
+      {findBooks && (
+        <BookSearch
+          userId={userId}
+          folders={folders}
+          onSaved={(b) => setBooks((prev) => [...prev, b])}
+          onClose={() => setFindBooks(false)}
+        />
+      )}
     </div>
   );
 }

@@ -2483,3 +2483,16 @@ a {
 }
 .doc-body:focus { outline: none; }
 .doc-status { min-height: 1.2em; font-size: 0.85rem; opacity: 0.6; }
+
+/* The Den — book search */
+.den-books-modal { max-width: 560px; width: 92vw; }
+.den-book-search { display: flex; gap: 8px; margin: 8px 0; }
+.den-book-search input { flex: 1; }
+.den-book-folder { display: flex; align-items: center; gap: 8px; font-size: 0.9rem; margin-bottom: 8px; }
+.den-book-results { list-style: none; margin: 0; padding: 0; max-height: 52vh; overflow-y: auto; }
+.den-book-results li { display: flex; align-items: center; gap: 12px; padding: 8px 0; border-top: 1px solid rgba(255,255,255,0.08); }
+.den-book-results img, .den-book-nocover { width: 40px; height: 56px; object-fit: cover; border-radius: 3px; flex-shrink: 0; }
+.den-book-nocover { display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.06); }
+.den-book-info { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+.den-book-title { font-weight: 600; }
+.den-book-author { font-size: 0.85rem; opacity: 0.6; }

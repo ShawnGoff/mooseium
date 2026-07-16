@@ -887,9 +887,9 @@ function skyTexture(seed = 1, overcast = false): THREE.Texture {
   const ctx = c.getContext("2d")!;
   const grad = ctx.createLinearGradient(0, 0, 0, 256);
   if (overcast) {
-    grad.addColorStop(0, "#3b5077");
-    grad.addColorStop(0.55, "#526b92");
-    grad.addColorStop(1, "#6c85ac");
+    grad.addColorStop(0, "#565e66");
+    grad.addColorStop(0.55, "#6b747d");
+    grad.addColorStop(1, "#828b94");
   } else {
     grad.addColorStop(0, "#5a8ed4");
     grad.addColorStop(0.55, "#93bde9");
@@ -1092,7 +1092,7 @@ function SkyRain({ lowPower }: { lowPower: boolean }) {
       Array.from({ length: count }, () => ({
         x: -2.7 + Math.random() * 5.4,
         z: -2.7 + Math.random() * 5.4,
-        y: H - 0.02 - Math.random() * 0.05,
+        y: H - 0.03 - Math.random() * 0.03,
         v: 0.45 + Math.random() * 0.35,
       })),
     [count]
@@ -1104,8 +1104,8 @@ function SkyRain({ lowPower }: { lowPower: boolean }) {
       const d = drops[i];
       d.y -= d.v * dt;
       d.x += d.v * 0.1 * dt; // slight angle across the glass
-      if (d.y < H - 0.09) {
-        d.y = H - 0.02;
+      if (d.y < H - 0.06) {
+        d.y = H - 0.03;
         d.x = -2.7 + Math.random() * 5.4;
       }
       c.position.set(d.x, d.y, d.z);
@@ -1115,7 +1115,7 @@ function SkyRain({ lowPower }: { lowPower: boolean }) {
     <group ref={ref}>
       {drops.map((d, i) => (
         <mesh key={i} position={[d.x, d.y, d.z]} rotation={[0, 0, 0.3]}>
-          <boxGeometry args={[0.01, 0.2, 0.01]} />
+          <boxGeometry args={[0.01, 0.14, 0.01]} />
           <meshStandardMaterial
             color="#cdd9e6"
             transparent
@@ -1132,7 +1132,7 @@ function SkyRain({ lowPower }: { lowPower: boolean }) {
 // A steel-and-glass skylight frame — a perimeter curb + a mullion grid — so the
 // opening reads as glazing, not a hole in the roof.
 function SkylightFrame() {
-  const y = H - 0.08;
+  const y = H - 0.15;
   const col = "#2b2118";
   const bar = (
     args: [number, number, number],

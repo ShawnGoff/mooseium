@@ -19,6 +19,12 @@ type Result = {
 };
 type Shelf = { artist: string; books: Result[] };
 
+// Session caches so the discovery feeds fetch once, not on every remount
+// (switching to the Discover tab remounts this component).
+let coverCache: Record<string, string> = {};
+let popularCache: Result[] | null = null;
+let shelvesCache: Shelf[] | null = null;
+
 const SUBJECTS = [
   "Fiction",
   "Poetry",
@@ -55,9 +61,10 @@ export default function DenDiscover({
   const [results, setResults] = useState<Result[] | null>(null);
   const [heading, setHeading] = useState("");
   const [searching, setSearching] = useState(false);
-  const [shelves, setShelves] = useState<Shelf[] | null>(null);
-  const [popular, setPopular] = useState<Result[] | null>(null);
-  const [subjectCovers, setSubjectCovers] = useState<Record<string, string>>({});
+  const [shelves, setShelves] = useState<Shelf[] | null>(shelvesCache);
+  const [popular, setPopular] = useState<Result[] | null>(popularCache);
+  const [subjectCovers, setSubjectCovers] =
+    useState<Record<string, string>>(coverCache);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [justSaved, setJustSaved] = useState<Set<string>>(new Set());
   const [baseParams, setBaseParams] = useState("");
@@ -70,25 +77,40 @@ export default function DenDiscover({
   const router = useRouter();
 
   useEffect(() => {
-    fetch("/api/den/connected")
-      .then((r) => r.json())
-      .then((d) => setShelves(d.shelves ?? []))
-      .catch(() => setShelves([]));
-    fetch("/api/den/books/popular")
-      .then((r) => r.json())
-      .then((d) => setPopular(d.results ?? []))
-      .catch(() => setPopular([]));
+    if (shelvesCache === null) {
+      fetch("/api/den/connected")
+        .then((r) => r.json())
+        .then((d) => {
+          shelvesCache = d.shelves ?? [];
+          setShelves(shelvesCache);
+        })
+        .catch(() => setShelves([]));
+    }
+    if (popularCache === null) {
+      fetch("/api/den/books/popular")
+        .then((r) => r.json())
+        .then((d) => {
+          popularCache = d.results ?? [];
+          setPopular(popularCache);
+        })
+        .catch(() => setPopular([]));
+    }
   }, []);
 
   // A representative cover per subject so the category cards are filled out.
+  // Cached per session so we don't burst 18 lookups on every remount.
   useEffect(() => {
+    if (Object.keys(coverCache).length > 0) return;
     let cancelled = false;
     SUBJECTS.forEach((s) => {
       fetch(`/api/den/books/search?topic=${encodeURIComponent(s)}`)
         .then((r) => r.json())
         .then((d) => {
           const cover = (d.results ?? []).find((r: Result) => r.coverUrl)?.coverUrl;
-          if (!cancelled && cover) setSubjectCovers((p) => ({ ...p, [s]: cover }));
+          if (cover) {
+            coverCache = { ...coverCache, [s]: cover };
+            if (!cancelled) setSubjectCovers((p) => ({ ...p, [s]: cover }));
+          }
         })
         .catch(() => {});
     });

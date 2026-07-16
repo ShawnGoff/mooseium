@@ -13,7 +13,9 @@ type GutendexBook = {
 };
 
 export async function GET(req: NextRequest) {
-  const limited = await checkRateLimit(req, "den-books", 60, 60_000);
+  // A single Discover mount legitimately bursts ~18 subject-cover lookups, so
+  // this is generous. Results are cached client-side to avoid repeat bursts.
+  const limited = await checkRateLimit(req, "den-books", 200, 60_000);
   if (limited) return limited;
 
   const q = req.nextUrl.searchParams.get("q")?.trim();

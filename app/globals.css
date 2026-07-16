@@ -2791,3 +2791,40 @@ button.reader-back, button.reader-notes-link {
   border-radius: 8px; padding: 9px 22px; cursor: pointer; font-size: 0.9rem;
 }
 .den-loadmore:hover:not(:disabled) { background: rgba(230,211,163,0.16); }
+
+/* Discover — book placard modal */
+.den-cover-click { cursor: pointer; }
+.den-cover-click:hover { opacity: 0.9; }
+.book-detail { max-width: 620px; width: 92vw; position: relative; }
+.book-detail-body { display: flex; gap: 20px; }
+.book-detail-cover {
+  flex: 0 0 150px; aspect-ratio: 2/3; border-radius: 5px; overflow: hidden;
+  box-shadow: 0 8px 22px rgba(0,0,0,0.45); background: #2b2620;
+  display: flex; align-items: center; justify-content: center;
+}
+.book-detail-cover img { width: 100%; height: 100%; object-fit: cover; }
+.book-detail-info { flex: 1; min-width: 0; }
+.book-detail-info h2 { margin: 0 0 2px; font-size: 1.25rem; line-height: 1.25; }
+.book-detail-author { opacity: 0.7; margin: 0 0 12px; }
+.book-detail-desc { font-size: 0.92rem; line-height: 1.55; max-height: 34vh; overflow-y: auto; }
+.book-detail-desc.muted { opacity: 0.55; font-style: italic; }
+.book-detail-subjects { display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0; }
+.book-detail-chip {
+  font-size: 0.75rem; padding: 3px 9px; border-radius: 999px;
+  background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.12);
+}
+.book-detail-meta { font-size: 0.8rem; opacity: 0.55; margin: 4px 0 0; }
+.book-detail-actions { display: flex; gap: 10px; margin: 16px 0 8px; }
+.book-detail-read {
+  background: linear-gradient(180deg, #d8bd85, #c7a86a); color: #241c10; border: none;
+  border-radius: 8px; padding: 9px 18px; font-weight: 600; cursor: pointer;
+}
+.book-detail-read:hover:not(:disabled) { filter: brightness(1.05); }
+.book-detail-save {
+  background: transparent; border: 1px solid rgba(230,211,163,0.5); color: inherit;
+  border-radius: 8px; padding: 9px 16px; cursor: pointer;
+}
+.book-detail-save:hover:not(:disabled) { background: rgba(230,211,163,0.16); }
+.book-detail-save.saved { opacity: 0.6; cursor: default; }
+.book-detail-source { font-size: 0.72rem; opacity: 0.45; margin: 6px 0 0; }
+@media (max-width: 560px) { .book-detail-body { flex-direction: column; } .book-detail-cover { flex-basis: auto; width: 130px; } }

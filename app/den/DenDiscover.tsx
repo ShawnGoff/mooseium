@@ -5,8 +5,10 @@
 // their books. Saving adds a book to your library.
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import type { DenBook } from "./DenView";
+import BookDetail from "./BookDetail";
 
 type Result = {
   source: string;
@@ -62,8 +64,10 @@ export default function DenDiscover({
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [detailBook, setDetailBook] = useState<Result | null>(null);
 
   const supabase = useMemo(() => createClient(), []);
+  const router = useRouter();
 
   useEffect(() => {
     fetch("/api/den/connected")
@@ -167,11 +171,50 @@ export default function DenDiscover({
     }
   }
 
+  // Save (or find, if already saved) and open the reader.
+  async function openBook(r: Result) {
+    setSavingId(r.externalId);
+    let id: string | null = null;
+    const { data, error } = await supabase
+      .from("den_books")
+      .insert({
+        user_id: userId,
+        source: r.source,
+        external_id: r.externalId,
+        title: r.title,
+        author: r.author,
+        cover_url: r.coverUrl,
+      })
+      .select("id, folder_id, title, author, cover_url, external_id")
+      .single();
+    if (data) {
+      id = data.id;
+      setJustSaved((s) => new Set(s).add(r.externalId));
+      onSaved(data as DenBook);
+    } else if (error?.code === "23505") {
+      const { data: ex } = await supabase
+        .from("den_books")
+        .select("id")
+        .eq("user_id", userId)
+        .eq("source", r.source)
+        .eq("external_id", r.externalId)
+        .single();
+      id = (ex as { id: string } | null)?.id ?? null;
+      setJustSaved((s) => new Set(s).add(r.externalId));
+    }
+    setSavingId(null);
+    if (id) {
+      setDetailBook(null);
+      if (onOpenBook) onOpenBook(id);
+      else router.push(`/den/book/${id}`);
+    }
+  }
+
   function Card({ r }: { r: Result }) {
     const saved = isSaved(r.externalId);
     return (
       <div className="den-book-card">
-        <div className="den-cover">
+        <div className="den-cover den-cover-click" onClick={() => setDetailBook(r)}>
           {r.coverUrl ? (
             /* eslint-disable-next-line @next/next/no-img-element */
             <img src={r.coverUrl} alt="" loading="lazy" />
@@ -179,7 +222,11 @@ export default function DenDiscover({
             <span className="den-cover-fallback">📖</span>
           )}
         </div>
-        <div className="den-card-title" title={r.title}>
+        <div
+          className="den-card-title den-cover-click"
+          title={r.title}
+          onClick={() => setDetailBook(r)}
+        >
           {r.title}
         </div>
         {r.author && <div className="den-card-sub">{r.author}</div>}
@@ -300,6 +347,17 @@ export default function DenDiscover({
             ))
           )}
         </>
+      )}
+
+      {detailBook && (
+        <BookDetail
+          book={detailBook}
+          saved={isSaved(detailBook.externalId)}
+          saving={savingId === detailBook.externalId}
+          onSave={() => save(detailBook)}
+          onRead={() => openBook(detailBook)}
+          onClose={() => setDetailBook(null)}
+        />
       )}
     </div>
   );

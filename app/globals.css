@@ -2828,3 +2828,13 @@ button.reader-back, button.reader-notes-link {
 .book-detail-save.saved { opacity: 0.6; cursor: default; }
 .book-detail-source { font-size: 0.72rem; opacity: 0.45; margin: 6px 0 0; }
 @media (max-width: 560px) { .book-detail-body { flex-direction: column; } .book-detail-cover { flex-basis: auto; width: 130px; } }
+
+/* The Library — Books tab: Continue reading + Recently added */
+.den-cr { margin-bottom: 24px; }
+.den-cr-head { font-size: 1.02rem; font-weight: 600; margin: 0 0 12px; }
+.den-cr .den-cover { position: relative; }
+.den-cr-bar {
+  position: absolute; left: 0; right: 0; bottom: 0; height: 5px;
+  background: rgba(0,0,0,0.45);
+}
+.den-cr-fill { height: 100%; background: rgba(230,211,163,0.95); }

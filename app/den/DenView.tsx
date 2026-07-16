@@ -23,6 +23,7 @@ export type DenBook = {
   author: string | null;
   cover_url: string | null;
   external_id?: string | null;
+  progress?: { percent?: number } | null;
 };
 export type DenDoc = {
   id: string;
@@ -82,6 +83,14 @@ export default function DenView({
     activeFolder === null ? books : books.filter((b) => b.folder_id === activeFolder);
   const shownDocs =
     activeFolder === null ? docs : docs.filter((d) => d.folder_id === activeFolder);
+
+  // Books you've started but not finished, newest first (books are ordered by
+  // created_at desc), for the "Continue reading" shelf.
+  const pctOf = (b: DenBook) =>
+    typeof b.progress?.percent === "number" ? b.progress.percent : 0;
+  const continueReading = books
+    .filter((b) => pctOf(b) > 0.01 && pctOf(b) < 0.98)
+    .slice(0, 12);
 
   // ---- folder CRUD ----
   async function createFolder(parentId: string | null) {
@@ -307,45 +316,88 @@ export default function DenView({
 
           <section className="den-main">
             {tab === "library" ? (
-              shownBooks.length === 0 ? (
-                <p className="status">
-                  No books here yet. Use Discover or “Find books” to add some.
-                </p>
-              ) : (
-                <div className="den-grid">
-                  {shownBooks.map((b) => (
-                    <div
-                      key={b.id}
-                      className="den-book-card"
-                      {...cardDrag("book", b.id)}
-                      onClick={() => openBook(b.id)}
-                    >
-                      <div className="den-cover">
-                        {b.cover_url ? (
-                          /* eslint-disable-next-line @next/next/no-img-element */
-                          <img src={b.cover_url} alt="" loading="lazy" />
-                        ) : (
-                          <span className="den-cover-fallback">📖</span>
-                        )}
-                      </div>
-                      <div className="den-card-title" title={b.title ?? ""}>
-                        {b.title || "Untitled"}
-                      </div>
-                      {b.author && <div className="den-card-sub">{b.author}</div>}
-                      <button
-                        className="den-card-del"
-                        title="Remove from library"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          deleteBook(b);
-                        }}
-                      >
-                        🗑
-                      </button>
+              <>
+                {activeFolder === null && continueReading.length > 0 && (
+                  <section className="den-cr">
+                    <h3 className="den-cr-head">Continue reading</h3>
+                    <div className="den-shelf-row">
+                      {continueReading.map((b) => (
+                        <div
+                          key={b.id}
+                          className="den-book-card"
+                          onClick={() => openBook(b.id)}
+                        >
+                          <div className="den-cover">
+                            {b.cover_url ? (
+                              /* eslint-disable-next-line @next/next/no-img-element */
+                              <img src={b.cover_url} alt="" loading="lazy" />
+                            ) : (
+                              <span className="den-cover-fallback">📖</span>
+                            )}
+                            <div className="den-cr-bar">
+                              <div
+                                className="den-cr-fill"
+                                style={{ width: `${Math.round(pctOf(b) * 100)}%` }}
+                              />
+                            </div>
+                          </div>
+                          <div className="den-card-title" title={b.title ?? ""}>
+                            {b.title || "Untitled"}
+                          </div>
+                          <div className="den-card-sub">
+                            {Math.round(pctOf(b) * 100)}%
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
-              )
+                  </section>
+                )}
+
+                {shownBooks.length === 0 ? (
+                  <p className="status">
+                    No books here yet. Use Discover or “Find books” to add some.
+                  </p>
+                ) : (
+                  <>
+                    {activeFolder === null && (
+                      <h3 className="den-cr-head">Recently added</h3>
+                    )}
+                    <div className="den-grid">
+                      {shownBooks.map((b) => (
+                        <div
+                          key={b.id}
+                          className="den-book-card"
+                          {...cardDrag("book", b.id)}
+                          onClick={() => openBook(b.id)}
+                        >
+                          <div className="den-cover">
+                            {b.cover_url ? (
+                              /* eslint-disable-next-line @next/next/no-img-element */
+                              <img src={b.cover_url} alt="" loading="lazy" />
+                            ) : (
+                              <span className="den-cover-fallback">📖</span>
+                            )}
+                          </div>
+                          <div className="den-card-title" title={b.title ?? ""}>
+                            {b.title || "Untitled"}
+                          </div>
+                          {b.author && <div className="den-card-sub">{b.author}</div>}
+                          <button
+                            className="den-card-del"
+                            title="Remove from library"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              deleteBook(b);
+                            }}
+                          >
+                            🗑
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </>
             ) : shownDocs.length === 0 ? (
               <p className="status">Nothing written here yet. Start a new note.</p>
             ) : (

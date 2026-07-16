@@ -40,8 +40,8 @@ export default async function DenPage() {
       .order("sort"),
     supabase
       .from("den_books")
-      .select("id, folder_id, title, author, cover_url, external_id")
-      .order("created_at"),
+      .select("id, folder_id, title, author, cover_url, external_id, progress")
+      .order("created_at", { ascending: false }),
     supabase
       .from("den_documents")
       .select("id, folder_id, title, updated_at")

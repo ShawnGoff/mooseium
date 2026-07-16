@@ -84,13 +84,13 @@ const MUSEUM_FONT =
 // the track menu lets visitors pick one, and it loops until they choose another.
 // (src paths URL-encode the spaces in the filenames.)
 const MUSIC_TRACKS: { name: string; src: string }[] = [
+  { name: "Acoustic", src: "/Acoustic.mp3" },
+  { name: "Chill 1", src: "/Chill%201.mp3" },
+  { name: "Chill 2", src: "/Chill%202.mp3" },
   { name: "Jazz 1", src: "/jazz.mp3" },
   { name: "Jazz 2", src: "/jazz2.mp3" },
   { name: "Lo-Fi 1", src: "/Lofi%201.mp3" },
   { name: "Lo-Fi 2", src: "/Lofi%202.mp3" },
-  { name: "Chill 1", src: "/Chill%201.mp3" },
-  { name: "Chill 2", src: "/Chill%202.mp3" },
-  { name: "Acoustic", src: "/Acoustic.mp3" },
 ];
 
 const rect = (x0: number, x1: number, z0: number, z1: number): AABB => ({ x0, x1, z0, z1 });

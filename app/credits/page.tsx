@@ -25,7 +25,6 @@ const MUSEUMS: { name: string; href: string }[] = [
     href: "https://harvardartmuseums.org/collections/api",
   },
   { name: "Smithsonian Open Access", href: "https://www.si.edu/openaccess" },
-  { name: "Victoria and Albert Museum", href: "https://developers.vam.ac.uk/" },
 ];
 
 // Music attributions — attribution isn't required by Pixabay's license, but we

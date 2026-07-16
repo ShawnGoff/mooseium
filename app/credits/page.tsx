@@ -30,8 +30,16 @@ const MUSEUMS: { name: string; href: string }[] = [
 // Music attributions — attribution isn't required by Pixabay's license, but we
 // like to credit the artists. Add each track here as you add it to the player.
 const MUSIC: { title: string; artist: string; via: string }[] = [
-  { title: "Museum Theme", artist: "—", via: "Pixabay" },
-  // { title: "Relaxing Jazz Cafe", artist: "AlexMorgan", via: "Pixabay" },
+  { title: "Jazz Restaurant Music", artist: "Alex Morgan", via: "Pixabay" },
+  { title: "Relaxing Coffee Shop Music", artist: "Alex Morgan", via: "Pixabay" },
+  { title: "Perfect Sunset Lo-Fi Music", artist: "Sonican", via: "Pixabay" },
+  { title: "Hopeful City Lo-Fi Music", artist: "Sonican", via: "Pixabay" },
+  { title: "Soft Chill Coffee", artist: "Mellowtape Nights", via: "Pixabay" },
+  {
+    title: "Moonlit Serenity: Deep Sleep Ambient",
+    artist: "ChrisDjYogi",
+    via: "Pixabay",
+  },
 ];
 
 function Ext({ href, children }: { href: string; children: React.ReactNode }) {

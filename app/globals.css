@@ -2610,3 +2610,27 @@ a {
   .den2 { flex-direction: column; }
   .den-sidebar { flex-basis: auto; width: 100%; }
 }
+
+/* The Den — in-museum overlay panel */
+.den-panel {
+  position: absolute; inset: 0; z-index: 40; display: flex; flex-direction: column;
+  background: rgba(16,14,12,0.97); color: #f3efe9;
+}
+.den-panel-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 20px; border-bottom: 1px solid rgba(255,255,255,0.1); flex: 0 0 auto;
+}
+.den-panel-title { font-weight: 700; font-size: 1.1rem; letter-spacing: 0.03em; }
+.den-panel-close {
+  background: transparent; color: inherit; border: 1px solid rgba(255,255,255,0.25);
+  border-radius: 8px; padding: 6px 14px; cursor: pointer; font-size: 0.9rem;
+}
+.den-panel-close:hover { background: rgba(255,255,255,0.1); }
+.den-panel-body { flex: 1; overflow-y: auto; position: relative; }
+.den-panel-body .container { max-width: 1000px; margin: 0 auto; padding: 20px; }
+/* reader fills the panel body cleanly */
+.den-panel-body .reader { height: 100%; }
+/* button variants of the reader links */
+button.reader-back, button.reader-notes-link {
+  background: transparent; border: none; cursor: pointer; font: inherit; padding: 0;
+}

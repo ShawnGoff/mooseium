@@ -15,6 +15,8 @@ export default function BookReader({
   author,
   initialPercent,
   initialNoteDocId,
+  onBack,
+  onOpenDoc,
 }: {
   id: string;
   userId: string;
@@ -23,6 +25,9 @@ export default function BookReader({
   author: string | null;
   initialPercent: number;
   initialNoteDocId: string | null;
+  // Embedded (overlay) mode: use callbacks instead of navigating.
+  onBack?: () => void;
+  onOpenDoc?: (id: string) => void;
 }) {
   const [content, setContent] = useState<
     { html: string } | { text: string } | null
@@ -148,18 +153,32 @@ export default function BookReader({
   return (
     <div className="reader">
       <header className="reader-bar">
-        <Link href="/den" className="reader-back">
-          ← The Den
-        </Link>
+        {onBack ? (
+          <button className="reader-back" onClick={onBack}>
+            ← Back
+          </button>
+        ) : (
+          <Link href="/den" className="reader-back">
+            ← The Den
+          </Link>
+        )}
         <div className="reader-meta">
           <span className="reader-title">{title}</span>
           {author && <span className="reader-author">{author}</span>}
         </div>
-        {noteDocId && (
-          <Link href={`/den/doc/${noteDocId}`} className="reader-notes-link">
-            📝 Notes
-          </Link>
-        )}
+        {noteDocId &&
+          (onOpenDoc ? (
+            <button
+              className="reader-notes-link"
+              onClick={() => onOpenDoc(noteDocId)}
+            >
+              📝 Notes
+            </button>
+          ) : (
+            <Link href={`/den/doc/${noteDocId}`} className="reader-notes-link">
+              📝 Notes
+            </Link>
+          ))}
         <span className="reader-pct">{Math.round(progress * 100)}%</span>
       </header>
       <div className="reader-progress">

@@ -95,6 +95,7 @@ export function Player({
   constrain = defaultConstrain,
   onEnter,
   posRef,
+  pausedRef,
 }: {
   dragRef: React.MutableRefObject<boolean>;
   joyRef: React.MutableRefObject<{ x: number; y: number }>;
@@ -104,6 +105,7 @@ export function Player({
   constrain?: Constrain;
   onEnter?: (wing: number) => void;
   posRef?: React.MutableRefObject<{ x: number; z: number }>;
+  pausedRef?: React.MutableRefObject<boolean>;
 }) {
   const { camera, gl } = useThree();
   const yaw = useRef(spawnYaw);
@@ -125,7 +127,7 @@ export function Player({
     let startX = 0;
     let startY = 0;
     const pd = (e: PointerEvent) => {
-      if (dragging) return;
+      if (dragging || pausedRef?.current) return;
       dragging = true;
       activeId = e.pointerId;
       lastX = startX = e.clientX;
@@ -162,6 +164,10 @@ export function Player({
   }, [gl, dragRef]);
 
   useFrame((_, delta) => {
+    if (pausedRef?.current) {
+      keys.current = {};
+      return;
+    }
     const k = keys.current;
     let mf = 0;
     let ms = 0;

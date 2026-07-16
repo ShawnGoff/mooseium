@@ -36,16 +36,23 @@ export default function DenView({
   initialFolders,
   initialBooks,
   initialDocs,
+  initialTab = "library",
+  onOpenBook,
+  onOpenDoc,
 }: {
   userId: string;
   initialFolders: DenFolder[];
   initialBooks: DenBook[];
   initialDocs: DenDoc[];
+  initialTab?: "library" | "writing";
+  // When provided (overlay/embedded mode), open in-place instead of navigating.
+  onOpenBook?: (id: string) => void;
+  onOpenDoc?: (id: string) => void;
 }) {
   const [folders, setFolders] = useState<DenFolder[]>(initialFolders);
   const [books, setBooks] = useState<DenBook[]>(initialBooks);
   const [docs, setDocs] = useState<DenDoc[]>(initialDocs);
-  const [tab, setTab] = useState<"library" | "writing">("library");
+  const [tab, setTab] = useState<"library" | "writing">(initialTab);
   const [activeFolder, setActiveFolder] = useState<string | null>(null); // null = All
   const [drag, setDrag] = useState<Drag>(null);
   const [dropTarget, setDropTarget] = useState<string | "all" | null>(null);
@@ -131,8 +138,17 @@ export default function DenView({
       .single();
     setBusy(false);
     if (error || !data) return setError("Could not create the note.");
-    router.push(`/den/doc/${data.id}`);
+    setDocs((d) => [
+      { id: data.id, folder_id: activeFolder, title: "Untitled", updated_at: new Date().toISOString() },
+      ...d,
+    ]);
+    openDoc(data.id);
   }
+
+  const openBook = (id: string) =>
+    onOpenBook ? onOpenBook(id) : router.push(`/den/book/${id}`);
+  const openDoc = (id: string) =>
+    onOpenDoc ? onOpenDoc(id) : router.push(`/den/doc/${id}`);
 
   // ---- drag to file into a folder (or All to unfile) ----
   async function assignTo(folderId: string | null) {
@@ -264,7 +280,7 @@ export default function DenView({
                   key={b.id}
                   className="den-book-card"
                   {...cardDrag("book", b.id)}
-                  onClick={() => router.push(`/den/book/${b.id}`)}
+                  onClick={() => openBook(b.id)}
                 >
                   <div className="den-cover">
                     {b.cover_url ? (
@@ -291,7 +307,7 @@ export default function DenView({
                 key={d.id}
                 className="den-doc-card"
                 {...cardDrag("doc", d.id)}
-                onClick={() => router.push(`/den/doc/${d.id}`)}
+                onClick={() => openDoc(d.id)}
               >
                 <div className="den-doc-page">✍️</div>
                 <div className="den-card-title" title={d.title}>

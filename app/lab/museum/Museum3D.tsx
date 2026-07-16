@@ -11,10 +11,10 @@
 // Isolated under /lab; reads ?u=<handle>.
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
 import * as THREE from "three";
 import { Canvas, useFrame } from "@react-three/fiber";
 import { Text, MeshReflectorMaterial } from "@react-three/drei";
+import DenPanel from "../../den/DenPanel";
 import {
   Player,
   ProxyArtwork,
@@ -1054,7 +1054,9 @@ export default function Museum3D({
   );
   const [hot, setHot] = useState<string[]>([]);
   const [nearStation, setNearStation] = useState<string | null>(null);
-  const router = useRouter();
+  const [denPanel, setDenPanel] = useState<null | "library" | "writing">(null);
+  const pausedRef = useRef(false);
+  pausedRef.current = denPanel !== null;
   const [tp, setTp] = useState<{ spawn: [number, number, number]; yaw: number; k: number }>({
     spawn: ENTRANCE_SPAWN,
     yaw: 0,
@@ -1132,21 +1134,21 @@ export default function Museum3D({
 
   const station = DEN_STATIONS.find((s) => s.id === nearStation) ?? null;
   const enterStation = () => {
-    if (station) router.push(station.href);
+    if (station) setDenPanel(station.id === "desk" ? "writing" : "library");
   };
 
-  // Press E / Enter to enter the tool at a nearby station.
+  // Press E / Enter to open the tool at a nearby station.
   useEffect(() => {
-    if (!station) return;
+    if (!station || denPanel) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "e" || e.key === "E" || e.key === "Enter") {
         e.preventDefault();
-        router.push(station.href);
+        setDenPanel(station.id === "desk" ? "writing" : "library");
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [station, router]);
+  }, [station, denPanel]);
 
   const handleSelect = (p: Piece) => {
     if (!dragRef.current) setSelected(p);
@@ -1206,9 +1208,14 @@ export default function Museum3D({
             spawnYaw={tp.yaw}
             constrain={constrain}
             posRef={posRef}
+            pausedRef={pausedRef}
           />
         )}
       </Canvas>
+
+      {isOwner && denPanel && (
+        <DenPanel initialTab={denPanel} onClose={() => setDenPanel(null)} />
+      )}
 
       {isTouch && view === "ready" && <JoystickPad joyRef={joyRef} />}
 

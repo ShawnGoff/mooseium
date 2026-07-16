@@ -864,9 +864,14 @@ export default function Home() {
 
           {publicGalleries.length > 0 && (
             <section className="home-section">
-              <h2 className="feed-heading">Galleries to explore</h2>
-              <div className="pubgal-grid">
-                {publicGalleries.map((g) => (
+              <div className="feed-head-row">
+                <h2 className="feed-heading">Galleries to explore</h2>
+                <Link href="/galleries" className="feed-see-all">
+                  See all →
+                </Link>
+              </div>
+              <div className="pubgal-grid two-row">
+                {publicGalleries.slice(0, 8).map((g) => (
                   <Link key={g.slug} href={`/g/${g.slug}`} className="pubgal-card">
                     <div
                       className="pubgal-img"

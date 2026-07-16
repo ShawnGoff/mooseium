@@ -55,12 +55,12 @@ export default async function DenPage() {
     <main className="container">
       <div className="brand brand-row">
         <div>
-          <h1>The Library</h1>
+          <h1>My Library</h1>
           <span className="tag">your private study</span>
         </div>
         {username && (
           <Link href={`/@${username}/museum`} className="walk-3d-btn">
-            🚶 Walk in 3D
+            Walk in 3D
           </Link>
         )}
       </div>

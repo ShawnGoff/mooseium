@@ -1,8 +1,8 @@
 "use client";
 
 // Context-aware primary nav. Two spaces share one login: the Museum (art) and
-// the Library (books/writing). We only show the tools for the space you're in,
-// plus a switch to the other and a "Walk in 3D" entry (one unified 3D world).
+// the Library (books/writing). The two spaces come first, then a divider, then
+// the sub-nav for whichever space you're in. "Walk in 3D" is one unified world.
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -19,26 +19,27 @@ export default function TopNav({
 
   return (
     <nav className="topbar-nav">
+      {/* Space anchors, always first */}
+      <Link href="/" className={`topbar-link${!inLibrary ? " active" : ""}`}>
+        🏛 Museum
+      </Link>
+      {signedIn && (
+        <Link href="/den" className={`topbar-link${inLibrary ? " active" : ""}`}>
+          📖 My Library
+        </Link>
+      )}
+
+      <span className="topbar-sep" aria-hidden />
+
+      {/* Sub-nav for the current space */}
       {inLibrary ? (
-        <>
-          <Link href="/den" className="topbar-link active">
-            📖 The Library
+        username && (
+          <Link href={`/@${username}/museum`} className="topbar-link">
+            Walk in 3D
           </Link>
-          {username && (
-            <Link href={`/@${username}/museum`} className="topbar-link">
-              🚶 Walk in 3D
-            </Link>
-          )}
-          <span className="topbar-sep" aria-hidden />
-          <Link href="/" className="topbar-link">
-            🏛 Museum
-          </Link>
-        </>
+        )
       ) : (
         <>
-          <Link href="/" className="topbar-link">
-            Explore
-          </Link>
           <Link href="/museums" className="topbar-link">
             Museums
           </Link>
@@ -47,18 +48,10 @@ export default function TopNav({
               Collections
             </Link>
           )}
-          {signedIn && username && (
+          {username && (
             <Link href={`/@${username}/museum`} className="topbar-link">
-              🏛 My Museum
+              Walk in 3D
             </Link>
-          )}
-          {signedIn && (
-            <>
-              <span className="topbar-sep" aria-hidden />
-              <Link href="/den" className="topbar-link">
-                📖 The Library
-              </Link>
-            </>
           )}
         </>
       )}

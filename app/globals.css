@@ -2771,3 +2771,15 @@ button.reader-back, button.reader-notes-link {
   box-shadow: 0 2px 10px rgba(0,0,0,0.3);
 }
 .walk-3d-btn:hover { filter: brightness(1.05); }
+
+/* Home: section header with "See all" + clamp Galleries to explore to ~2 rows */
+.feed-head-row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.feed-see-all { color: #e6d3a3; text-decoration: none; font-size: 0.9rem; white-space: nowrap; }
+.feed-see-all:hover { text-decoration: underline; }
+.pubgal-grid.two-row {
+  grid-template-columns: repeat(4, 1fr);
+  grid-template-rows: repeat(2, auto);
+  grid-auto-rows: 0;
+  overflow: hidden;
+}
+@media (max-width: 900px) { .pubgal-grid.two-row { grid-template-columns: repeat(2, 1fr); } }

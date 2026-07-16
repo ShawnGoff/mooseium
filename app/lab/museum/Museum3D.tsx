@@ -1017,18 +1017,26 @@ function DenWindow({
 
 // The atrium skylight, sharing the day / night / rain state. Rain falls across
 // it at an angle (seen from below); night shows stars through the glass.
-const SKYLIGHT_LOOK: Record<Sky, { col: string; emis: string; int: number }> = {
-  day: { col: "#f4f8ff", emis: "#dfeaff", int: 0.7 },
-  night: { col: "#0d1730", emis: "#12213f", int: 0.3 },
-  rain: { col: "#6a7078", emis: "#5f666f", int: 0.45 },
+// day catches the interior light (bright daylight pouring in). night/rain use a
+// black diffuse so the atrium point-light can't burn a hotspot into the "sky",
+// and go semi-transparent so the stars / rain sitting ABOVE the glass show
+// through — never inside the room.
+const SKYLIGHT_LOOK: Record<
+  Sky,
+  { col: string; emis: string; int: number; opacity: number }
+> = {
+  day: { col: "#f4f8ff", emis: "#dfeaff", int: 0.7, opacity: 1 },
+  night: { col: "#000000", emis: "#17243f", int: 0.5, opacity: 0.6 },
+  rain: { col: "#000000", emis: "#6a7078", int: 0.55, opacity: 0.6 },
 };
 
 function SkyStars() {
   const stars = useMemo(
     () =>
-      Array.from({ length: 40 }, () => ({
+      Array.from({ length: 44 }, () => ({
         x: -2.6 + Math.random() * 5.2,
         z: -2.6 + Math.random() * 5.2,
+        y: H + 0.06 + Math.random() * 0.5,
         s: 0.012 + Math.random() * 0.022,
       })),
     []
@@ -1036,9 +1044,9 @@ function SkyStars() {
   return (
     <group>
       {stars.map((st, i) => (
-        <mesh key={i} position={[st.x, H - 0.08, st.z]}>
+        <mesh key={i} position={[st.x, st.y, st.z]}>
           <sphereGeometry args={[st.s, 6, 6]} />
-          <meshStandardMaterial color="#fdfbf0" emissive="#fdfbf0" emissiveIntensity={1.6} />
+          <meshStandardMaterial color="#fdfbf0" emissive="#fdfbf0" emissiveIntensity={1.8} />
         </mesh>
       ))}
     </group>
@@ -1053,7 +1061,7 @@ function SkyRain({ lowPower }: { lowPower: boolean }) {
       Array.from({ length: count }, () => ({
         x: -2.6 + Math.random() * 5.2,
         z: -2.6 + Math.random() * 5.2,
-        y: H - 0.02 - Math.random() * 0.6,
+        y: H + 0.06 + Math.random() * 0.7,
         v: 2.5 + Math.random() * 2.5,
       })),
     [count]
@@ -1065,8 +1073,8 @@ function SkyRain({ lowPower }: { lowPower: boolean }) {
       const d = drops[i];
       d.y -= d.v * dt;
       d.x += d.v * 0.28 * dt; // the angle across the glass
-      if (d.y < H - 0.65) {
-        d.y = H - 0.02;
+      if (d.y < H + 0.04) {
+        d.y = H + 0.75;
         d.x = -2.6 + Math.random() * 5.2;
       }
       c.position.set(d.x, d.y, d.z);
@@ -1080,9 +1088,9 @@ function SkyRain({ lowPower }: { lowPower: boolean }) {
           <meshStandardMaterial
             color="#aebfce"
             transparent
-            opacity={0.5}
+            opacity={0.55}
             emissive="#8ba0b5"
-            emissiveIntensity={0.4}
+            emissiveIntensity={0.5}
           />
         </mesh>
       ))}
@@ -1094,12 +1102,18 @@ function Skylight({ sky, lowPower }: { sky: Sky; lowPower: boolean }) {
   const look = SKYLIGHT_LOOK[sky];
   return (
     <group>
-      <mesh position={[0, H - 0.03, 0]} rotation={[Math.PI / 2, 0, 0]}>
-        <planeGeometry args={[6, 6]} />
-        <meshStandardMaterial color={look.col} emissive={look.emis} emissiveIntensity={look.int} />
-      </mesh>
       {sky === "night" && <SkyStars />}
       {sky === "rain" && <SkyRain lowPower={lowPower} />}
+      <mesh position={[0, H - 0.03, 0]} rotation={[Math.PI / 2, 0, 0]}>
+        <planeGeometry args={[6, 6]} />
+        <meshStandardMaterial
+          color={look.col}
+          emissive={look.emis}
+          emissiveIntensity={look.int}
+          transparent={look.opacity < 1}
+          opacity={look.opacity}
+        />
+      </mesh>
     </group>
   );
 }
@@ -1294,21 +1308,79 @@ export default function Museum3D({
   const [denPanel, setDenPanel] = useState<null | "library" | "writing">(null);
   const [sky, setSky] = useState<Sky>("day");
   const [lightsOn, setLightsOn] = useState(true);
-  const rainRef = useRef<HTMLAudioElement>(null);
   const pausedRef = useRef(false);
   pausedRef.current = denPanel !== null;
 
-  // Rain ambience follows the window toggle (needs the click as its gesture).
+  // Rain ambience via Web Audio, looped sample-accurately with the encoder's
+  // silent padding trimmed off both ends so it loops seamlessly (an <audio loop>
+  // tag can't do this — MP3 padding leaves an audible gap each pass).
+  const rainCtxRef = useRef<AudioContext | null>(null);
+  const rainBufRef = useRef<AudioBuffer | null>(null);
+  const rainSrcRef = useRef<AudioBufferSourceNode | null>(null);
+  const rainGainRef = useRef<GainNode | null>(null);
+
   useEffect(() => {
-    const a = rainRef.current;
-    if (!a) return;
-    if (sky === "rain") {
-      a.volume = 0.4;
-      a.play().catch(() => {});
-    } else {
-      a.pause();
+    let cancelled = false;
+    async function startRain() {
+      try {
+        let ctx = rainCtxRef.current;
+        if (!ctx) {
+          const AC =
+            window.AudioContext ||
+            (window as unknown as { webkitAudioContext: typeof AudioContext })
+              .webkitAudioContext;
+          ctx = new AC();
+          rainCtxRef.current = ctx;
+          const g = ctx.createGain();
+          g.gain.value = 0.4;
+          g.connect(ctx.destination);
+          rainGainRef.current = g;
+        }
+        if (ctx.state === "suspended") await ctx.resume();
+        if (!rainBufRef.current) {
+          const res = await fetch("/rain.mp3");
+          rainBufRef.current = await ctx.decodeAudioData(await res.arrayBuffer());
+        }
+        if (cancelled || rainSrcRef.current) return;
+        const buf = rainBufRef.current;
+        const src = ctx.createBufferSource();
+        src.buffer = buf;
+        src.loop = true;
+        src.loopStart = Math.min(0.12, buf.duration * 0.1);
+        src.loopEnd = Math.max(src.loopStart + 0.1, buf.duration - 0.12);
+        src.connect(rainGainRef.current!);
+        src.start(0, src.loopStart);
+        rainSrcRef.current = src;
+      } catch {
+        /* ignore */
+      }
     }
+    function stopRain() {
+      const s = rainSrcRef.current;
+      if (s) {
+        try {
+          s.stop();
+        } catch {
+          /* already stopped */
+        }
+        s.disconnect();
+        rainSrcRef.current = null;
+      }
+    }
+    if (sky === "rain") startRain();
+    else stopRain();
+    return () => {
+      cancelled = true;
+    };
   }, [sky]);
+
+  useEffect(
+    () => () => {
+      rainSrcRef.current?.disconnect();
+      rainCtxRef.current?.close().catch(() => {});
+    },
+    []
+  );
   const [tp, setTp] = useState<{ spawn: [number, number, number]; yaw: number; k: number }>({
     spawn: ENTRANCE_SPAWN,
     yaw: 0,
@@ -1484,8 +1556,7 @@ export default function Museum3D({
 
       {/* Soft background music — add a file at public/museum-music.mp3 */}
       <audio ref={audioRef} loop preload="none" src="/museum-music.mp3" />
-      {/* Rain loop — add a file at public/rain.mp3 */}
-      <audio ref={rainRef} loop preload="none" src="/rain.mp3" />
+      {/* Rain loop uses Web Audio (see the rain effect above) from public/rain.mp3 */}
 
       {view === "ready" && isOwner && (
         <div style={skyToggleStyle}>

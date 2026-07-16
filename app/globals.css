@@ -2783,3 +2783,11 @@ button.reader-back, button.reader-notes-link {
   overflow: hidden;
 }
 @media (max-width: 900px) { .pubgal-grid.two-row { grid-template-columns: repeat(2, 1fr); } }
+
+/* Discover — load more */
+.den-loadmore-wrap { display: flex; justify-content: center; margin: 22px 0 8px; }
+.den-loadmore {
+  border: 1px solid rgba(255,255,255,0.25); background: transparent; color: inherit;
+  border-radius: 8px; padding: 9px 22px; cursor: pointer; font-size: 0.9rem;
+}
+.den-loadmore:hover:not(:disabled) { background: rgba(230,211,163,0.16); }

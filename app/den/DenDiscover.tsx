@@ -58,6 +58,10 @@ export default function DenDiscover({
   const [subjectCovers, setSubjectCovers] = useState<Record<string, string>>({});
   const [savingId, setSavingId] = useState<string | null>(null);
   const [justSaved, setJustSaved] = useState<Set<string>>(new Set());
+  const [baseParams, setBaseParams] = useState("");
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
 
   const supabase = useMemo(() => createClient(), []);
 
@@ -94,14 +98,40 @@ export default function DenDiscover({
   async function run(params: string, label: string) {
     setSearching(true);
     setHeading(label);
+    setBaseParams(params);
+    setPage(1);
     try {
-      const res = await fetch(`/api/den/books/search?${params}`);
+      const res = await fetch(`/api/den/books/search?${params}&page=1`);
       const d = await res.json();
       setResults(d.results ?? []);
+      setHasMore(Boolean(d.hasMore));
     } catch {
       setResults([]);
+      setHasMore(false);
     } finally {
       setSearching(false);
+    }
+  }
+
+  async function loadMore() {
+    if (!baseParams || loadingMore) return;
+    setLoadingMore(true);
+    const next = page + 1;
+    try {
+      const res = await fetch(`/api/den/books/search?${baseParams}&page=${next}`);
+      const d = await res.json();
+      const more: Result[] = d.results ?? [];
+      // De-dupe by id in case pages overlap.
+      setResults((prev) => {
+        const seen = new Set(prev.map((r) => r.externalId));
+        return [...prev, ...more.filter((r) => !seen.has(r.externalId))];
+      });
+      setHasMore(Boolean(d.hasMore));
+      setPage(next);
+    } catch {
+      setHasMore(false);
+    } finally {
+      setLoadingMore(false);
     }
   }
 
@@ -194,11 +224,24 @@ export default function DenDiscover({
           {results.length === 0 ? (
             <p className="status">No books found. Try another search.</p>
           ) : (
-            <div className="den-grid">
-              {results.map((r) => (
-                <Card key={r.externalId} r={r} />
-              ))}
-            </div>
+            <>
+              <div className="den-grid">
+                {results.map((r) => (
+                  <Card key={r.externalId} r={r} />
+                ))}
+              </div>
+              {hasMore && (
+                <div className="den-loadmore-wrap">
+                  <button
+                    className="den-loadmore"
+                    onClick={loadMore}
+                    disabled={loadingMore}
+                  >
+                    {loadingMore ? "Loading…" : "Load more books"}
+                  </button>
+                </div>
+              )}
+            </>
           )}
         </section>
       ) : (

@@ -2677,3 +2677,13 @@ button.reader-back, button.reader-notes-link {
 .den-connected-empty { max-width: 42ch; }
 .text-link { background: none; border: none; color: inherit; cursor: pointer; text-decoration: underline; opacity: 0.75; font-size: 0.85rem; }
 .text-link:hover { opacity: 1; }
+
+/* The Den — reader seek controls */
+.reader-seek { display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+.reader-seek button {
+  background: transparent; border: 1px solid rgba(255,255,255,0.22); color: inherit;
+  border-radius: 6px; padding: 3px 7px; cursor: pointer; font-size: 0.78rem;
+}
+.reader-seek button:hover { background: rgba(255,255,255,0.1); }
+.reader-progress { cursor: pointer; }
+.reader-progress:hover .reader-progress-fill { background: rgba(230,211,163,1); }

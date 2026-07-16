@@ -43,6 +43,8 @@ export default function BookReader({
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const restored = useRef(false);
+  const userInteracted = useRef(false);
+  const lastPct = useRef(initialPercent);
 
   // Load the illustrated HTML; fall back to plain text if unavailable.
   useEffect(() => {
@@ -72,17 +74,41 @@ export default function BookReader({
     };
   }, [gid]);
 
-  // Once content is in the DOM, jump to the saved place.
+  // Restore the saved place. The rich HTML keeps growing as images load, so a
+  // single jump lands too high — re-apply on a few ticks and on each image load
+  // until the user scrolls, then stop.
   useEffect(() => {
     if (content === null || restored.current) return;
     restored.current = true;
     const el = scrollRef.current;
-    if (el && initialPercent > 0) {
-      requestAnimationFrame(() => {
-        el.scrollTop = initialPercent * (el.scrollHeight - el.clientHeight);
-      });
-    }
+    if (!el || initialPercent <= 0) return;
+    const apply = () => {
+      if (userInteracted.current) return;
+      const max = el.scrollHeight - el.clientHeight;
+      if (max > 0) el.scrollTop = initialPercent * max;
+    };
+    apply();
+    const timers = [80, 300, 700, 1400, 2500].map((ms) => setTimeout(apply, ms));
+    const imgs = Array.from(el.querySelectorAll("img"));
+    imgs.forEach((im) => im.addEventListener("load", apply));
+    return () => {
+      timers.forEach(clearTimeout);
+      imgs.forEach((im) => im.removeEventListener("load", apply));
+    };
   }, [content, initialPercent]);
+
+  // Save the latest position when the reader unmounts (closing before the
+  // debounce fires would otherwise lose the last few seconds of reading).
+  useEffect(
+    () => () => {
+      supabase
+        .from("den_books")
+        .update({ progress: { percent: lastPct.current } })
+        .eq("id", id)
+        .then(() => {});
+    },
+    [id, supabase]
+  );
 
   const onScroll = useCallback(() => {
     const el = scrollRef.current;
@@ -90,6 +116,7 @@ export default function BookReader({
     const max = el.scrollHeight - el.clientHeight;
     const pct = max > 0 ? Math.min(1, el.scrollTop / max) : 0;
     setProgress(pct);
+    lastPct.current = pct;
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(() => {
       supabase
@@ -99,6 +126,18 @@ export default function BookReader({
         .then(() => {});
     }, 800);
   }, [id, supabase]);
+
+  // Jump by a fraction (±5% buttons) or to an absolute fraction (progress bar).
+  function seekBy(delta: number) {
+    seekTo(progress + delta);
+  }
+  function seekTo(fraction: number) {
+    const el = scrollRef.current;
+    if (!el) return;
+    userInteracted.current = true;
+    const max = el.scrollHeight - el.clientHeight;
+    if (max > 0) el.scrollTop = Math.max(0, Math.min(1, fraction)) * max;
+  }
 
   function captureSelection() {
     const s = window.getSelection()?.toString().trim() ?? "";
@@ -179,9 +218,24 @@ export default function BookReader({
               📝 Notes
             </Link>
           ))}
-        <span className="reader-pct">{Math.round(progress * 100)}%</span>
+        <div className="reader-seek">
+          <button onClick={() => seekBy(-0.05)} aria-label="Back 5%" title="Back 5%">
+            −5%
+          </button>
+          <span className="reader-pct">{Math.round(progress * 100)}%</span>
+          <button onClick={() => seekBy(0.05)} aria-label="Forward 5%" title="Forward 5%">
+            +5%
+          </button>
+        </div>
       </header>
-      <div className="reader-progress">
+      <div
+        className="reader-progress"
+        title="Click to jump"
+        onClick={(e) => {
+          const r = e.currentTarget.getBoundingClientRect();
+          seekTo((e.clientX - r.left) / r.width);
+        }}
+      >
         <div
           className="reader-progress-fill"
           style={{ width: `${progress * 100}%` }}
@@ -191,6 +245,8 @@ export default function BookReader({
         className="reader-scroll"
         ref={scrollRef}
         onScroll={onScroll}
+        onWheel={() => (userInteracted.current = true)}
+        onPointerDown={() => (userInteracted.current = true)}
         onMouseUp={captureSelection}
         onTouchEnd={captureSelection}
       >

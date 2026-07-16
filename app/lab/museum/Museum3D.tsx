@@ -870,6 +870,122 @@ function DenFurniture({ lowPower }: { lowPower: boolean }) {
   );
 }
 
+// A window on the Den's west wall you can toggle between day, night, and rain.
+type Sky = "day" | "night" | "rain";
+const SKY_LOOK: Record<Sky, { sky: string; int: number; light: string; li: number }> = {
+  day: { sky: "#a9cbf0", int: 1.0, light: "#dbe6ff", li: 9 },
+  night: { sky: "#0e1830", int: 0.45, light: "#2b3a5c", li: 2.5 },
+  rain: { sky: "#5f666f", int: 0.7, light: "#5b6672", li: 4 },
+};
+
+function RainStreaks({ zW, xWall, lowPower }: { zW: number; xWall: number; lowPower: boolean }) {
+  const ref = useRef<THREE.Group>(null);
+  const count = lowPower ? 34 : 70;
+  const drops = useMemo(
+    () =>
+      Array.from({ length: count }, () => ({
+        y: 1.3 + Math.random() * 2.4,
+        z: zW - 1.4 + Math.random() * 2.8,
+        v: 3.5 + Math.random() * 3.5,
+      })),
+    [count, zW]
+  );
+  useFrame((_, dt) => {
+    const g = ref.current;
+    if (!g) return;
+    g.children.forEach((c, i) => {
+      const d = drops[i];
+      d.y -= d.v * dt;
+      if (d.y < 1.3) d.y = 3.7;
+      c.position.y = d.y;
+    });
+  });
+  return (
+    <group ref={ref}>
+      {drops.map((d, i) => (
+        <mesh key={i} position={[xWall + 0.1, d.y, d.z]}>
+          <boxGeometry args={[0.006, 0.26, 0.006]} />
+          <meshStandardMaterial
+            color="#aebfce"
+            transparent
+            opacity={0.55}
+            emissive="#8ba0b5"
+            emissiveIntensity={0.4}
+          />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
+function Stars({ zW, xWall }: { zW: number; xWall: number }) {
+  const stars = useMemo(
+    () =>
+      Array.from({ length: 28 }, () => ({
+        y: 1.5 + Math.random() * 2.0,
+        z: zW - 1.35 + Math.random() * 2.7,
+        s: 0.012 + Math.random() * 0.02,
+      })),
+    [zW]
+  );
+  return (
+    <group>
+      {stars.map((st, i) => (
+        <mesh key={i} position={[xWall + 0.07, st.y, st.z]}>
+          <sphereGeometry args={[st.s, 6, 6]} />
+          <meshStandardMaterial color="#fdfbf0" emissive="#fdfbf0" emissiveIntensity={1.6} />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
+function DenWindow({ sky, lowPower }: { sky: Sky; lowPower: boolean }) {
+  const zW = A + VEST_LEN - 3;
+  const xWall = -VEST_HALF;
+  const look = SKY_LOOK[sky];
+  const frameCol = "#2e2117";
+  const bar = (
+    args: [number, number, number],
+    pos: [number, number, number]
+  ) => (
+    <mesh position={pos}>
+      <boxGeometry args={args} />
+      <meshStandardMaterial color={frameCol} roughness={0.6} />
+    </mesh>
+  );
+  return (
+    <group>
+      {/* sky pane */}
+      <mesh position={[xWall + 0.06, 2.5, zW]} rotation={[0, Math.PI / 2, 0]}>
+        <planeGeometry args={[3, 2.4]} />
+        <meshStandardMaterial color={look.sky} emissive={look.sky} emissiveIntensity={look.int} />
+      </mesh>
+      {sky === "night" && <Stars zW={zW} xWall={xWall} />}
+      {sky === "rain" && <RainStreaks zW={zW} xWall={xWall} lowPower={lowPower} />}
+      {/* glass sheen */}
+      <mesh position={[xWall + 0.09, 2.5, zW]} rotation={[0, Math.PI / 2, 0]}>
+        <planeGeometry args={[3, 2.4]} />
+        <meshStandardMaterial color="#cfe0f0" transparent opacity={0.1} roughness={0.1} />
+      </mesh>
+      {/* frame + muntins */}
+      {bar([0.16, 0.14, 3.26], [xWall + 0.12, 3.77, zW])}
+      {bar([0.16, 0.14, 3.26], [xWall + 0.12, 1.23, zW])}
+      {bar([0.16, 2.4, 0.14], [xWall + 0.12, 2.5, zW - 1.5])}
+      {bar([0.16, 2.4, 0.14], [xWall + 0.12, 2.5, zW + 1.5])}
+      {bar([0.12, 2.4, 0.05], [xWall + 0.12, 2.5, zW])}
+      {bar([0.12, 0.05, 3], [xWall + 0.12, 2.5, zW])}
+      <pointLight
+        position={[xWall + 0.8, 2.6, zW]}
+        intensity={lowPower ? look.li * 0.7 : look.li}
+        distance={9}
+        decay={2}
+        color={look.light}
+      />
+    </group>
+  );
+}
+
 // Interactive stations in the Den. Standing near one shows a prompt that opens
 // the matching 2D tool (the writing desk, the library / reader).
 type Station = { id: string; label: string; cx: number; cz: number; r: number; href: string };
@@ -920,6 +1036,7 @@ function Scene({
   reflect,
   lowPower,
   showDen,
+  sky,
   onSelect,
 }: {
   layout: Layout;
@@ -928,6 +1045,7 @@ function Scene({
   reflect: boolean;
   lowPower: boolean;
   showDen: boolean;
+  sky: Sky;
   onSelect: (p: Piece) => void;
 }) {
   return (
@@ -978,6 +1096,7 @@ function Scene({
       ))}
 
       {showDen && <DenFurniture lowPower={lowPower} />}
+      {showDen && <DenWindow sky={sky} lowPower={lowPower} />}
 
       {layout.hints.map((h, i) => (
         <HintSign key={i} pos={h.pos} rot={h.rot} />
@@ -1055,8 +1174,22 @@ export default function Museum3D({
   const [hot, setHot] = useState<string[]>([]);
   const [nearStation, setNearStation] = useState<string | null>(null);
   const [denPanel, setDenPanel] = useState<null | "library" | "writing">(null);
+  const [sky, setSky] = useState<Sky>("day");
+  const rainRef = useRef<HTMLAudioElement>(null);
   const pausedRef = useRef(false);
   pausedRef.current = denPanel !== null;
+
+  // Rain ambience follows the window toggle (needs the click as its gesture).
+  useEffect(() => {
+    const a = rainRef.current;
+    if (!a) return;
+    if (sky === "rain") {
+      a.volume = 0.4;
+      a.play().catch(() => {});
+    } else {
+      a.pause();
+    }
+  }, [sky]);
   const [tp, setTp] = useState<{ spawn: [number, number, number]; yaw: number; k: number }>({
     spawn: ENTRANCE_SPAWN,
     yaw: 0,
@@ -1185,6 +1318,7 @@ export default function Museum3D({
             reflect={!isTouch}
             lowPower={isTouch}
             showDen={isOwner}
+            sky={sky}
             onSelect={handleSelect}
           />
         )}
@@ -1230,6 +1364,26 @@ export default function Museum3D({
 
       {/* Soft background music — add a file at public/museum-music.mp3 */}
       <audio ref={audioRef} loop preload="none" src="/museum-music.mp3" />
+      {/* Rain loop — add a file at public/rain.mp3 */}
+      <audio ref={rainRef} loop preload="none" src="/rain.mp3" />
+
+      {view === "ready" && isOwner && (
+        <div style={skyToggleStyle}>
+          {(["day", "night", "rain"] as Sky[]).map((s) => (
+            <button
+              key={s}
+              onClick={() => setSky(s)}
+              style={{
+                ...skyBtnStyle,
+                ...(sky === s ? skyBtnActiveStyle : null),
+              }}
+              aria-label={s}
+            >
+              {s === "day" ? "☀️" : s === "night" ? "🌙" : "🌧"}
+            </button>
+          ))}
+        </div>
+      )}
       {view === "ready" && (
         <button onClick={toggleMusic} style={musicBtnStyle} aria-label="Toggle music">
           {musicOn ? "🔊 Music on" : "🔈 Music off"}
@@ -1351,6 +1505,29 @@ const musicBtnStyle: React.CSSProperties = {
   padding: "8px 14px",
   cursor: "pointer",
   fontSize: 14,
+};
+const skyToggleStyle: React.CSSProperties = {
+  position: "absolute",
+  bottom: 14,
+  left: 14,
+  display: "flex",
+  gap: 4,
+  background: "rgba(20,18,16,0.72)",
+  border: "1px solid #4a423b",
+  borderRadius: 8,
+  padding: 4,
+};
+const skyBtnStyle: React.CSSProperties = {
+  background: "transparent",
+  border: "none",
+  borderRadius: 6,
+  padding: "6px 10px",
+  cursor: "pointer",
+  fontSize: 16,
+  lineHeight: 1,
+};
+const skyBtnActiveStyle: React.CSSProperties = {
+  background: "rgba(230,211,163,0.22)",
 };
 const stationPromptStyle: React.CSSProperties = {
   position: "absolute",

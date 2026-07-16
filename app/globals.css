@@ -2448,3 +2448,19 @@ a {
 .save-btn.ghost {
   color: var(--muted);
 }
+
+/* The Den (Mooseprint study) — directory tree */
+.den-toolbar { margin: 12px 0 8px; }
+.den-tree { list-style: none; margin: 0; padding-left: 18px; }
+.den-tree > li { margin: 4px 0; }
+.den-row { display: flex; align-items: center; gap: 12px; justify-content: space-between; }
+.den-name { font-weight: 600; }
+.den-meta { opacity: 0.6; font-weight: 400; }
+.den-actions { display: inline-flex; gap: 8px; opacity: 0; transition: opacity 0.12s; }
+.den-row:hover .den-actions, .den-row:focus-within .den-actions { opacity: 1; }
+.den-actions button, .den-toolbar button {
+  font-size: 0.8rem; padding: 2px 8px; border-radius: 6px;
+  border: 1px solid rgba(0,0,0,0.15); background: transparent; cursor: pointer;
+}
+.den-actions button:hover, .den-toolbar button:hover { background: rgba(0,0,0,0.05); }
+.den-leaf { list-style: none; padding: 2px 0; opacity: 0.9; }

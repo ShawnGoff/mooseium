@@ -649,8 +649,10 @@ function BookRow({ y, width }: { y: number; width: number }) {
   const books: React.ReactElement[] = [];
   let x = -width / 2 + 0.04;
   let i = 0;
-  while (x < width / 2 - 0.08 && i < 40) {
-    const w = 0.05 + (i % 3) * 0.018;
+  // Chunkier books = ~14 per row instead of ~26 — roughly halves the mesh/draw
+  // count of the shelves with no meaningful visual change.
+  while (x < width / 2 - 0.1 && i < 16) {
+    const w = 0.1 + (i % 3) * 0.028;
     const h = 0.3 + ((i * 7) % 5) * 0.03;
     const c = BOOK_COLORS[(i * 3) % BOOK_COLORS.length];
     books.push(
@@ -659,7 +661,7 @@ function BookRow({ y, width }: { y: number; width: number }) {
         <meshStandardMaterial color={c} roughness={0.85} />
       </mesh>
     );
-    x += w + 0.012;
+    x += w + 0.014;
     i++;
   }
   return <>{books}</>;
@@ -1053,13 +1055,17 @@ function DenWindow({
       {bar([0.16, 2.4, 0.14], [xWall + dir * 0.12, 2.5, zW + 1.5])}
       {bar([0.12, 2.4, 0.05], [xWall + dir * 0.12, 2.5, zW])}
       {bar([0.12, 0.05, 3], [xWall + dir * 0.12, 2.5, zW])}
-      <pointLight
-        position={[xWall + dir * 1.4, 2.7, zW]}
-        intensity={lowPower ? look.li * 0.7 : look.li}
-        distance={10}
-        decay={2}
-        color={look.light}
-      />
+      {/* On phones the ceiling light carries the room; skip the window lights to
+          keep the point-light count down. */}
+      {!lowPower && (
+        <pointLight
+          position={[xWall + dir * 1.4, 2.7, zW]}
+          intensity={look.li}
+          distance={10}
+          decay={2}
+          color={look.light}
+        />
+      )}
     </group>
   );
 }
@@ -1243,7 +1249,11 @@ function StationWatcher({
   onNear: (id: string | null) => void;
 }) {
   const cur = useRef<string | null>(null);
-  useFrame(() => {
+  const acc = useRef(0);
+  useFrame((_, dt) => {
+    acc.current += dt;
+    if (acc.current < 0.2) return; // 5×/sec is plenty for a proximity prompt
+    acc.current = 0;
     const p = posRef.current;
     let found: string | null = null;
     for (const s of DEN_STATIONS) {

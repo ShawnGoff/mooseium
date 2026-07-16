@@ -803,12 +803,22 @@ function Armchair({
   );
 }
 
-function DenFurniture({ lowPower }: { lowPower: boolean }) {
+function DenFurniture({ lowPower, lightsOn }: { lowPower: boolean; lightsOn: boolean }) {
   const wW = VEST_HALF; // wall x
   const zS = A + VEST_LEN; // south wall z
   const zMid = A + VEST_LEN / 2;
   return (
     <group>
+      {/* room ceiling light (toggleable) */}
+      {lightsOn && (
+        <pointLight
+          position={[0, H - 0.6, zMid]}
+          intensity={lowPower ? 11 : 16}
+          distance={24}
+          decay={2}
+          color="#ffe6bd"
+        />
+      )}
       {/* "THE DEN" carved on the back (south) wall, facing the visitor */}
       <Text
         font={MUSEUM_FONT}
@@ -833,14 +843,16 @@ function DenFurniture({ lowPower }: { lowPower: boolean }) {
         <meshStandardMaterial color="#3c2320" roughness={0.95} />
       </mesh>
 
-      {/* bookshelves along the west and east walls */}
+      {/* bookshelves: two on the west wall, one on the east, one anchoring the
+          back (south) wall under the sign */}
       <Bookshelf position={[-wW + 0.22, 0, zMid - 2.6]} rotation={[0, Math.PI / 2, 0]} />
       <Bookshelf position={[-wW + 0.22, 0, zMid + 0.3]} rotation={[0, Math.PI / 2, 0]} />
       <Bookshelf position={[wW - 0.22, 0, zMid - 2.6]} rotation={[0, -Math.PI / 2, 0]} />
+      <Bookshelf position={[0, 0, zS - 0.24]} rotation={[0, Math.PI, 0]} />
 
-      {/* writing desk against the south (back) wall, chair facing it */}
-      <Desk position={[2.6, 0, zS - 0.9]} rotation={[0, Math.PI, 0]} />
-      <Chair position={[2.6, 0, zS - 1.9]} rotation={[0, 0, 0]} />
+      {/* writing desk in front of the east window, chair facing out the window */}
+      <Desk position={[wW - 0.7, 0, zS - 3]} rotation={[0, -Math.PI / 2, 0]} />
+      <Chair position={[wW - 1.75, 0, zS - 3]} rotation={[0, Math.PI / 2, 0]} />
 
       {/* reading nook: armchair, side table + lamp near the SW corner */}
       <Armchair position={[-2.8, 0, zS - 1.6]} rotation={[0, Math.PI - 0.35, 0]} />
@@ -857,7 +869,7 @@ function DenFurniture({ lowPower }: { lowPower: boolean }) {
         <coneGeometry args={[0.22, 0.3, 16, 1, true]} />
         <meshStandardMaterial color="#fff2cf" emissive="#ffd98f" emissiveIntensity={1.2} side={2} />
       </mesh>
-      {!lowPower && (
+      {lightsOn && !lowPower && (
         <pointLight
           position={[-4.4, 1.7, zS - 1.4]}
           intensity={6}
@@ -870,7 +882,7 @@ function DenFurniture({ lowPower }: { lowPower: boolean }) {
   );
 }
 
-// A window on the Den's west wall you can toggle between day, night, and rain.
+// Windows on the Den's side walls you can toggle between day, night, and rain.
 type Sky = "day" | "night" | "rain";
 const SKY_LOOK: Record<Sky, { sky: string; int: number; light: string; li: number }> = {
   day: { sky: "#a9cbf0", int: 1.0, light: "#dbe6ff", li: 9 },
@@ -878,7 +890,17 @@ const SKY_LOOK: Record<Sky, { sky: string; int: number; light: string; li: numbe
   rain: { sky: "#5f666f", int: 0.7, light: "#5b6672", li: 4 },
 };
 
-function RainStreaks({ zW, xWall, lowPower }: { zW: number; xWall: number; lowPower: boolean }) {
+function RainStreaks({
+  zW,
+  xWall,
+  dir,
+  lowPower,
+}: {
+  zW: number;
+  xWall: number;
+  dir: number;
+  lowPower: boolean;
+}) {
   const ref = useRef<THREE.Group>(null);
   const count = lowPower ? 34 : 70;
   const drops = useMemo(
@@ -903,7 +925,7 @@ function RainStreaks({ zW, xWall, lowPower }: { zW: number; xWall: number; lowPo
   return (
     <group ref={ref}>
       {drops.map((d, i) => (
-        <mesh key={i} position={[xWall + 0.1, d.y, d.z]}>
+        <mesh key={i} position={[xWall + dir * 0.1, d.y, d.z]}>
           <boxGeometry args={[0.006, 0.26, 0.006]} />
           <meshStandardMaterial
             color="#aebfce"
@@ -918,7 +940,7 @@ function RainStreaks({ zW, xWall, lowPower }: { zW: number; xWall: number; lowPo
   );
 }
 
-function Stars({ zW, xWall }: { zW: number; xWall: number }) {
+function Stars({ zW, xWall, dir }: { zW: number; xWall: number; dir: number }) {
   const stars = useMemo(
     () =>
       Array.from({ length: 28 }, () => ({
@@ -931,7 +953,7 @@ function Stars({ zW, xWall }: { zW: number; xWall: number }) {
   return (
     <group>
       {stars.map((st, i) => (
-        <mesh key={i} position={[xWall + 0.07, st.y, st.z]}>
+        <mesh key={i} position={[xWall + dir * 0.07, st.y, st.z]}>
           <sphereGeometry args={[st.s, 6, 6]} />
           <meshStandardMaterial color="#fdfbf0" emissive="#fdfbf0" emissiveIntensity={1.6} />
         </mesh>
@@ -940,15 +962,22 @@ function Stars({ zW, xWall }: { zW: number; xWall: number }) {
   );
 }
 
-function DenWindow({ sky, lowPower }: { sky: Sky; lowPower: boolean }) {
+function DenWindow({
+  side,
+  sky,
+  lowPower,
+}: {
+  side: "W" | "E";
+  sky: Sky;
+  lowPower: boolean;
+}) {
   const zW = A + VEST_LEN - 3;
-  const xWall = -VEST_HALF;
+  const xWall = side === "W" ? -VEST_HALF : VEST_HALF;
+  const dir = side === "W" ? 1 : -1; // toward the room interior
+  const faceRot: [number, number, number] = [0, dir * (Math.PI / 2), 0];
   const look = SKY_LOOK[sky];
   const frameCol = "#2e2117";
-  const bar = (
-    args: [number, number, number],
-    pos: [number, number, number]
-  ) => (
+  const bar = (args: [number, number, number], pos: [number, number, number]) => (
     <mesh position={pos}>
       <boxGeometry args={args} />
       <meshStandardMaterial color={frameCol} roughness={0.6} />
@@ -957,26 +986,26 @@ function DenWindow({ sky, lowPower }: { sky: Sky; lowPower: boolean }) {
   return (
     <group>
       {/* sky pane */}
-      <mesh position={[xWall + 0.06, 2.5, zW]} rotation={[0, Math.PI / 2, 0]}>
+      <mesh position={[xWall + dir * 0.06, 2.5, zW]} rotation={faceRot}>
         <planeGeometry args={[3, 2.4]} />
         <meshStandardMaterial color={look.sky} emissive={look.sky} emissiveIntensity={look.int} />
       </mesh>
-      {sky === "night" && <Stars zW={zW} xWall={xWall} />}
-      {sky === "rain" && <RainStreaks zW={zW} xWall={xWall} lowPower={lowPower} />}
+      {sky === "night" && <Stars zW={zW} xWall={xWall} dir={dir} />}
+      {sky === "rain" && <RainStreaks zW={zW} xWall={xWall} dir={dir} lowPower={lowPower} />}
       {/* glass sheen */}
-      <mesh position={[xWall + 0.09, 2.5, zW]} rotation={[0, Math.PI / 2, 0]}>
+      <mesh position={[xWall + dir * 0.09, 2.5, zW]} rotation={faceRot}>
         <planeGeometry args={[3, 2.4]} />
         <meshStandardMaterial color="#cfe0f0" transparent opacity={0.1} roughness={0.1} />
       </mesh>
       {/* frame + muntins */}
-      {bar([0.16, 0.14, 3.26], [xWall + 0.12, 3.77, zW])}
-      {bar([0.16, 0.14, 3.26], [xWall + 0.12, 1.23, zW])}
-      {bar([0.16, 2.4, 0.14], [xWall + 0.12, 2.5, zW - 1.5])}
-      {bar([0.16, 2.4, 0.14], [xWall + 0.12, 2.5, zW + 1.5])}
-      {bar([0.12, 2.4, 0.05], [xWall + 0.12, 2.5, zW])}
-      {bar([0.12, 0.05, 3], [xWall + 0.12, 2.5, zW])}
+      {bar([0.16, 0.14, 3.26], [xWall + dir * 0.12, 3.77, zW])}
+      {bar([0.16, 0.14, 3.26], [xWall + dir * 0.12, 1.23, zW])}
+      {bar([0.16, 2.4, 0.14], [xWall + dir * 0.12, 2.5, zW - 1.5])}
+      {bar([0.16, 2.4, 0.14], [xWall + dir * 0.12, 2.5, zW + 1.5])}
+      {bar([0.12, 2.4, 0.05], [xWall + dir * 0.12, 2.5, zW])}
+      {bar([0.12, 0.05, 3], [xWall + dir * 0.12, 2.5, zW])}
       <pointLight
-        position={[xWall + 0.8, 2.6, zW]}
+        position={[xWall + dir * 0.8, 2.6, zW]}
         intensity={lowPower ? look.li * 0.7 : look.li}
         distance={9}
         decay={2}
@@ -990,7 +1019,7 @@ function DenWindow({ sky, lowPower }: { sky: Sky; lowPower: boolean }) {
 // the matching 2D tool (the writing desk, the library / reader).
 type Station = { id: string; label: string; cx: number; cz: number; r: number; href: string };
 const DEN_STATIONS: Station[] = [
-  { id: "desk", label: "✍️  Sit and write", cx: 2.6, cz: A + VEST_LEN - 1.9, r: 1.9, href: "/den" },
+  { id: "desk", label: "✍️  Sit and write", cx: VEST_HALF - 2.4, cz: A + VEST_LEN - 3, r: 1.9, href: "/den" },
   { id: "chair", label: "📖  Sit and read", cx: -2.8, cz: A + VEST_LEN - 1.6, r: 1.9, href: "/den" },
   {
     id: "shelves",
@@ -1037,6 +1066,7 @@ function Scene({
   lowPower,
   showDen,
   sky,
+  lightsOn,
   onSelect,
 }: {
   layout: Layout;
@@ -1046,6 +1076,7 @@ function Scene({
   lowPower: boolean;
   showDen: boolean;
   sky: Sky;
+  lightsOn: boolean;
   onSelect: (p: Piece) => void;
 }) {
   return (
@@ -1095,8 +1126,9 @@ function Scene({
         <RoomMesh key={i} room={room} />
       ))}
 
-      {showDen && <DenFurniture lowPower={lowPower} />}
-      {showDen && <DenWindow sky={sky} lowPower={lowPower} />}
+      {showDen && <DenFurniture lowPower={lowPower} lightsOn={lightsOn} />}
+      {showDen && <DenWindow side="W" sky={sky} lowPower={lowPower} />}
+      {showDen && <DenWindow side="E" sky={sky} lowPower={lowPower} />}
 
       {layout.hints.map((h, i) => (
         <HintSign key={i} pos={h.pos} rot={h.rot} />
@@ -1175,6 +1207,7 @@ export default function Museum3D({
   const [nearStation, setNearStation] = useState<string | null>(null);
   const [denPanel, setDenPanel] = useState<null | "library" | "writing">(null);
   const [sky, setSky] = useState<Sky>("day");
+  const [lightsOn, setLightsOn] = useState(true);
   const rainRef = useRef<HTMLAudioElement>(null);
   const pausedRef = useRef(false);
   pausedRef.current = denPanel !== null;
@@ -1319,6 +1352,7 @@ export default function Museum3D({
             lowPower={isTouch}
             showDen={isOwner}
             sky={sky}
+            lightsOn={lightsOn}
             onSelect={handleSelect}
           />
         )}
@@ -1382,6 +1416,15 @@ export default function Museum3D({
               {s === "day" ? "☀️" : s === "night" ? "🌙" : "🌧"}
             </button>
           ))}
+          <span style={{ width: 1, background: "#4a423b", margin: "2px 2px" }} />
+          <button
+            onClick={() => setLightsOn((v) => !v)}
+            style={{ ...skyBtnStyle, ...(lightsOn ? skyBtnActiveStyle : null) }}
+            aria-label="Toggle lights"
+            title={lightsOn ? "Lights on" : "Lights off"}
+          >
+            💡
+          </button>
         </div>
       )}
       {view === "ready" && (

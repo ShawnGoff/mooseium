@@ -1090,10 +1090,10 @@ function SkyRain({ lowPower }: { lowPower: boolean }) {
   const drops = useMemo(
     () =>
       Array.from({ length: count }, () => ({
-        x: -1.9 + Math.random() * 3.8,
-        z: -1.9 + Math.random() * 3.8,
-        y: H - 0.03 - Math.random() * 0.08,
-        v: 0.7 + Math.random() * 0.5,
+        x: -2.7 + Math.random() * 5.4,
+        z: -2.7 + Math.random() * 5.4,
+        y: H - 0.02 - Math.random() * 0.05,
+        v: 0.45 + Math.random() * 0.35,
       })),
     [count]
   );
@@ -1103,10 +1103,10 @@ function SkyRain({ lowPower }: { lowPower: boolean }) {
     g.children.forEach((c, i) => {
       const d = drops[i];
       d.y -= d.v * dt;
-      d.x += d.v * 0.12 * dt; // the angle across the glass
-      if (d.y < H - 0.12) {
-        d.y = H - 0.03;
-        d.x = -1.9 + Math.random() * 3.8;
+      d.x += d.v * 0.1 * dt; // slight angle across the glass
+      if (d.y < H - 0.09) {
+        d.y = H - 0.02;
+        d.x = -2.7 + Math.random() * 5.4;
       }
       c.position.set(d.x, d.y, d.z);
     });
@@ -1141,31 +1141,11 @@ function Skylight({ sky, lowPower }: { sky: Sky; lowPower: boolean }) {
       <mesh position={[0, H - 0.03, 0]} rotation={[Math.PI / 2, 0, 0]}>
         <planeGeometry args={[6, 6]} />
         {sky === "day" ? (
-          <meshStandardMaterial
-            color="#000000"
-            emissive="#ffffff"
-            emissiveMap={dayTex}
-            emissiveIntensity={1}
-            roughness={1}
-            metalness={0}
-          />
+          <meshLambertMaterial color="#000000" emissive="#ffffff" emissiveMap={dayTex} emissiveIntensity={1} />
         ) : sky === "rain" ? (
-          <meshStandardMaterial
-            color="#000000"
-            emissive="#ffffff"
-            emissiveMap={rainTex}
-            emissiveIntensity={1}
-            roughness={1}
-            metalness={0}
-          />
+          <meshLambertMaterial color="#000000" emissive="#ffffff" emissiveMap={rainTex} emissiveIntensity={1} />
         ) : (
-          <meshStandardMaterial
-            color="#000000"
-            emissive="#1e2f56"
-            emissiveIntensity={1}
-            roughness={1}
-            metalness={0}
-          />
+          <meshLambertMaterial color="#000000" emissive="#1e2f56" emissiveIntensity={1} />
         )}
       </mesh>
     </group>

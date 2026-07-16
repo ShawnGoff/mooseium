@@ -25,6 +25,18 @@ function isGutenbergUrl(u: string): boolean {
   }
 }
 
+async function tryFetch(url: string): Promise<{ raw: string; finalUrl: string } | null> {
+  try {
+    const r = await fetch(url, { redirect: "follow", next: { revalidate: 86400 } });
+    if (!r.ok) return null;
+    const raw = await r.text();
+    if (!raw || raw.length < 200) return null;
+    return { raw, finalUrl: r.url || url };
+  } catch {
+    return null;
+  }
+}
+
 export async function GET(req: NextRequest) {
   const limited = await checkRateLimit(req, "den-book-content", 30, 60_000);
   if (limited) return limited;
@@ -34,39 +46,44 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Bad book id." }, { status: 400 });
   }
 
-  let meta: GutendexBook;
-  try {
-    const r = await fetch(`https://gutendex.com/books/${gid}`, {
-      next: { revalidate: 86400 },
-    });
-    if (!r.ok) throw new Error();
-    meta = (await r.json()) as GutendexBook;
-  } catch {
-    return NextResponse.json({ error: "Book not found." }, { status: 404 });
+  // Fetch the illustrated HTML DIRECTLY from gutenberg.org's predictable file
+  // URLs — this doesn't depend on the (flaky) Gutendex metadata API.
+  let got: { raw: string; finalUrl: string } | null = null;
+  const direct = [
+    `https://www.gutenberg.org/cache/epub/${gid}/pg${gid}-images.html`,
+    `https://www.gutenberg.org/cache/epub/${gid}/pg${gid}.html`,
+    `https://www.gutenberg.org/files/${gid}/${gid}-h/${gid}-h.htm`,
+  ];
+  for (const url of direct) {
+    got = await tryFetch(url);
+    if (got) break;
   }
 
-  // Prefer an HTML format (has the illustrations); skip zip archives.
-  const htmlUrl = Object.entries(meta.formats).find(
-    ([type, url]) => type.startsWith("text/html") && !url.endsWith(".zip"),
-  )?.[1];
+  // Fallback: resolve the URL via Gutendex if the direct paths didn't exist.
+  if (!got) {
+    try {
+      const mr = await fetch(`https://gutendex.com/books/${gid}`, {
+        next: { revalidate: 86400 },
+      });
+      if (mr.ok) {
+        const meta = (await mr.json()) as GutendexBook;
+        const htmlUrl = Object.entries(meta.formats ?? {}).find(
+          ([type, url]) => type.startsWith("text/html") && !url.endsWith(".zip"),
+        )?.[1];
+        if (htmlUrl && isGutenbergUrl(htmlUrl)) got = await tryFetch(htmlUrl);
+      }
+    } catch {
+      /* ignore */
+    }
+  }
 
-  if (!htmlUrl || !isGutenbergUrl(htmlUrl)) {
+  if (!got) {
     return NextResponse.json(
       { error: "No illustrated version for this book." },
       { status: 415 },
     );
   }
-
-  let raw: string;
-  let finalUrl: string;
-  try {
-    const r = await fetch(htmlUrl, { redirect: "follow", next: { revalidate: 86400 } });
-    if (!r.ok) throw new Error();
-    raw = await r.text();
-    finalUrl = r.url || htmlUrl;
-  } catch {
-    return NextResponse.json({ error: "Could not load the book." }, { status: 502 });
-  }
+  const { raw, finalUrl } = got;
 
   const base = finalUrl.slice(0, finalUrl.lastIndexOf("/") + 1);
 
@@ -104,8 +121,13 @@ export async function GET(req: NextRequest) {
     },
   });
 
+  const titleMatch = /<title>([^<]+)<\/title>/i.exec(raw);
+  const title = titleMatch
+    ? titleMatch[1].replace(/\s*[|·-]\s*Project Gutenberg.*/i, "").trim()
+    : null;
+
   return NextResponse.json(
-    { title: meta.title, html: clean },
+    { title, html: clean },
     { headers: { "Cache-Control": "public, max-age=86400" } },
   );
 }

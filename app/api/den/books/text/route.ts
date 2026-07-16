@@ -49,53 +49,67 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Bad book id." }, { status: 400 });
   }
 
-  let meta: GutendexBook;
-  try {
-    const r = await fetch(`https://gutendex.com/books/${gid}`, {
-      next: { revalidate: 86400 },
-    });
-    if (!r.ok) throw new Error();
-    meta = (await r.json()) as GutendexBook;
-  } catch {
-    return NextResponse.json({ error: "Book not found." }, { status: 404 });
-  }
+  // Fetch the plain text DIRECTLY from gutenberg.org's predictable file URLs so
+  // reading doesn't depend on the (flaky) Gutendex metadata API.
+  const direct = [
+    `https://www.gutenberg.org/cache/epub/${gid}/pg${gid}.txt`,
+    `https://www.gutenberg.org/files/${gid}/${gid}-0.txt`,
+    `https://www.gutenberg.org/files/${gid}/${gid}.txt`,
+  ];
 
-  // Prefer the UTF-8 plain-text format so accented text isn't mojibake; skip
-  // zipped variants. Fall back to any plain-text format.
-  const plain = Object.entries(meta.formats).filter(
-    ([type, url]) => type.startsWith("text/plain") && !url.endsWith(".zip"),
-  );
-  const chosen =
-    plain.find(([type]) => /utf-8/i.test(type)) ?? plain[0];
-  const textUrl = chosen?.[1];
-
-  if (!textUrl || !isGutenbergUrl(textUrl)) {
-    return NextResponse.json(
-      { error: "No readable text for this book." },
-      { status: 415 },
-    );
-  }
-
-  let raw: string;
-  try {
-    const r = await fetch(textUrl, { next: { revalidate: 86400 } });
-    if (!r.ok) throw new Error();
-    // Decode with the declared charset (Gutenberg has ISO-8859-1 texts too).
-    const type = chosen?.[0] || r.headers.get("content-type") || "";
-    const m = /charset=([\w-]+)/i.exec(type);
-    const charset = (m?.[1] || "utf-8").toLowerCase();
-    const buf = await r.arrayBuffer();
+  let raw: string | null = null;
+  for (const url of direct) {
     try {
-      raw = new TextDecoder(charset).decode(buf);
+      const r = await fetch(url, { redirect: "follow", next: { revalidate: 86400 } });
+      if (!r.ok) continue;
+      const type = r.headers.get("content-type") || "";
+      const m = /charset=([\w-]+)/i.exec(type);
+      const charset = (m?.[1] || "utf-8").toLowerCase();
+      const buf = await r.arrayBuffer();
+      let decoded: string;
+      try {
+        decoded = new TextDecoder(charset).decode(buf);
+      } catch {
+        decoded = new TextDecoder("utf-8").decode(buf);
+      }
+      if (decoded && decoded.length > 200) {
+        raw = decoded;
+        break;
+      }
     } catch {
-      raw = new TextDecoder("utf-8").decode(buf);
+      /* try next */
     }
-  } catch {
+  }
+
+  // Fallback: resolve the text URL via Gutendex if the direct paths failed.
+  if (!raw) {
+    try {
+      const mr = await fetch(`https://gutendex.com/books/${gid}`, {
+        next: { revalidate: 86400 },
+      });
+      if (mr.ok) {
+        const meta = (await mr.json()) as GutendexBook;
+        const plain = Object.entries(meta.formats ?? {}).filter(
+          ([type, url]) => type.startsWith("text/plain") && !url.endsWith(".zip"),
+        );
+        const chosen = plain.find(([type]) => /utf-8/i.test(type)) ?? plain[0];
+        const textUrl = chosen?.[1];
+        if (textUrl && isGutenbergUrl(textUrl)) {
+          const r = await fetch(textUrl, { next: { revalidate: 86400 } });
+          if (r.ok) raw = await r.text();
+        }
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+
+  if (!raw) {
     return NextResponse.json({ error: "Could not load the text." }, { status: 502 });
   }
 
   return NextResponse.json(
-    { title: meta.title, text: stripBoilerplate(raw) },
+    { title: null, text: stripBoilerplate(raw) },
     { headers: { "Cache-Control": "public, max-age=86400" } },
   );
 }

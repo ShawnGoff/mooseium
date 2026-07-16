@@ -818,6 +818,86 @@ function Armchair({
   );
 }
 
+// A stone fireplace for the back wall — surround + mantel + logs, with animated
+// flickering flames and a warm firelight.
+function Fireplace() {
+  const zF = A + VEST_LEN - 0.32; // front face, just off the south wall
+  const zBack = A + VEST_LEN - 0.06;
+  const stone = "#6f665c";
+  const stoneDark = "#524b43";
+  const lightRef = useRef<THREE.PointLight>(null);
+  const flameRef = useRef<THREE.Group>(null);
+  useFrame((state) => {
+    const t = state.clock.elapsedTime;
+    const flick =
+      0.72 + Math.sin(t * 13) * 0.12 + Math.sin(t * 7.3) * 0.1 + Math.random() * 0.05;
+    if (lightRef.current) lightRef.current.intensity = 7 * flick;
+    if (flameRef.current) flameRef.current.scale.set(1, 0.85 + flick * 0.3, 1);
+  });
+  const flame = (x: number, s: number, color: string, y = 0) => (
+    <mesh position={[x, y, 0]}>
+      <coneGeometry args={[0.11 * s, 0.42 * s, 8]} />
+      <meshStandardMaterial color={color} emissive={color} emissiveIntensity={1.6} />
+    </mesh>
+  );
+  return (
+    <group>
+      {/* hearth */}
+      <mesh position={[0, 0.08, zF - 0.02]}>
+        <boxGeometry args={[2.0, 0.16, 0.62]} />
+        <meshStandardMaterial color={stoneDark} roughness={0.9} />
+      </mesh>
+      {/* side pillars */}
+      <mesh position={[-0.72, 1.0, zF]}>
+        <boxGeometry args={[0.42, 1.9, 0.5]} />
+        <meshStandardMaterial color={stone} roughness={0.9} />
+      </mesh>
+      <mesh position={[0.72, 1.0, zF]}>
+        <boxGeometry args={[0.42, 1.9, 0.5]} />
+        <meshStandardMaterial color={stone} roughness={0.9} />
+      </mesh>
+      {/* lintel above the opening */}
+      <mesh position={[0, 1.62, zF]}>
+        <boxGeometry args={[1.86, 0.66, 0.5]} />
+        <meshStandardMaterial color={stone} roughness={0.9} />
+      </mesh>
+      {/* mantel shelf */}
+      <mesh position={[0, 1.99, zF + 0.02]}>
+        <boxGeometry args={[2.25, 0.14, 0.68]} />
+        <meshStandardMaterial color={stoneDark} roughness={0.7} />
+      </mesh>
+      {/* dark firebox recess */}
+      <mesh position={[0, 0.72, zBack]}>
+        <boxGeometry args={[1.05, 1.15, 0.06]} />
+        <meshStandardMaterial color="#130f0b" roughness={1} />
+      </mesh>
+      {/* logs */}
+      <mesh position={[0, 0.26, zF + 0.06]} rotation={[0, 0, Math.PI / 2]}>
+        <cylinderGeometry args={[0.06, 0.06, 0.82, 8]} />
+        <meshStandardMaterial color="#3a2a1c" roughness={0.9} />
+      </mesh>
+      <mesh position={[0, 0.35, zF + 0.02]} rotation={[0, 0, Math.PI / 2 + 0.12]}>
+        <cylinderGeometry args={[0.055, 0.055, 0.72, 8]} />
+        <meshStandardMaterial color="#2c1f14" roughness={0.9} />
+      </mesh>
+      {/* flames */}
+      <group ref={flameRef} position={[0, 0.34, zF + 0.05]}>
+        {flame(-0.16, 1.0, "#ff7a1a")}
+        {flame(0.14, 0.85, "#ffa028", 0.02)}
+        {flame(-0.01, 1.15, "#ffcb46", 0.05)}
+      </group>
+      <pointLight
+        ref={lightRef}
+        position={[0, 0.6, zF + 0.15]}
+        intensity={7}
+        distance={6.5}
+        decay={2}
+        color="#ff8a3a"
+      />
+    </group>
+  );
+}
+
 function DenFurniture({ lowPower, lightsOn }: { lowPower: boolean; lightsOn: boolean }) {
   const wW = VEST_HALF; // wall x
   const zS = A + VEST_LEN; // south wall z
@@ -850,7 +930,9 @@ function DenFurniture({ lowPower, lightsOn }: { lowPower: boolean; lightsOn: boo
       <Bookshelf position={[-wW + 0.22, 0, zMid - 2.6]} rotation={[0, Math.PI / 2, 0]} />
       <Bookshelf position={[-wW + 0.22, 0, zMid + 0.3]} rotation={[0, Math.PI / 2, 0]} />
       <Bookshelf position={[wW - 0.22, 0, zMid - 2.6]} rotation={[0, -Math.PI / 2, 0]} />
-      <Bookshelf position={[0, 0, zS - 0.24]} rotation={[0, Math.PI, 0]} />
+
+      {/* fireplace centered on the back (south) wall */}
+      <Fireplace />
 
       {/* writing desk in front of the east window, chair facing out the window */}
       <Desk position={[wW - 0.7, 0, zS - 3]} rotation={[0, -Math.PI / 2, 0]} />

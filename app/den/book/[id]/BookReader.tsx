@@ -24,7 +24,9 @@ export default function BookReader({
   initialPercent: number;
   initialNoteDocId: string | null;
 }) {
-  const [text, setText] = useState<string | null>(null);
+  const [content, setContent] = useState<
+    { html: string } | { text: string } | null
+  >(null);
   const [error, setError] = useState<string | null>(null);
   const [progress, setProgress] = useState(initialPercent);
   const [selection, setSelection] = useState("");
@@ -37,21 +39,37 @@ export default function BookReader({
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const restored = useRef(false);
 
-  // Load the text once.
+  // Load the illustrated HTML; fall back to plain text if unavailable.
   useEffect(() => {
     let alive = true;
-    fetch(`/api/den/books/text?gid=${encodeURIComponent(gid)}`)
-      .then((r) => (r.ok ? r.json() : Promise.reject()))
-      .then((d) => alive && setText(d.text ?? ""))
-      .catch(() => alive && setError("Couldn't load this book's text."));
+    (async () => {
+      try {
+        const r = await fetch(`/api/den/books/content?gid=${encodeURIComponent(gid)}`);
+        if (r.ok) {
+          const d = await r.json();
+          if (alive) setContent({ html: d.html ?? "" });
+          return;
+        }
+      } catch {
+        /* fall through to plain text */
+      }
+      try {
+        const r = await fetch(`/api/den/books/text?gid=${encodeURIComponent(gid)}`);
+        if (!r.ok) throw new Error();
+        const d = await r.json();
+        if (alive) setContent({ text: d.text ?? "" });
+      } catch {
+        if (alive) setError("Couldn't load this book.");
+      }
+    })();
     return () => {
       alive = false;
     };
   }, [gid]);
 
-  // Once text is in the DOM, jump to the saved place.
+  // Once content is in the DOM, jump to the saved place.
   useEffect(() => {
-    if (text === null || restored.current) return;
+    if (content === null || restored.current) return;
     restored.current = true;
     const el = scrollRef.current;
     if (el && initialPercent > 0) {
@@ -59,7 +77,7 @@ export default function BookReader({
         el.scrollTop = initialPercent * (el.scrollHeight - el.clientHeight);
       });
     }
-  }, [text, initialPercent]);
+  }, [content, initialPercent]);
 
   const onScroll = useCallback(() => {
     const el = scrollRef.current;
@@ -159,10 +177,15 @@ export default function BookReader({
       >
         {error ? (
           <p className="status error">{error}</p>
-        ) : text === null ? (
+        ) : content === null ? (
           <p className="status">Loading…</p>
+        ) : "html" in content ? (
+          <article
+            className="reader-text reader-rich"
+            dangerouslySetInnerHTML={{ __html: content.html }}
+          />
         ) : (
-          <article className="reader-text">{text}</article>
+          <article className="reader-text">{content.text}</article>
         )}
       </div>
 

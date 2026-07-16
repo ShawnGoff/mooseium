@@ -1065,7 +1065,7 @@ function SkyStars() {
       Array.from({ length: 44 }, () => ({
         x: -2.6 + Math.random() * 5.2,
         z: -2.6 + Math.random() * 5.2,
-        y: H + 0.06 + Math.random() * 0.5,
+        y: H - 0.06 - Math.random() * 0.03,
         s: 0.012 + Math.random() * 0.022,
       })),
     []
@@ -1090,7 +1090,7 @@ function SkyRain({ lowPower }: { lowPower: boolean }) {
       Array.from({ length: count }, () => ({
         x: -2.6 + Math.random() * 5.2,
         z: -2.6 + Math.random() * 5.2,
-        y: H + 0.06 + Math.random() * 0.7,
+        y: H - 0.06 - Math.random() * 0.4,
         v: 2 + Math.random() * 1.8,
       })),
     [count]
@@ -1102,8 +1102,8 @@ function SkyRain({ lowPower }: { lowPower: boolean }) {
       const d = drops[i];
       d.y -= d.v * dt;
       d.x += d.v * 0.28 * dt; // the angle across the glass
-      if (d.y < H + 0.04) {
-        d.y = H + 0.75;
+      if (d.y < H - 0.5) {
+        d.y = H - 0.06;
         d.x = -2.6 + Math.random() * 5.2;
       }
       c.position.set(d.x, d.y, d.z);
@@ -1139,13 +1139,7 @@ function Skylight({ sky, lowPower }: { sky: Sky; lowPower: boolean }) {
         {sky === "day" ? (
           <meshStandardMaterial map={dayTex} emissiveMap={dayTex} emissive="#ffffff" emissiveIntensity={0.5} />
         ) : (
-          <meshStandardMaterial
-            color={look.col}
-            emissive={look.emis}
-            emissiveIntensity={look.int}
-            transparent={look.opacity < 1}
-            opacity={look.opacity}
-          />
+          <meshStandardMaterial color={look.col} emissive={look.emis} emissiveIntensity={look.int} />
         )}
       </mesh>
     </group>

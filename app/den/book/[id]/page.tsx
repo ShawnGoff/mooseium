@@ -39,7 +39,7 @@ export default async function BookPage({
 
   const { data: book } = await supabase
     .from("den_books")
-    .select("id, source, external_id, title, author, progress")
+    .select("id, source, external_id, title, author, progress, note_document_id")
     .eq("id", id)
     .single();
 
@@ -74,10 +74,14 @@ export default async function BookPage({
   return (
     <BookReader
       id={book.id}
+      userId={user.id}
       gid={book.external_id}
       title={book.title ?? "Untitled"}
       author={book.author}
       initialPercent={percent}
+      initialNoteDocId={
+        (book as { note_document_id?: string | null }).note_document_id ?? null
+      }
     />
   );
 }

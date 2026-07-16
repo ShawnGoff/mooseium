@@ -1,7 +1,8 @@
 "use client";
 
-// The Den directory: a nested folder tree holding saved books and documents.
-// Talks to Supabase directly (RLS keeps every row owner-private).
+// The Den library. Folder sidebar + a cover-forward grid, split into Library
+// (books) and Writing (documents) tabs. Drag any card onto a folder to file it.
+// Everything talks to Supabase directly; RLS keeps rows owner-private.
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -19,6 +20,7 @@ export type DenBook = {
   folder_id: string | null;
   title: string | null;
   author: string | null;
+  cover_url: string | null;
 };
 export type DenDoc = {
   id: string;
@@ -26,6 +28,8 @@ export type DenDoc = {
   title: string;
   updated_at: string;
 };
+
+type Drag = { kind: "book" | "doc"; id: string } | null;
 
 export default function DenView({
   userId,
@@ -40,45 +44,37 @@ export default function DenView({
 }) {
   const [folders, setFolders] = useState<DenFolder[]>(initialFolders);
   const [books, setBooks] = useState<DenBook[]>(initialBooks);
-  const [docs] = useState<DenDoc[]>(initialDocs);
+  const [docs, setDocs] = useState<DenDoc[]>(initialDocs);
+  const [tab, setTab] = useState<"library" | "writing">("library");
+  const [activeFolder, setActiveFolder] = useState<string | null>(null); // null = All
+  const [drag, setDrag] = useState<Drag>(null);
+  const [dropTarget, setDropTarget] = useState<string | "all" | null>(null);
+  const [findBooks, setFindBooks] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [findBooks, setFindBooks] = useState(false);
 
   const supabase = useMemo(() => createClient(), []);
   const router = useRouter();
 
-  async function createDocument(parentId: string | null) {
-    setBusy(true);
-    setError(null);
-    const { data, error } = await supabase
-      .from("den_documents")
-      .insert({ user_id: userId, folder_id: parentId, title: "Untitled" })
-      .select("id")
-      .single();
-    setBusy(false);
-    if (error || !data) {
-      setError("Could not create the note.");
-      return;
-    }
-    router.push(`/den/doc/${data.id}`);
-  }
-
-  // Group children by parent for recursive rendering.
-  const childFolders = useMemo(() => {
-    const map = new Map<string | null, DenFolder[]>();
+  const childMap = useMemo(() => {
+    const m = new Map<string | null, DenFolder[]>();
     for (const f of folders) {
-      const key = f.parent_folder_id;
-      (map.get(key) ?? map.set(key, []).get(key)!).push(f);
+      const k = f.parent_folder_id;
+      (m.get(k) ?? m.set(k, []).get(k)!).push(f);
     }
-    return map;
+    return m;
   }, [folders]);
 
-  const booksIn = (folderId: string | null) =>
-    books.filter((b) => b.folder_id === folderId);
-  const docsIn = (folderId: string | null) =>
-    docs.filter((d) => d.folder_id === folderId);
+  const countIn = (fid: string) =>
+    books.filter((b) => b.folder_id === fid).length +
+    docs.filter((d) => d.folder_id === fid).length;
 
+  const shownBooks =
+    activeFolder === null ? books : books.filter((b) => b.folder_id === activeFolder);
+  const shownDocs =
+    activeFolder === null ? docs : docs.filter((d) => d.folder_id === activeFolder);
+
+  // ---- folder CRUD ----
   async function createFolder(parentId: string | null) {
     const name = window.prompt("New folder name")?.trim();
     if (!name) return;
@@ -90,126 +86,224 @@ export default function DenView({
       .select("id, parent_folder_id, name, sort")
       .single();
     setBusy(false);
-    if (error || !data) {
-      setError("Could not create the folder.");
-      return;
-    }
+    if (error || !data) return setError("Could not create the folder.");
     setFolders((f) => [...f, data as DenFolder]);
   }
 
   async function renameFolder(folder: DenFolder) {
     const name = window.prompt("Rename folder", folder.name)?.trim();
     if (!name || name === folder.name) return;
-    setBusy(true);
-    setError(null);
     const { error } = await supabase
       .from("den_folders")
       .update({ name })
       .eq("id", folder.id);
-    setBusy(false);
-    if (error) {
-      setError("Could not rename the folder.");
-      return;
-    }
+    if (error) return setError("Could not rename the folder.");
     setFolders((f) => f.map((x) => (x.id === folder.id ? { ...x, name } : x)));
   }
 
   async function deleteFolder(folder: DenFolder) {
-    const kids = childFolders.get(folder.id)?.length ?? 0;
-    const msg =
-      kids > 0
-        ? `Delete "${folder.name}" and its ${kids} subfolder(s)? Books and documents inside move to the top level.`
-        : `Delete "${folder.name}"? Books and documents inside move to the top level.`;
-    if (!window.confirm(msg)) return;
-    setBusy(true);
-    setError(null);
-    const { error } = await supabase
-      .from("den_folders")
-      .delete()
-      .eq("id", folder.id);
-    setBusy(false);
-    if (error) {
-      setError("Could not delete the folder.");
-      return;
-    }
-    // Remove the folder and any descendants from local state.
+    if (!window.confirm(`Delete "${folder.name}"? Items inside move to All.`)) return;
+    const { error } = await supabase.from("den_folders").delete().eq("id", folder.id);
+    if (error) return setError("Could not delete the folder.");
     const removed = new Set<string>();
     const collect = (id: string) => {
       removed.add(id);
-      for (const c of folders.filter((x) => x.parent_folder_id === id))
-        collect(c.id);
+      for (const c of folders.filter((x) => x.parent_folder_id === id)) collect(c.id);
     };
     collect(folder.id);
     setFolders((f) => f.filter((x) => !removed.has(x.id)));
+    setBooks((b) =>
+      b.map((x) => (x.folder_id && removed.has(x.folder_id) ? { ...x, folder_id: null } : x)),
+    );
+    setDocs((d) =>
+      d.map((x) => (x.folder_id && removed.has(x.folder_id) ? { ...x, folder_id: null } : x)),
+    );
+    if (activeFolder && removed.has(activeFolder)) setActiveFolder(null);
   }
 
-  function Tree({ parentId }: { parentId: string | null }) {
-    const kids = childFolders.get(parentId) ?? [];
-    const looseBooks = booksIn(parentId);
-    const looseDocs = docsIn(parentId);
+  async function createDocument() {
+    setBusy(true);
+    setError(null);
+    const { data, error } = await supabase
+      .from("den_documents")
+      .insert({ user_id: userId, folder_id: activeFolder, title: "Untitled" })
+      .select("id")
+      .single();
+    setBusy(false);
+    if (error || !data) return setError("Could not create the note.");
+    router.push(`/den/doc/${data.id}`);
+  }
+
+  // ---- drag to file into a folder (or All to unfile) ----
+  async function assignTo(folderId: string | null) {
+    if (!drag) return;
+    const table = drag.kind === "book" ? "den_books" : "den_documents";
+    const { error } = await supabase
+      .from(table)
+      .update({ folder_id: folderId })
+      .eq("id", drag.id);
+    if (error) {
+      setError("Could not move that.");
+      return;
+    }
+    if (drag.kind === "book")
+      setBooks((b) => b.map((x) => (x.id === drag.id ? { ...x, folder_id: folderId } : x)));
+    else setDocs((d) => d.map((x) => (x.id === drag.id ? { ...x, folder_id: folderId } : x)));
+  }
+
+  function FolderRows({ parentId, depth }: { parentId: string | null; depth: number }) {
+    const rows = childMap.get(parentId) ?? [];
     return (
-      <ul className="den-tree">
-        {kids.map((f) => (
-          <li key={f.id} className="den-folder">
-            <div className="den-row">
-              <span className="den-name">📁 {f.name}</span>
-              <span className="den-actions">
-                <button onClick={() => createFolder(f.id)} disabled={busy}>
-                  ＋ folder
+      <>
+        {rows.map((f) => (
+          <div key={f.id}>
+            <div
+              className={`den-side-row${activeFolder === f.id ? " active" : ""}${
+                dropTarget === f.id ? " drop" : ""
+              }`}
+              style={{ paddingLeft: 10 + depth * 14 }}
+              onClick={() => setActiveFolder(f.id)}
+              onDragOver={(e) => {
+                e.preventDefault();
+                setDropTarget(f.id);
+              }}
+              onDragLeave={() => setDropTarget((t) => (t === f.id ? null : t))}
+              onDrop={() => {
+                assignTo(f.id);
+                setDropTarget(null);
+              }}
+            >
+              <span className="den-side-name">📁 {f.name}</span>
+              <span className="den-side-count">{countIn(f.id) || ""}</span>
+              <span className="den-side-actions">
+                <button title="New subfolder" onClick={(e) => (e.stopPropagation(), createFolder(f.id))}>
+                  ＋
                 </button>
-                <button onClick={() => createDocument(f.id)} disabled={busy}>
-                  ＋ note
+                <button title="Rename" onClick={(e) => (e.stopPropagation(), renameFolder(f))}>
+                  ✎
                 </button>
-                <button onClick={() => renameFolder(f)} disabled={busy}>
-                  rename
-                </button>
-                <button onClick={() => deleteFolder(f)} disabled={busy}>
-                  delete
+                <button title="Delete" onClick={(e) => (e.stopPropagation(), deleteFolder(f))}>
+                  🗑
                 </button>
               </span>
             </div>
-            <Tree parentId={f.id} />
-          </li>
+            <FolderRows parentId={f.id} depth={depth + 1} />
+          </div>
         ))}
-        {looseBooks.map((b) => (
-          <li key={b.id} className="den-leaf">
-            <a className="den-doc-link" href={`/den/book/${b.id}`}>
-              📖 {b.title || "Untitled book"}
-            </a>
-            {b.author ? <span className="den-meta"> · {b.author}</span> : null}
-          </li>
-        ))}
-        {looseDocs.map((d) => (
-          <li key={d.id} className="den-leaf">
-            <a className="den-doc-link" href={`/den/doc/${d.id}`}>
-              ✍️ {d.title || "Untitled"}
-            </a>
-          </li>
-        ))}
-      </ul>
+      </>
     );
   }
 
+  const cardDrag = (kind: "book" | "doc", id: string) => ({
+    draggable: true,
+    onDragStart: () => setDrag({ kind, id }),
+    onDragEnd: () => {
+      setDrag(null);
+      setDropTarget(null);
+    },
+  });
+
   return (
-    <div className="den">
-      <div className="den-toolbar">
-        <button onClick={() => createFolder(null)} disabled={busy}>
+    <div className="den2">
+      <aside className="den-sidebar">
+        <div
+          className={`den-side-row${activeFolder === null ? " active" : ""}${
+            dropTarget === "all" ? " drop" : ""
+          }`}
+          onClick={() => setActiveFolder(null)}
+          onDragOver={(e) => {
+            e.preventDefault();
+            setDropTarget("all");
+          }}
+          onDragLeave={() => setDropTarget((t) => (t === "all" ? null : t))}
+          onDrop={() => {
+            assignTo(null);
+            setDropTarget(null);
+          }}
+        >
+          <span className="den-side-name">🗂 All items</span>
+        </div>
+        <FolderRows parentId={null} depth={0} />
+        <button className="den-side-new" onClick={() => createFolder(null)} disabled={busy}>
           ＋ New folder
         </button>
-        <button onClick={() => createDocument(null)} disabled={busy}>
-          ＋ New note
-        </button>
-        <button onClick={() => setFindBooks(true)} disabled={busy}>
-          🔎 Find books
-        </button>
-      </div>
-      <Tree parentId={null} />
-      {folders.length === 0 && books.length === 0 && docs.length === 0 && (
-        <p className="status">
-          Empty study. Make a folder to start organizing your books and writing.
-        </p>
-      )}
-      {error && <p className="status error">{error}</p>}
+      </aside>
+
+      <section className="den-main">
+        <div className="den-tabs">
+          <button
+            className={tab === "library" ? "active" : ""}
+            onClick={() => setTab("library")}
+          >
+            📚 Library
+          </button>
+          <button
+            className={tab === "writing" ? "active" : ""}
+            onClick={() => setTab("writing")}
+          >
+            ✍️ Writing
+          </button>
+          <div className="den-main-actions">
+            {tab === "library" ? (
+              <button onClick={() => setFindBooks(true)}>🔎 Find books</button>
+            ) : (
+              <button onClick={createDocument} disabled={busy}>
+                ＋ New note
+              </button>
+            )}
+          </div>
+        </div>
+
+        {tab === "library" ? (
+          shownBooks.length === 0 ? (
+            <p className="status">No books here yet. Use “Find books” to add some.</p>
+          ) : (
+            <div className="den-grid">
+              {shownBooks.map((b) => (
+                <div
+                  key={b.id}
+                  className="den-book-card"
+                  {...cardDrag("book", b.id)}
+                  onClick={() => router.push(`/den/book/${b.id}`)}
+                >
+                  <div className="den-cover">
+                    {b.cover_url ? (
+                      /* eslint-disable-next-line @next/next/no-img-element */
+                      <img src={b.cover_url} alt="" loading="lazy" />
+                    ) : (
+                      <span className="den-cover-fallback">📖</span>
+                    )}
+                  </div>
+                  <div className="den-card-title" title={b.title ?? ""}>
+                    {b.title || "Untitled"}
+                  </div>
+                  {b.author && <div className="den-card-sub">{b.author}</div>}
+                </div>
+              ))}
+            </div>
+          )
+        ) : shownDocs.length === 0 ? (
+          <p className="status">Nothing written here yet. Start a new note.</p>
+        ) : (
+          <div className="den-grid">
+            {shownDocs.map((d) => (
+              <div
+                key={d.id}
+                className="den-doc-card"
+                {...cardDrag("doc", d.id)}
+                onClick={() => router.push(`/den/doc/${d.id}`)}
+              >
+                <div className="den-doc-page">✍️</div>
+                <div className="den-card-title" title={d.title}>
+                  {d.title || "Untitled"}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {error && <p className="status error">{error}</p>}
+      </section>
 
       {findBooks && (
         <BookSearch

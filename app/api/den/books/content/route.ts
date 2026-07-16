@@ -11,6 +11,20 @@ type GutendexBook = {
   formats: Record<string, string>;
 };
 
+// Defense-in-depth: even the second-hop URL (from Gutendex's response) must be
+// an https Gutenberg host, so a poisoned response can't steer our fetch.
+function isGutenbergUrl(u: string): boolean {
+  try {
+    const url = new URL(u);
+    return (
+      url.protocol === "https:" &&
+      (url.hostname === "gutenberg.org" || url.hostname.endsWith(".gutenberg.org"))
+    );
+  } catch {
+    return false;
+  }
+}
+
 export async function GET(req: NextRequest) {
   const limited = await checkRateLimit(req, "den-book-content", 30, 60_000);
   if (limited) return limited;
@@ -36,7 +50,7 @@ export async function GET(req: NextRequest) {
     ([type, url]) => type.startsWith("text/html") && !url.endsWith(".zip"),
   )?.[1];
 
-  if (!htmlUrl) {
+  if (!htmlUrl || !isGutenbergUrl(htmlUrl)) {
     return NextResponse.json(
       { error: "No illustrated version for this book." },
       { status: 415 },
@@ -64,7 +78,7 @@ export async function GET(req: NextRequest) {
       "thead", "tbody", "tr", "td", "th", "a",
     ],
     allowedAttributes: {
-      img: ["src", "alt", "width", "height"],
+      img: ["src", "alt", "width", "height", "loading"],
       a: ["href"],
       td: ["colspan", "rowspan"],
       th: ["colspan", "rowspan"],

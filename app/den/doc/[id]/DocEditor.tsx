@@ -47,6 +47,25 @@ export default function DocEditor({
   const supabase = useMemo(() => createClient(), []);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const first = useRef(true);
+  const latest = useRef({ title: initialTitle, body: initialBody });
+  const dirty = useRef(false);
+
+  const flush = useMemo(
+    () => () => {
+      if (!dirty.current) return;
+      dirty.current = false;
+      supabase
+        .from("den_documents")
+        .update({
+          title: latest.current.title.trim() || "Untitled",
+          body: latest.current.body,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", id)
+        .then(() => {});
+    },
+    [id, supabase]
+  );
 
   useEffect(() => {
     // Skip the initial mount so we don't save unchanged content.
@@ -54,6 +73,8 @@ export default function DocEditor({
       first.current = false;
       return;
     }
+    latest.current = { title, body };
+    dirty.current = true;
     setStatus("saving");
     if (timer.current) clearTimeout(timer.current);
     timer.current = setTimeout(async () => {
@@ -65,12 +86,28 @@ export default function DocEditor({
           updated_at: new Date().toISOString(),
         })
         .eq("id", id);
+      dirty.current = false;
       setStatus(error ? "error" : "saved");
     }, 700);
     return () => {
       if (timer.current) clearTimeout(timer.current);
     };
   }, [title, body, id, supabase]);
+
+  // Flush pending edits on close (unmount) and on tab hide/close, so nothing
+  // typed in the last moment before leaving is lost.
+  useEffect(() => {
+    const onHide = () => {
+      if (document.visibilityState === "hidden") flush();
+    };
+    window.addEventListener("visibilitychange", onHide);
+    window.addEventListener("beforeunload", flush);
+    return () => {
+      window.removeEventListener("visibilitychange", onHide);
+      window.removeEventListener("beforeunload", flush);
+      flush();
+    };
+  }, [flush]);
 
   return (
     <div className={`doc-editor doc-${theme}`}>

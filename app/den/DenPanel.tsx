@@ -42,6 +42,7 @@ export default function DenPanel({
   const [view, setView] = useState<View>({ kind: "list" });
   const [doc, setDoc] = useState<DocRow | null>(null);
   const [book, setBook] = useState<BookRow | null>(null);
+  const [authError, setAuthError] = useState(false);
 
   // Load user + library once.
   useEffect(() => {
@@ -49,7 +50,10 @@ export default function DenPanel({
       const {
         data: { user },
       } = await supabase.auth.getUser();
-      if (!user) return;
+      if (!user) {
+        setAuthError(true);
+        return;
+      }
       setUserId(user.id);
       const [f, b, d] = await Promise.all([
         supabase.from("den_folders").select("id, parent_folder_id, name, sort").order("sort"),
@@ -114,7 +118,12 @@ export default function DenPanel({
 
       <div className="den-panel-body">
         {view.kind === "list" ? (
-          !data || !userId ? (
+          authError ? (
+            <p className="status">
+              Your session expired. Please{" "}
+              <a href="/login">sign in</a> again to open your library.
+            </p>
+          ) : !data || !userId ? (
             <p className="status">Opening your study…</p>
           ) : (
             <div className="container">

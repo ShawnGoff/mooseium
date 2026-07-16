@@ -10,6 +10,19 @@ type GutendexBook = {
   formats: Record<string, string>;
 };
 
+// Defense-in-depth: the text URL from Gutendex must be an https Gutenberg host.
+function isGutenbergUrl(u: string): boolean {
+  try {
+    const url = new URL(u);
+    return (
+      url.protocol === "https:" &&
+      (url.hostname === "gutenberg.org" || url.hostname.endsWith(".gutenberg.org"))
+    );
+  } catch {
+    return false;
+  }
+}
+
 function stripBoilerplate(text: string): string {
   const startRe = /\*\*\*\s*START OF (THE|THIS) PROJECT GUTENBERG.*?\*\*\*/i;
   const endRe = /\*\*\*\s*END OF (THE|THIS) PROJECT GUTENBERG.*?\*\*\*/i;
@@ -47,12 +60,16 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Book not found." }, { status: 404 });
   }
 
-  // Prefer a UTF-8 plain-text format; skip zipped variants.
-  const textUrl = Object.entries(meta.formats).find(
+  // Prefer the UTF-8 plain-text format so accented text isn't mojibake; skip
+  // zipped variants. Fall back to any plain-text format.
+  const plain = Object.entries(meta.formats).filter(
     ([type, url]) => type.startsWith("text/plain") && !url.endsWith(".zip"),
-  )?.[1];
+  );
+  const chosen =
+    plain.find(([type]) => /utf-8/i.test(type)) ?? plain[0];
+  const textUrl = chosen?.[1];
 
-  if (!textUrl) {
+  if (!textUrl || !isGutenbergUrl(textUrl)) {
     return NextResponse.json(
       { error: "No readable text for this book." },
       { status: 415 },
@@ -63,7 +80,16 @@ export async function GET(req: NextRequest) {
   try {
     const r = await fetch(textUrl, { next: { revalidate: 86400 } });
     if (!r.ok) throw new Error();
-    raw = await r.text();
+    // Decode with the declared charset (Gutenberg has ISO-8859-1 texts too).
+    const type = chosen?.[0] || r.headers.get("content-type") || "";
+    const m = /charset=([\w-]+)/i.exec(type);
+    const charset = (m?.[1] || "utf-8").toLowerCase();
+    const buf = await r.arrayBuffer();
+    try {
+      raw = new TextDecoder(charset).decode(buf);
+    } catch {
+      raw = new TextDecoder("utf-8").decode(buf);
+    }
   } catch {
     return NextResponse.json({ error: "Could not load the text." }, { status: 502 });
   }

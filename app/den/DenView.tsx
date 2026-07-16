@@ -221,6 +221,19 @@ export default function DenView({
     },
   });
 
+  async function deleteBook(b: DenBook) {
+    if (!window.confirm(`Remove "${b.title || "this book"}" from your library?`)) return;
+    const { error } = await supabase.from("den_books").delete().eq("id", b.id);
+    if (error) return setError("Could not remove that book.");
+    setBooks((prev) => prev.filter((x) => x.id !== b.id));
+  }
+  async function deleteDoc(d: DenDoc) {
+    if (!window.confirm(`Delete "${d.title || "this note"}"? This can't be undone.`)) return;
+    const { error } = await supabase.from("den_documents").delete().eq("id", d.id);
+    if (error) return setError("Could not delete that note.");
+    setDocs((prev) => prev.filter((x) => x.id !== d.id));
+  }
+
   const savedIds = useMemo(
     () => new Set(books.map((b) => b.external_id).filter(Boolean) as string[]),
     [books]
@@ -319,6 +332,16 @@ export default function DenView({
                         {b.title || "Untitled"}
                       </div>
                       {b.author && <div className="den-card-sub">{b.author}</div>}
+                      <button
+                        className="den-card-del"
+                        title="Remove from library"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          deleteBook(b);
+                        }}
+                      >
+                        🗑
+                      </button>
                     </div>
                   ))}
                 </div>
@@ -338,6 +361,16 @@ export default function DenView({
                     <div className="den-card-title" title={d.title}>
                       {d.title || "Untitled"}
                     </div>
+                    <button
+                      className="den-card-del"
+                      title="Delete note"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        deleteDoc(d);
+                      }}
+                    >
+                      🗑
+                    </button>
                   </div>
                 ))}
               </div>

@@ -2745,3 +2745,15 @@ button.reader-back, button.reader-notes-link {
 }
 .doc-paper .reader-theme-toggle:hover, .doc-paper .reader-aa:hover { background: rgba(0,0,0,0.06); }
 .doc-paper .reader-settings { background: #fff8ea; color: #33291b; border-color: rgba(0,0,0,0.15); }
+
+/* The Library — card delete affordance */
+.den-book-card, .den-doc-card { position: relative; }
+.den-card-del {
+  position: absolute; top: 4px; right: 4px; width: 26px; height: 26px;
+  border: none; border-radius: 6px; cursor: pointer; font-size: 0.8rem;
+  background: rgba(20,18,16,0.75); color: #fff; opacity: 0; transition: opacity 0.12s;
+  display: flex; align-items: center; justify-content: center;
+}
+.den-book-card:hover .den-card-del, .den-doc-card:hover .den-card-del,
+.den-card-del:focus-visible { opacity: 1; }
+.den-card-del:hover { background: rgba(150,40,40,0.9); }

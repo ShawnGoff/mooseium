@@ -17,14 +17,20 @@ export async function GET(req: NextRequest) {
   if (limited) return limited;
 
   const q = req.nextUrl.searchParams.get("q")?.trim();
-  if (!q) return NextResponse.json({ results: [] });
+  const topic = req.nextUrl.searchParams.get("topic")?.trim();
+  if (!q && !topic) return NextResponse.json({ results: [] });
+
+  // `topic` filters by Gutenberg bookshelf/subject (Browse by subject); `search`
+  // matches titles + author names.
+  const param = topic
+    ? `topic=${encodeURIComponent(topic)}`
+    : `search=${encodeURIComponent(q!)}`;
 
   let upstream: Response;
   try {
-    upstream = await fetch(
-      `https://gutendex.com/books?search=${encodeURIComponent(q)}`,
-      { next: { revalidate: 3600 } },
-    );
+    upstream = await fetch(`https://gutendex.com/books?${param}`, {
+      next: { revalidate: 3600 },
+    });
   } catch {
     return NextResponse.json({ error: "Book search is unavailable." }, { status: 502 });
   }

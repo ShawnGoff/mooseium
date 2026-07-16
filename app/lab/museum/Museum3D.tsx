@@ -908,7 +908,7 @@ function RainStreaks({
       Array.from({ length: count }, () => ({
         y: 1.3 + Math.random() * 2.4,
         z: zW - 1.4 + Math.random() * 2.8,
-        v: 3.5 + Math.random() * 3.5,
+        v: 2 + Math.random() * 1.8,
       })),
     [count, zW]
   );
@@ -926,11 +926,11 @@ function RainStreaks({
     <group ref={ref}>
       {drops.map((d, i) => (
         <mesh key={i} position={[xWall + dir * 0.1, d.y, d.z]}>
-          <boxGeometry args={[0.016, 0.34, 0.016]} />
+          <boxGeometry args={[0.011, 0.3, 0.011]} />
           <meshStandardMaterial
             color="#c6d4e2"
             transparent
-            opacity={0.85}
+            opacity={0.82}
             emissive="#9db2c6"
             emissiveIntensity={0.7}
           />
@@ -1062,7 +1062,7 @@ function SkyRain({ lowPower }: { lowPower: boolean }) {
         x: -2.6 + Math.random() * 5.2,
         z: -2.6 + Math.random() * 5.2,
         y: H + 0.06 + Math.random() * 0.7,
-        v: 2.5 + Math.random() * 2.5,
+        v: 1.1 + Math.random() * 1.1,
       })),
     [count]
   );
@@ -1084,13 +1084,13 @@ function SkyRain({ lowPower }: { lowPower: boolean }) {
     <group ref={ref}>
       {drops.map((d, i) => (
         <mesh key={i} position={[d.x, d.y, d.z]} rotation={[0, 0, 0.35]}>
-          <boxGeometry args={[0.024, 0.44, 0.024]} />
+          <boxGeometry args={[0.012, 0.32, 0.012]} />
           <meshStandardMaterial
             color="#cdd9e6"
             transparent
-            opacity={0.95}
+            opacity={0.9}
             emissive="#b3c3d3"
-            emissiveIntensity={1.0}
+            emissiveIntensity={0.95}
           />
         </mesh>
       ))}

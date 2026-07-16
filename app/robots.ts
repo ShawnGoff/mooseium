@@ -9,7 +9,15 @@ export default function robots(): MetadataRoute.Robots {
       userAgent: "*",
       allow: "/",
       // Keep crawlers out of API and private/utility routes.
-      disallow: ["/api/", "/account", "/collections", "/auth/", "/login", "/lab"],
+      disallow: [
+        "/api/",
+        "/account",
+        "/collections",
+        "/den",
+        "/auth/",
+        "/login",
+        "/lab",
+      ],
     },
     sitemap: `${SITE_URL}/sitemap.xml`,
   };

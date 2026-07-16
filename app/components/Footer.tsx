@@ -9,6 +9,7 @@ export default function Footer() {
           <Link href="/museums">Museums</Link>
           <Link href="/museums#how-search-works">How search works</Link>
           <Link href="/credits">Credits &amp; Thanks</Link>
+          <Link href="/contact">Contact</Link>
           <Link href="/terms">Terms</Link>
           <Link href="/privacy">Privacy</Link>
         </nav>

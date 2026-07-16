@@ -9,7 +9,7 @@ export default function PrivacyPage() {
   return (
     <main className="container legal">
       <h1>Privacy Policy</h1>
-      <p className="legal-updated">Last updated: July 12, 2026</p>
+      <p className="legal-updated">Last updated: July 16, 2026</p>
 
       <p>
         This policy explains what information Mooseium collects, how it&apos;s
@@ -22,8 +22,10 @@ export default function PrivacyPage() {
         sign-in). If you choose to, you can add a display name, a unique handle,
         and a short bio. We store the content you create in the app — your
         collections, saved artworks, gallery arrangements, curator notes, and
-        guestbook messages. We also process basic technical data such as log and
-        device information needed to run and secure the service.
+        guestbook messages. This also includes your Library: books you save,
+        your reading progress, folders, and any personal writing or notes you
+        create. We also process basic technical data such as log and device
+        information needed to run and secure the service.
       </p>
 
       <h2>How we use it</h2>
@@ -39,7 +41,9 @@ export default function PrivacyPage() {
         Some things are public by design. If you publish a gallery, its contents,
         its name, and your display name and handle are visible to anyone with the
         link. Guestbook signatures and your public profile page are also visible
-        to others. Please keep this in mind when choosing what to share.
+        to others. Your Library — the books you save, your reading progress, and
+        your personal writing — is private to your account. Please keep this in
+        mind when choosing what to share.
       </p>
 
       <h2>Service providers</h2>

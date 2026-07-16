@@ -2838,3 +2838,11 @@ button.reader-back, button.reader-notes-link {
   background: rgba(0,0,0,0.45);
 }
 .den-cr-fill { height: 100%; background: rgba(230,211,163,0.95); }
+
+/* The Library — progress badge on any book cover */
+.den-cover { position: relative; }
+.den-pct-badge {
+  position: absolute; top: 5px; left: 5px; z-index: 1;
+  background: rgba(20,18,16,0.82); color: #e6d3a3;
+  font-size: 0.7rem; font-weight: 600; padding: 2px 7px; border-radius: 999px;
+}

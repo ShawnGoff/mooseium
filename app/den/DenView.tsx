@@ -377,6 +377,19 @@ export default function DenView({
                             ) : (
                               <span className="den-cover-fallback">📖</span>
                             )}
+                            {pctOf(b) > 0.01 && (
+                              <>
+                                <span className="den-pct-badge">
+                                  {Math.round(pctOf(b) * 100)}%
+                                </span>
+                                <div className="den-cr-bar">
+                                  <div
+                                    className="den-cr-fill"
+                                    style={{ width: `${Math.round(pctOf(b) * 100)}%` }}
+                                  />
+                                </div>
+                              </>
+                            )}
                           </div>
                           <div className="den-card-title" title={b.title ?? ""}>
                             {b.title || "Untitled"}

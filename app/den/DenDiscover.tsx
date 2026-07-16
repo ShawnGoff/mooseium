@@ -81,8 +81,9 @@ export default function DenDiscover({
       fetch("/api/den/connected")
         .then((r) => r.json())
         .then((d) => {
-          shelvesCache = d.shelves ?? [];
-          setShelves(shelvesCache);
+          const s = d.shelves ?? [];
+          if (s.length) shelvesCache = s; // don't cache an empty/failed result
+          setShelves(s);
         })
         .catch(() => setShelves([]));
     }
@@ -90,8 +91,9 @@ export default function DenDiscover({
       fetch("/api/den/books/popular")
         .then((r) => r.json())
         .then((d) => {
-          popularCache = d.results ?? [];
-          setPopular(popularCache);
+          const res = d.results ?? [];
+          if (res.length) popularCache = res; // don't cache an empty/failed result
+          setPopular(res);
         })
         .catch(() => setPopular([]));
     }

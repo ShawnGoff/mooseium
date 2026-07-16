@@ -80,6 +80,10 @@ type Layout = {
 const MUSEUM_FONT =
   "https://cdn.jsdelivr.net/npm/@fontsource/cinzel@5.2.8/files/cinzel-latin-600-normal.woff";
 
+// Background music playlist. Drop more .mp3 files in /public and add their
+// paths here to let visitors cycle through songs with the ⏭ button.
+const MUSIC_TRACKS = ["/museum-music.mp3"];
+
 const rect = (x0: number, x1: number, z0: number, z1: number): AABB => ({ x0, x1, z0, z1 });
 const inset = (a: AABB, d: number): AABB => rect(a.x0 + d, a.x1 - d, a.z0 + d, a.z1 - d);
 const ctrX = (a: AABB) => (a.x0 + a.x1) / 2;
@@ -1088,10 +1092,10 @@ function SkyRain({ lowPower }: { lowPower: boolean }) {
   const drops = useMemo(
     () =>
       Array.from({ length: count }, () => ({
-        x: -2.6 + Math.random() * 5.2,
-        z: -2.6 + Math.random() * 5.2,
-        y: H - 0.06 - Math.random() * 0.4,
-        v: 2 + Math.random() * 1.8,
+        x: -2.3 + Math.random() * 4.6,
+        z: -2.3 + Math.random() * 4.6,
+        y: H - 0.04 - Math.random() * 0.16,
+        v: 1.3 + Math.random() * 1.1,
       })),
     [count]
   );
@@ -1101,10 +1105,10 @@ function SkyRain({ lowPower }: { lowPower: boolean }) {
     g.children.forEach((c, i) => {
       const d = drops[i];
       d.y -= d.v * dt;
-      d.x += d.v * 0.28 * dt; // the angle across the glass
-      if (d.y < H - 0.5) {
-        d.y = H - 0.06;
-        d.x = -2.6 + Math.random() * 5.2;
+      d.x += d.v * 0.22 * dt; // the angle across the glass
+      if (d.y < H - 0.22) {
+        d.y = H - 0.04;
+        d.x = -2.3 + Math.random() * 4.6;
       }
       c.position.set(d.x, d.y, d.z);
     });
@@ -1112,8 +1116,8 @@ function SkyRain({ lowPower }: { lowPower: boolean }) {
   return (
     <group ref={ref}>
       {drops.map((d, i) => (
-        <mesh key={i} position={[d.x, d.y, d.z]} rotation={[0, 0, 0.35]}>
-          <boxGeometry args={[0.012, 0.32, 0.012]} />
+        <mesh key={i} position={[d.x, d.y, d.z]} rotation={[0, 0, 0.3]}>
+          <boxGeometry args={[0.01, 0.2, 0.01]} />
           <meshStandardMaterial
             color="#cdd9e6"
             transparent
@@ -1386,6 +1390,7 @@ export default function Museum3D({
   const [denPanel, setDenPanel] = useState<null | "library" | "writing">(null);
   const [sky, setSky] = useState<Sky>("day");
   const [lightsOn, setLightsOn] = useState(true);
+  const [rainSound, setRainSound] = useState(true);
   const pausedRef = useRef(false);
   pausedRef.current = denPanel !== null;
 
@@ -1445,12 +1450,12 @@ export default function Museum3D({
         rainSrcRef.current = null;
       }
     }
-    if (sky === "rain") startRain();
+    if (sky === "rain" && rainSound) startRain();
     else stopRain();
     return () => {
       cancelled = true;
     };
-  }, [sky]);
+  }, [sky, rainSound]);
 
   useEffect(
     () => () => {
@@ -1469,6 +1474,7 @@ export default function Museum3D({
   const posRef = useRef({ x: ENTRANCE_SPAWN[0], z: ENTRANCE_SPAWN[2] });
   const audioRef = useRef<HTMLAudioElement>(null);
   const [musicOn, setMusicOn] = useState(false);
+  const [trackIdx, setTrackIdx] = useState(0);
   const toggleMusic = () => {
     const a = audioRef.current;
     if (!a) return;
@@ -1480,6 +1486,16 @@ export default function Museum3D({
       a.play().then(() => setMusicOn(true)).catch(() => {});
     }
   };
+  const nextTrack = () => setTrackIdx((i) => (i + 1) % MUSIC_TRACKS.length);
+  // When the track changes while playing, start the new one.
+  useEffect(() => {
+    const a = audioRef.current;
+    if (a && musicOn) {
+      a.volume = 0.32;
+      a.play().catch(() => {});
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [trackIdx]);
 
   const layout = useMemo(() => (museum ? buildMuseum(museum) : null), [museum]);
   const constrain: Constrain = useMemo(() => {
@@ -1640,8 +1656,14 @@ export default function Museum3D({
         </button>
       )}
 
-      {/* Soft background music — add a file at public/museum-music.mp3 */}
-      <audio ref={audioRef} loop preload="none" src="/museum-music.mp3" />
+      {/* Soft background music playlist (see MUSIC_TRACKS) */}
+      <audio
+        ref={audioRef}
+        loop={MUSIC_TRACKS.length === 1}
+        preload="none"
+        src={MUSIC_TRACKS[trackIdx]}
+        onEnded={MUSIC_TRACKS.length > 1 ? nextTrack : undefined}
+      />
       {/* Rain loop uses Web Audio (see the rain effect above) from public/rain.mp3 */}
 
       {view === "ready" && isOwner && (
@@ -1659,6 +1681,16 @@ export default function Museum3D({
               {s === "day" ? "☀️" : s === "night" ? "🌙" : "🌧"}
             </button>
           ))}
+          {sky === "rain" && (
+            <button
+              onClick={() => setRainSound((v) => !v)}
+              style={{ ...skyBtnStyle, ...(rainSound ? skyBtnActiveStyle : null) }}
+              aria-label="Toggle rain sound"
+              title={rainSound ? "Rain sound on" : "Rain sound off"}
+            >
+              {rainSound ? "🔊" : "🔇"}
+            </button>
+          )}
           <span style={{ width: 1, background: "#4a423b", margin: "2px 2px" }} />
           <button
             onClick={() => setLightsOn((v) => !v)}
@@ -1671,9 +1703,16 @@ export default function Museum3D({
         </div>
       )}
       {view === "ready" && (
-        <button onClick={toggleMusic} style={musicBtnStyle} aria-label="Toggle music">
-          {musicOn ? "🔊 Music on" : "🔈 Music off"}
-        </button>
+        <div style={musicRowStyle}>
+          <button onClick={toggleMusic} style={musicBtnStyle} aria-label="Toggle music">
+            {musicOn ? "🔊 Music on" : "🔈 Music off"}
+          </button>
+          {musicOn && MUSIC_TRACKS.length > 1 && (
+            <button onClick={nextTrack} style={musicBtnStyle} aria-label="Next song" title="Next song">
+              ⏭
+            </button>
+          )}
+        </div>
       )}
 
       <div style={panelStyle}>
@@ -1780,10 +1819,14 @@ const panelStyle: React.CSSProperties = {
   maxWidth: 320,
   lineHeight: 1.5,
 };
-const musicBtnStyle: React.CSSProperties = {
+const musicRowStyle: React.CSSProperties = {
   position: "absolute",
   bottom: 14,
   right: 14,
+  display: "flex",
+  gap: 6,
+};
+const musicBtnStyle: React.CSSProperties = {
   background: "rgba(20,18,16,0.72)",
   color: "#f3efe9",
   border: "1px solid #4a423b",

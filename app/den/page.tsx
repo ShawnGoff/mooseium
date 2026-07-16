@@ -33,7 +33,7 @@ export default async function DenPage() {
     );
   }
 
-  const [foldersRes, booksRes, docsRes] = await Promise.all([
+  const [foldersRes, booksRes, docsRes, profileRes] = await Promise.all([
     supabase
       .from("den_folders")
       .select("id, parent_folder_id, name, sort")
@@ -46,13 +46,23 @@ export default async function DenPage() {
       .from("den_documents")
       .select("id, folder_id, title, updated_at")
       .order("updated_at", { ascending: false }),
+    supabase.from("profiles").select("username").eq("id", user.id).single(),
   ]);
+
+  const username = (profileRes.data as { username: string | null } | null)?.username;
 
   return (
     <main className="container">
-      <div className="brand">
-        <h1>The Library</h1>
-        <span className="tag">your private study</span>
+      <div className="brand brand-row">
+        <div>
+          <h1>The Library</h1>
+          <span className="tag">your private study</span>
+        </div>
+        {username && (
+          <Link href={`/@${username}/museum`} className="walk-3d-btn">
+            🚶 Walk in 3D
+          </Link>
+        )}
       </div>
       <DenView
         userId={user.id}

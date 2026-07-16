@@ -4,6 +4,7 @@ import Link from "next/link";
 import { isSupabaseConfigured } from "@/lib/supabase/client";
 import { createClient } from "@/lib/supabase/server";
 import MobileMenu from "./MobileMenu";
+import TopNav from "./TopNav";
 
 export default async function Header() {
   let signedIn = false;
@@ -33,29 +34,7 @@ export default async function Header() {
         <Link href="/" className="topbar-brand">
           Mooseium
         </Link>
-        <nav className="topbar-nav">
-          <Link href="/" className="topbar-link">
-            Explore
-          </Link>
-          <Link href="/museums" className="topbar-link">
-            Museums
-          </Link>
-          {signedIn && (
-            <Link href="/collections" className="topbar-link">
-              Collections
-            </Link>
-          )}
-          {signedIn && username && (
-            <Link href={`/@${username}/museum`} className="topbar-link">
-              🏛 My Museum
-            </Link>
-          )}
-          {signedIn && (
-            <Link href="/den" className="topbar-link">
-              📖 The Library
-            </Link>
-          )}
-        </nav>
+        <TopNav signedIn={signedIn} username={username} />
       </div>
       <nav className="topbar-auth">
         {signedIn ? (

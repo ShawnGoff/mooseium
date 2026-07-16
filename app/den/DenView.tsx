@@ -173,7 +173,9 @@ export default function DenView({
         ))}
         {looseBooks.map((b) => (
           <li key={b.id} className="den-leaf">
-            📖 {b.title || "Untitled book"}
+            <a className="den-doc-link" href={`/den/book/${b.id}`}>
+              📖 {b.title || "Untitled book"}
+            </a>
             {b.author ? <span className="den-meta"> · {b.author}</span> : null}
           </li>
         ))}

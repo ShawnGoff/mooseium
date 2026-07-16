@@ -8,6 +8,7 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import BookSearch from "./BookSearch";
+import DenDiscover from "./DenDiscover";
 
 export type DenFolder = {
   id: string;
@@ -21,6 +22,7 @@ export type DenBook = {
   title: string | null;
   author: string | null;
   cover_url: string | null;
+  external_id?: string | null;
 };
 export type DenDoc = {
   id: string;
@@ -36,7 +38,7 @@ export default function DenView({
   initialFolders,
   initialBooks,
   initialDocs,
-  initialTab = "library",
+  initialTab = "discover",
   onOpenBook,
   onOpenDoc,
 }: {
@@ -44,7 +46,7 @@ export default function DenView({
   initialFolders: DenFolder[];
   initialBooks: DenBook[];
   initialDocs: DenDoc[];
-  initialTab?: "library" | "writing";
+  initialTab?: "discover" | "library" | "writing";
   // When provided (overlay/embedded mode), open in-place instead of navigating.
   onOpenBook?: (id: string) => void;
   onOpenDoc?: (id: string) => void;
@@ -52,7 +54,7 @@ export default function DenView({
   const [folders, setFolders] = useState<DenFolder[]>(initialFolders);
   const [books, setBooks] = useState<DenBook[]>(initialBooks);
   const [docs, setDocs] = useState<DenDoc[]>(initialDocs);
-  const [tab, setTab] = useState<"library" | "writing">(initialTab);
+  const [tab, setTab] = useState<"discover" | "library" | "writing">(initialTab);
   const [activeFolder, setActiveFolder] = useState<string | null>(null); // null = All
   const [drag, setDrag] = useState<Drag>(null);
   const [dropTarget, setDropTarget] = useState<string | "all" | null>(null);
@@ -219,107 +221,132 @@ export default function DenView({
     },
   });
 
+  const savedIds = useMemo(
+    () => new Set(books.map((b) => b.external_id).filter(Boolean) as string[]),
+    [books]
+  );
+
   return (
-    <div className="den2">
-      <aside className="den-sidebar">
-        <div
-          className={`den-side-row${activeFolder === null ? " active" : ""}${
-            dropTarget === "all" ? " drop" : ""
-          }`}
-          onClick={() => setActiveFolder(null)}
-          onDragOver={(e) => {
-            e.preventDefault();
-            setDropTarget("all");
-          }}
-          onDragLeave={() => setDropTarget((t) => (t === "all" ? null : t))}
-          onDrop={() => {
-            assignTo(null);
-            setDropTarget(null);
-          }}
+    <div className="den-root">
+      <div className="den-tabs den-toptabs">
+        <button
+          className={tab === "discover" ? "active" : ""}
+          onClick={() => setTab("discover")}
         >
-          <span className="den-side-name">🗂 All items</span>
-        </div>
-        <FolderRows parentId={null} depth={0} />
-        <button className="den-side-new" onClick={() => createFolder(null)} disabled={busy}>
-          ＋ New folder
+          🔦 Discover
         </button>
-      </aside>
-
-      <section className="den-main">
-        <div className="den-tabs">
-          <button
-            className={tab === "library" ? "active" : ""}
-            onClick={() => setTab("library")}
-          >
-            📚 Library
-          </button>
-          <button
-            className={tab === "writing" ? "active" : ""}
-            onClick={() => setTab("writing")}
-          >
-            ✍️ Writing
-          </button>
-          <div className="den-main-actions">
-            {tab === "library" ? (
-              <button onClick={() => setFindBooks(true)}>🔎 Find books</button>
-            ) : (
-              <button onClick={createDocument} disabled={busy}>
-                ＋ New note
-              </button>
-            )}
-          </div>
+        <button
+          className={tab === "library" ? "active" : ""}
+          onClick={() => setTab("library")}
+        >
+          📚 Library
+        </button>
+        <button
+          className={tab === "writing" ? "active" : ""}
+          onClick={() => setTab("writing")}
+        >
+          ✍️ Writing
+        </button>
+        <div className="den-main-actions">
+          {tab === "library" && (
+            <button onClick={() => setFindBooks(true)}>🔎 Find books</button>
+          )}
+          {tab === "writing" && (
+            <button onClick={createDocument} disabled={busy}>
+              ＋ New note
+            </button>
+          )}
         </div>
+      </div>
 
-        {tab === "library" ? (
-          shownBooks.length === 0 ? (
-            <p className="status">No books here yet. Use “Find books” to add some.</p>
-          ) : (
-            <div className="den-grid">
-              {shownBooks.map((b) => (
-                <div
-                  key={b.id}
-                  className="den-book-card"
-                  {...cardDrag("book", b.id)}
-                  onClick={() => openBook(b.id)}
-                >
-                  <div className="den-cover">
-                    {b.cover_url ? (
-                      /* eslint-disable-next-line @next/next/no-img-element */
-                      <img src={b.cover_url} alt="" loading="lazy" />
-                    ) : (
-                      <span className="den-cover-fallback">📖</span>
-                    )}
-                  </div>
-                  <div className="den-card-title" title={b.title ?? ""}>
-                    {b.title || "Untitled"}
-                  </div>
-                  {b.author && <div className="den-card-sub">{b.author}</div>}
-                </div>
-              ))}
+      {tab === "discover" ? (
+        <DenDiscover
+          userId={userId}
+          savedIds={savedIds}
+          onSaved={(b) => setBooks((prev) => [...prev, b])}
+          onOpenBook={openBook}
+        />
+      ) : (
+        <div className="den2">
+          <aside className="den-sidebar">
+            <div
+              className={`den-side-row${activeFolder === null ? " active" : ""}${
+                dropTarget === "all" ? " drop" : ""
+              }`}
+              onClick={() => setActiveFolder(null)}
+              onDragOver={(e) => {
+                e.preventDefault();
+                setDropTarget("all");
+              }}
+              onDragLeave={() => setDropTarget((t) => (t === "all" ? null : t))}
+              onDrop={() => {
+                assignTo(null);
+                setDropTarget(null);
+              }}
+            >
+              <span className="den-side-name">🗂 All items</span>
             </div>
-          )
-        ) : shownDocs.length === 0 ? (
-          <p className="status">Nothing written here yet. Start a new note.</p>
-        ) : (
-          <div className="den-grid">
-            {shownDocs.map((d) => (
-              <div
-                key={d.id}
-                className="den-doc-card"
-                {...cardDrag("doc", d.id)}
-                onClick={() => openDoc(d.id)}
-              >
-                <div className="den-doc-page">✍️</div>
-                <div className="den-card-title" title={d.title}>
-                  {d.title || "Untitled"}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
+            <FolderRows parentId={null} depth={0} />
+            <button className="den-side-new" onClick={() => createFolder(null)} disabled={busy}>
+              ＋ New folder
+            </button>
+          </aside>
 
-        {error && <p className="status error">{error}</p>}
-      </section>
+          <section className="den-main">
+            {tab === "library" ? (
+              shownBooks.length === 0 ? (
+                <p className="status">
+                  No books here yet. Use Discover or “Find books” to add some.
+                </p>
+              ) : (
+                <div className="den-grid">
+                  {shownBooks.map((b) => (
+                    <div
+                      key={b.id}
+                      className="den-book-card"
+                      {...cardDrag("book", b.id)}
+                      onClick={() => openBook(b.id)}
+                    >
+                      <div className="den-cover">
+                        {b.cover_url ? (
+                          /* eslint-disable-next-line @next/next/no-img-element */
+                          <img src={b.cover_url} alt="" loading="lazy" />
+                        ) : (
+                          <span className="den-cover-fallback">📖</span>
+                        )}
+                      </div>
+                      <div className="den-card-title" title={b.title ?? ""}>
+                        {b.title || "Untitled"}
+                      </div>
+                      {b.author && <div className="den-card-sub">{b.author}</div>}
+                    </div>
+                  ))}
+                </div>
+              )
+            ) : shownDocs.length === 0 ? (
+              <p className="status">Nothing written here yet. Start a new note.</p>
+            ) : (
+              <div className="den-grid">
+                {shownDocs.map((d) => (
+                  <div
+                    key={d.id}
+                    className="den-doc-card"
+                    {...cardDrag("doc", d.id)}
+                    onClick={() => openDoc(d.id)}
+                  >
+                    <div className="den-doc-page">✍️</div>
+                    <div className="den-card-title" title={d.title}>
+                      {d.title || "Untitled"}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+        </div>
+      )}
+
+      {error && <p className="status error">{error}</p>}
 
       {findBooks && (
         <BookSearch

@@ -869,11 +869,14 @@ function DenFurniture({ lowPower, lightsOn }: { lowPower: boolean; lightsOn: boo
   );
 }
 
-// Procedural daytime sky: a blue gradient with soft clouds, drawn once. Softer
-// and more atmospheric than a flat bright pane.
-let _skyTex: THREE.Texture | null = null;
-function skyTexture(): THREE.Texture {
-  if (_skyTex) return _skyTex;
+// Procedural daytime sky: a blue gradient with soft clouds. Seeded so each
+// window/skylight gets its own cloud layout (they shouldn't match).
+function skyTexture(seed = 1): THREE.Texture {
+  let s = (seed * 9301 + 49297) % 233280;
+  const rnd = () => {
+    s = (s * 9301 + 49297) % 233280;
+    return s / 233280;
+  };
   const c = document.createElement("canvas");
   c.width = 256;
   c.height = 256;
@@ -884,11 +887,11 @@ function skyTexture(): THREE.Texture {
   grad.addColorStop(1, "#cfe4f6");
   ctx.fillStyle = grad;
   ctx.fillRect(0, 0, 256, 256);
-  const puff = (cx: number, cy: number, s: number) => {
+  const puff = (cx: number, cy: number, sz: number) => {
     for (let i = 0; i < 7; i++) {
-      const x = cx + (Math.random() - 0.5) * s * 1.7;
-      const y = cy + (Math.random() - 0.5) * s * 0.55;
-      const r = s * (0.4 + Math.random() * 0.55);
+      const x = cx + (rnd() - 0.5) * sz * 1.7;
+      const y = cy + (rnd() - 0.5) * sz * 0.55;
+      const r = sz * (0.4 + rnd() * 0.55);
       const g = ctx.createRadialGradient(x, y, 0, x, y, r);
       g.addColorStop(0, "rgba(255,255,255,0.92)");
       g.addColorStop(1, "rgba(255,255,255,0)");
@@ -898,13 +901,13 @@ function skyTexture(): THREE.Texture {
       ctx.fill();
     }
   };
-  puff(70, 78, 26);
-  puff(185, 58, 32);
-  puff(120, 150, 28);
-  puff(212, 168, 22);
+  // 3–4 clouds at seed-varied spots
+  const n = 3 + Math.floor(rnd() * 2);
+  for (let i = 0; i < n; i++) {
+    puff(30 + rnd() * 200, 40 + rnd() * 180, 20 + rnd() * 16);
+  }
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace;
-  _skyTex = t;
   return t;
 }
 
@@ -1002,7 +1005,7 @@ function DenWindow({
   const dir = side === "W" ? 1 : -1; // toward the room interior
   const faceRot: [number, number, number] = [0, dir * (Math.PI / 2), 0];
   const look = SKY_LOOK[sky];
-  const dayTex = useMemo(() => skyTexture(), []);
+  const dayTex = useMemo(() => skyTexture(side === "W" ? 11 : 27), [side]);
   const frameCol = "#2e2117";
   const bar = (args: [number, number, number], pos: [number, number, number]) => (
     <mesh position={pos}>
@@ -1023,11 +1026,6 @@ function DenWindow({
       </mesh>
       {sky === "night" && <Stars zW={zW} xWall={xWall} dir={dir} />}
       {sky === "rain" && <RainStreaks zW={zW} xWall={xWall} dir={dir} lowPower={lowPower} />}
-      {/* glass sheen */}
-      <mesh position={[xWall + dir * 0.09, 2.5, zW]} rotation={faceRot}>
-        <planeGeometry args={[3, 2.4]} />
-        <meshStandardMaterial color="#cfe0f0" transparent opacity={0.1} roughness={0.1} />
-      </mesh>
       {/* frame + muntins */}
       {bar([0.16, 0.14, 3.26], [xWall + dir * 0.12, 3.77, zW])}
       {bar([0.16, 0.14, 3.26], [xWall + dir * 0.12, 1.23, zW])}
@@ -1036,9 +1034,9 @@ function DenWindow({
       {bar([0.12, 2.4, 0.05], [xWall + dir * 0.12, 2.5, zW])}
       {bar([0.12, 0.05, 3], [xWall + dir * 0.12, 2.5, zW])}
       <pointLight
-        position={[xWall + dir * 0.8, 2.6, zW]}
+        position={[xWall + dir * 1.4, 2.7, zW]}
         intensity={lowPower ? look.li * 0.7 : look.li}
-        distance={9}
+        distance={10}
         decay={2}
         color={look.light}
       />
@@ -1131,7 +1129,7 @@ function SkyRain({ lowPower }: { lowPower: boolean }) {
 
 function Skylight({ sky, lowPower }: { sky: Sky; lowPower: boolean }) {
   const look = SKYLIGHT_LOOK[sky];
-  const dayTex = useMemo(() => skyTexture(), []);
+  const dayTex = useMemo(() => skyTexture(41), []);
   return (
     <group>
       {sky === "night" && <SkyStars />}

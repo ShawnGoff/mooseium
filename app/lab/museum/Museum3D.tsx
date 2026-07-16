@@ -1062,7 +1062,7 @@ function SkyRain({ lowPower }: { lowPower: boolean }) {
         x: -2.6 + Math.random() * 5.2,
         z: -2.6 + Math.random() * 5.2,
         y: H + 0.06 + Math.random() * 0.7,
-        v: 1.1 + Math.random() * 1.1,
+        v: 2 + Math.random() * 1.8,
       })),
     [count]
   );

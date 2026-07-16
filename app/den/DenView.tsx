@@ -4,6 +4,7 @@
 // Talks to Supabase directly (RLS keeps every row owner-private).
 
 import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
 export type DenFolder = {
@@ -43,6 +44,23 @@ export default function DenView({
   const [error, setError] = useState<string | null>(null);
 
   const supabase = useMemo(() => createClient(), []);
+  const router = useRouter();
+
+  async function createDocument(parentId: string | null) {
+    setBusy(true);
+    setError(null);
+    const { data, error } = await supabase
+      .from("den_documents")
+      .insert({ user_id: userId, folder_id: parentId, title: "Untitled" })
+      .select("id")
+      .single();
+    setBusy(false);
+    if (error || !data) {
+      setError("Could not create the note.");
+      return;
+    }
+    router.push(`/den/doc/${data.id}`);
+  }
 
   // Group children by parent for recursive rendering.
   const childFolders = useMemo(() => {
@@ -137,6 +155,9 @@ export default function DenView({
                 <button onClick={() => createFolder(f.id)} disabled={busy}>
                   ＋ folder
                 </button>
+                <button onClick={() => createDocument(f.id)} disabled={busy}>
+                  ＋ note
+                </button>
                 <button onClick={() => renameFolder(f)} disabled={busy}>
                   rename
                 </button>
@@ -156,7 +177,9 @@ export default function DenView({
         ))}
         {looseDocs.map((d) => (
           <li key={d.id} className="den-leaf">
-            ✍️ {d.title || "Untitled"}
+            <a className="den-doc-link" href={`/den/doc/${d.id}`}>
+              ✍️ {d.title || "Untitled"}
+            </a>
           </li>
         ))}
       </ul>
@@ -168,6 +191,9 @@ export default function DenView({
       <div className="den-toolbar">
         <button onClick={() => createFolder(null)} disabled={busy}>
           ＋ New folder
+        </button>
+        <button onClick={() => createDocument(null)} disabled={busy}>
+          ＋ New note
         </button>
       </div>
       <Tree parentId={null} />

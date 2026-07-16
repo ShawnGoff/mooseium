@@ -2459,8 +2459,27 @@ a {
 .den-actions { display: inline-flex; gap: 8px; opacity: 0; transition: opacity 0.12s; }
 .den-row:hover .den-actions, .den-row:focus-within .den-actions { opacity: 1; }
 .den-actions button, .den-toolbar button {
-  font-size: 0.8rem; padding: 2px 8px; border-radius: 6px;
-  border: 1px solid rgba(0,0,0,0.15); background: transparent; cursor: pointer;
+  font-size: 0.8rem; padding: 3px 10px; border-radius: 6px;
+  border: 1px solid rgba(255,255,255,0.25); background: transparent;
+  color: inherit; cursor: pointer;
 }
-.den-actions button:hover, .den-toolbar button:hover { background: rgba(0,0,0,0.05); }
+.den-actions button:hover, .den-toolbar button:hover { background: rgba(255,255,255,0.1); }
 .den-leaf { list-style: none; padding: 2px 0; opacity: 0.9; }
+
+/* The Den — writing desk */
+.den-back { margin: 8px 0 16px; }
+.den-doc-link { color: inherit; text-decoration: none; }
+.den-doc-link:hover { text-decoration: underline; }
+.doc-editor { display: flex; flex-direction: column; gap: 10px; }
+.doc-title {
+  font-size: 1.6rem; font-weight: 700; background: transparent; color: inherit;
+  border: none; border-bottom: 1px solid rgba(255,255,255,0.12); padding: 6px 2px;
+}
+.doc-title:focus { outline: none; border-bottom-color: rgba(255,255,255,0.35); }
+.doc-body {
+  min-height: 55vh; font-size: 1.05rem; line-height: 1.7; background: transparent;
+  color: inherit; border: none; resize: vertical; padding: 4px 2px;
+  font-family: Georgia, "Times New Roman", serif;
+}
+.doc-body:focus { outline: none; }
+.doc-status { min-height: 1.2em; font-size: 0.85rem; opacity: 0.6; }

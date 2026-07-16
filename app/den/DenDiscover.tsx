@@ -123,8 +123,9 @@ export default function DenDiscover({
       const more: Result[] = d.results ?? [];
       // De-dupe by id in case pages overlap.
       setResults((prev) => {
-        const seen = new Set(prev.map((r) => r.externalId));
-        return [...prev, ...more.filter((r) => !seen.has(r.externalId))];
+        const base = prev ?? [];
+        const seen = new Set(base.map((r) => r.externalId));
+        return [...base, ...more.filter((r) => !seen.has(r.externalId))];
       });
       setHasMore(Boolean(d.hasMore));
       setPage(next);

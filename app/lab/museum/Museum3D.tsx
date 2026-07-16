@@ -1129,11 +1129,42 @@ function SkyRain({ lowPower }: { lowPower: boolean }) {
   );
 }
 
+// A steel-and-glass skylight frame — a perimeter curb + a mullion grid — so the
+// opening reads as glazing, not a hole in the roof.
+function SkylightFrame() {
+  const y = H - 0.08;
+  const col = "#2b2118";
+  const bar = (
+    args: [number, number, number],
+    pos: [number, number, number],
+    key: string
+  ) => (
+    <mesh key={key} position={pos}>
+      <boxGeometry args={args} />
+      <meshStandardMaterial color={col} roughness={0.55} metalness={0.25} />
+    </mesh>
+  );
+  const lines = [-1.5, 0, 1.5];
+  return (
+    <group>
+      {/* raised perimeter curb (sits a little proud of the ceiling) */}
+      {bar([6.24, 0.22, 0.2], [0, y + 0.03, -3.02], "n")}
+      {bar([6.24, 0.22, 0.2], [0, y + 0.03, 3.02], "s")}
+      {bar([0.2, 0.22, 6.24], [-3.02, y + 0.03, 0], "w")}
+      {bar([0.2, 0.22, 6.24], [3.02, y + 0.03, 0], "e")}
+      {/* mullion grid */}
+      {lines.map((x, i) => bar([0.09, 0.12, 6], [x, y, 0], `vx${i}`))}
+      {lines.map((z, i) => bar([6, 0.12, 0.09], [0, y, z], `vz${i}`))}
+    </group>
+  );
+}
+
 function Skylight({ sky, lowPower }: { sky: Sky; lowPower: boolean }) {
   const dayTex = useMemo(() => skyTexture(41), []);
   const rainTex = useMemo(() => skyTexture(53, true), []);
   return (
     <group>
+      <SkylightFrame />
       {sky === "night" && <SkyStars />}
       {sky === "rain" && <SkyRain lowPower={lowPower} />}
       {/* Self-lit sky: black diffuse + emissive texture, so the atrium ceiling

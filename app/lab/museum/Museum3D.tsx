@@ -875,7 +875,7 @@ function DenFurniture({ lowPower, lightsOn }: { lowPower: boolean; lightsOn: boo
 
 // Procedural daytime sky: a blue gradient with soft clouds. Seeded so each
 // window/skylight gets its own cloud layout (they shouldn't match).
-function skyTexture(seed = 1): THREE.Texture {
+function skyTexture(seed = 1, overcast = false): THREE.Texture {
   let s = (seed * 9301 + 49297) % 233280;
   const rnd = () => {
     s = (s * 9301 + 49297) % 233280;
@@ -886,19 +886,26 @@ function skyTexture(seed = 1): THREE.Texture {
   c.height = 256;
   const ctx = c.getContext("2d")!;
   const grad = ctx.createLinearGradient(0, 0, 0, 256);
-  grad.addColorStop(0, "#5a8ed4");
-  grad.addColorStop(0.55, "#93bde9");
-  grad.addColorStop(1, "#cfe4f6");
+  if (overcast) {
+    grad.addColorStop(0, "#1b2b47");
+    grad.addColorStop(0.55, "#2c4267");
+    grad.addColorStop(1, "#42597e");
+  } else {
+    grad.addColorStop(0, "#5a8ed4");
+    grad.addColorStop(0.55, "#93bde9");
+    grad.addColorStop(1, "#cfe4f6");
+  }
   ctx.fillStyle = grad;
   ctx.fillRect(0, 0, 256, 256);
+  const cloud = overcast ? "210,220,235" : "255,255,255";
   const puff = (cx: number, cy: number, sz: number) => {
     for (let i = 0; i < 7; i++) {
       const x = cx + (rnd() - 0.5) * sz * 1.7;
       const y = cy + (rnd() - 0.5) * sz * 0.55;
       const r = sz * (0.4 + rnd() * 0.55);
       const g = ctx.createRadialGradient(x, y, 0, x, y, r);
-      g.addColorStop(0, "rgba(255,255,255,0.92)");
-      g.addColorStop(1, "rgba(255,255,255,0)");
+      g.addColorStop(0, `rgba(${cloud},${overcast ? 0.6 : 0.92})`);
+      g.addColorStop(1, `rgba(${cloud},0)`);
       ctx.fillStyle = g;
       ctx.beginPath();
       ctx.arc(x, y, r, 0, Math.PI * 2);
@@ -1054,15 +1061,6 @@ function DenWindow({
 // black diffuse so the atrium point-light can't burn a hotspot into the "sky",
 // and go semi-transparent so the stars / rain sitting ABOVE the glass show
 // through — never inside the room.
-const SKYLIGHT_LOOK: Record<
-  Sky,
-  { col: string; emis: string; int: number; opacity: number }
-> = {
-  day: { col: "#f4f8ff", emis: "#dfeaff", int: 0.7, opacity: 1 },
-  night: { col: "#000000", emis: "#17243f", int: 0.5, opacity: 0.6 },
-  rain: { col: "#000000", emis: "#6a7078", int: 0.55, opacity: 0.48 },
-};
-
 function SkyStars() {
   const stars = useMemo(
     () =>
@@ -1092,10 +1090,10 @@ function SkyRain({ lowPower }: { lowPower: boolean }) {
   const drops = useMemo(
     () =>
       Array.from({ length: count }, () => ({
-        x: -2.3 + Math.random() * 4.6,
-        z: -2.3 + Math.random() * 4.6,
-        y: H - 0.04 - Math.random() * 0.16,
-        v: 1.3 + Math.random() * 1.1,
+        x: -2.1 + Math.random() * 4.2,
+        z: -2.1 + Math.random() * 4.2,
+        y: H - 0.03 - Math.random() * 0.1,
+        v: 0.8 + Math.random() * 0.6,
       })),
     [count]
   );
@@ -1105,10 +1103,10 @@ function SkyRain({ lowPower }: { lowPower: boolean }) {
     g.children.forEach((c, i) => {
       const d = drops[i];
       d.y -= d.v * dt;
-      d.x += d.v * 0.22 * dt; // the angle across the glass
-      if (d.y < H - 0.22) {
-        d.y = H - 0.04;
-        d.x = -2.3 + Math.random() * 4.6;
+      d.x += d.v * 0.14 * dt; // the angle across the glass
+      if (d.y < H - 0.14) {
+        d.y = H - 0.03;
+        d.x = -2.1 + Math.random() * 4.2;
       }
       c.position.set(d.x, d.y, d.z);
     });
@@ -1132,18 +1130,22 @@ function SkyRain({ lowPower }: { lowPower: boolean }) {
 }
 
 function Skylight({ sky, lowPower }: { sky: Sky; lowPower: boolean }) {
-  const look = SKYLIGHT_LOOK[sky];
   const dayTex = useMemo(() => skyTexture(41), []);
+  const rainTex = useMemo(() => skyTexture(53, true), []);
   return (
     <group>
       {sky === "night" && <SkyStars />}
       {sky === "rain" && <SkyRain lowPower={lowPower} />}
+      {/* Unlit (basic) so the atrium ceiling light can't burn a hotspot into
+          the "sky". A sky isn't lit by the room. */}
       <mesh position={[0, H - 0.03, 0]} rotation={[Math.PI / 2, 0, 0]}>
         <planeGeometry args={[6, 6]} />
         {sky === "day" ? (
-          <meshStandardMaterial map={dayTex} emissiveMap={dayTex} emissive="#ffffff" emissiveIntensity={0.5} />
+          <meshBasicMaterial map={dayTex} />
+        ) : sky === "rain" ? (
+          <meshBasicMaterial map={rainTex} />
         ) : (
-          <meshStandardMaterial color={look.col} emissive={look.emis} emissiveIntensity={look.int} />
+          <meshBasicMaterial color="#0c1428" />
         )}
       </mesh>
     </group>

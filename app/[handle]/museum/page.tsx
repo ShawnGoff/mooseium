@@ -58,5 +58,23 @@ export default async function CuratorMuseumPage({
   const profile = await getProfile(handle);
   if (!profile || !profile.username) notFound();
 
-  return <MuseumClient handle={profile.username} />;
+  // Only the owner sees their private Den (furniture + stations). Visitors get
+  // the museum without it. (The Den's data is already sealed by RLS regardless.)
+  let isOwner = false;
+  if (isSupabaseConfigured()) {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (user) {
+      const { data: me } = await supabase
+        .from("profiles")
+        .select("username")
+        .eq("id", user.id)
+        .single<{ username: string | null }>();
+      isOwner = !!me?.username && me.username === profile.username;
+    }
+  }
+
+  return <MuseumClient handle={profile.username} isOwner={isOwner} />;
 }

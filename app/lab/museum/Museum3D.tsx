@@ -168,15 +168,6 @@ function buildMuseum(m: Museum): Layout {
   open(atrium, vest, "S", ENTR_HALF, walk);
   walk.push(inset(vest.rect, INSET));
 
-  // "THE DEN" carved on the room's back (south) wall — you spawn here in your
-  // private study and walk north out into the museum.
-  labels.push({
-    text: "THE DEN",
-    pos: [0, DOORH + 0.4, A + VEST_LEN - 0.06],
-    rot: [0, Math.PI, 0],
-    size: 0.34,
-  });
-
   // museum name above the entrance, facing the arriving visitor
   labels.push({
     text: m.name.toUpperCase(),
@@ -818,6 +809,20 @@ function DenFurniture({ lowPower }: { lowPower: boolean }) {
   const zMid = A + VEST_LEN / 2;
   return (
     <group>
+      {/* "THE DEN" carved on the back (south) wall, facing the visitor */}
+      <Text
+        font={MUSEUM_FONT}
+        position={[0, DOORH + 0.4, zS - 0.06]}
+        rotation={[0, Math.PI, 0]}
+        fontSize={0.34}
+        color="#2a2320"
+        anchorX="center"
+        anchorY="middle"
+        letterSpacing={0.04}
+      >
+        THE DEN
+      </Text>
+
       {/* rug in the middle of the room */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, zMid]}>
         <planeGeometry args={[6.4, 5]} />
@@ -914,6 +919,7 @@ function Scene({
   hot,
   reflect,
   lowPower,
+  showDen,
   onSelect,
 }: {
   layout: Layout;
@@ -921,6 +927,7 @@ function Scene({
   hot: string[];
   reflect: boolean;
   lowPower: boolean;
+  showDen: boolean;
   onSelect: (p: Piece) => void;
 }) {
   return (
@@ -970,7 +977,7 @@ function Scene({
         <RoomMesh key={i} room={room} />
       ))}
 
-      <DenFurniture lowPower={lowPower} />
+      {showDen && <DenFurniture lowPower={lowPower} />}
 
       {layout.hints.map((h, i) => (
         <HintSign key={i} pos={h.pos} rot={h.rot} />
@@ -1029,7 +1036,13 @@ function Directory({ nav, onPick, onHome }: { nav: Nav[]; onPick: (i: number) =>
 
 const ENTRANCE_SPAWN: [number, number, number] = [0, EYE_Y, A + VEST_LEN - 2];
 
-export default function Museum3D({ handle }: { handle?: string } = {}) {
+export default function Museum3D({
+  handle,
+  isOwner = false,
+}: {
+  handle?: string;
+  isOwner?: boolean;
+} = {}) {
   const [museum, setMuseum] = useState<Museum | null>(null);
   const [view, setView] = useState<"loading" | "ready" | "empty">("loading");
   const [previews, setPreviews] = useState<Record<string, GalleryPiece | null>>({});
@@ -1169,6 +1182,7 @@ export default function Museum3D({ handle }: { handle?: string } = {}) {
             hot={hot}
             reflect={!isTouch}
             lowPower={isTouch}
+            showDen={isOwner}
             onSelect={handleSelect}
           />
         )}
@@ -1180,7 +1194,9 @@ export default function Museum3D({ handle }: { handle?: string } = {}) {
             onChange={setHot}
           />
         )}
-        {layout && <StationWatcher posRef={posRef} onNear={setNearStation} />}
+        {layout && isOwner && (
+          <StationWatcher posRef={posRef} onNear={setNearStation} />
+        )}
         {layout && (
           <Player
             key={tp.k}

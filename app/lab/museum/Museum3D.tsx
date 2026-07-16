@@ -11,6 +11,7 @@
 // Isolated under /lab; reads ?u=<handle>.
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import * as THREE from "three";
 import { Canvas, useFrame } from "@react-three/fiber";
 import { Text, MeshReflectorMaterial } from "@react-three/drei";
@@ -837,7 +838,7 @@ function DenFurniture({ lowPower }: { lowPower: boolean }) {
       <Chair position={[2.6, 0, zS - 1.9]} rotation={[0, 0, 0]} />
 
       {/* reading nook: armchair, side table + lamp near the SW corner */}
-      <Armchair position={[-2.8, 0, zS - 1.6]} rotation={[0, -Math.PI / 5, 0]} />
+      <Armchair position={[-2.8, 0, zS - 1.6]} rotation={[0, Math.PI - 0.35, 0]} />
       <mesh position={[-3.9, 0.3, zS - 2.6]}>
         <cylinderGeometry args={[0.28, 0.28, 0.6, 16]} />
         <meshStandardMaterial color={WOOD_DARK} roughness={0.6} />
@@ -862,6 +863,49 @@ function DenFurniture({ lowPower }: { lowPower: boolean }) {
       )}
     </group>
   );
+}
+
+// Interactive stations in the Den. Standing near one shows a prompt that opens
+// the matching 2D tool (the writing desk, the library / reader).
+type Station = { id: string; label: string; cx: number; cz: number; r: number; href: string };
+const DEN_STATIONS: Station[] = [
+  { id: "desk", label: "✍️  Sit and write", cx: 2.6, cz: A + VEST_LEN - 1.9, r: 1.9, href: "/den" },
+  { id: "chair", label: "📖  Sit and read", cx: -2.8, cz: A + VEST_LEN - 1.6, r: 1.9, href: "/den" },
+  {
+    id: "shelves",
+    label: "📚  Browse your library",
+    cx: -(VEST_HALF - 1),
+    cz: A + VEST_LEN / 2,
+    r: 2.4,
+    href: "/den",
+  },
+];
+
+function StationWatcher({
+  posRef,
+  onNear,
+}: {
+  posRef: React.MutableRefObject<{ x: number; z: number }>;
+  onNear: (id: string | null) => void;
+}) {
+  const cur = useRef<string | null>(null);
+  useFrame(() => {
+    const p = posRef.current;
+    let found: string | null = null;
+    for (const s of DEN_STATIONS) {
+      const dx = p.x - s.cx;
+      const dz = p.z - s.cz;
+      if (dx * dx + dz * dz < s.r * s.r) {
+        found = s.id;
+        break;
+      }
+    }
+    if (found !== cur.current) {
+      cur.current = found;
+      onNear(found);
+    }
+  });
+  return null;
 }
 
 function Scene({
@@ -996,6 +1040,8 @@ export default function Museum3D({ handle }: { handle?: string } = {}) {
       ("ontouchstart" in window || navigator.maxTouchPoints > 0)
   );
   const [hot, setHot] = useState<string[]>([]);
+  const [nearStation, setNearStation] = useState<string | null>(null);
+  const router = useRouter();
   const [tp, setTp] = useState<{ spawn: [number, number, number]; yaw: number; k: number }>({
     spawn: ENTRANCE_SPAWN,
     yaw: 0,
@@ -1071,6 +1117,24 @@ export default function Museum3D({ handle }: { handle?: string } = {}) {
     };
   }, [layout]);
 
+  const station = DEN_STATIONS.find((s) => s.id === nearStation) ?? null;
+  const enterStation = () => {
+    if (station) router.push(station.href);
+  };
+
+  // Press E / Enter to enter the tool at a nearby station.
+  useEffect(() => {
+    if (!station) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "e" || e.key === "E" || e.key === "Enter") {
+        e.preventDefault();
+        router.push(station.href);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [station, router]);
+
   const handleSelect = (p: Piece) => {
     if (!dragRef.current) setSelected(p);
   };
@@ -1116,6 +1180,7 @@ export default function Museum3D({ handle }: { handle?: string } = {}) {
             onChange={setHot}
           />
         )}
+        {layout && <StationWatcher posRef={posRef} onNear={setNearStation} />}
         {layout && (
           <Player
             key={tp.k}
@@ -1130,6 +1195,15 @@ export default function Museum3D({ handle }: { handle?: string } = {}) {
       </Canvas>
 
       {isTouch && view === "ready" && <JoystickPad joyRef={joyRef} />}
+
+      {view === "ready" && station && (
+        <button onClick={enterStation} style={stationPromptStyle}>
+          {station.label}
+          <span style={{ opacity: 0.6, marginLeft: 10, fontSize: 12 }}>
+            {isTouch ? "tap" : "press E"}
+          </span>
+        </button>
+      )}
 
       {/* Soft background music — add a file at public/museum-music.mp3 */}
       <audio ref={audioRef} loop preload="none" src="/museum-music.mp3" />
@@ -1254,6 +1328,21 @@ const musicBtnStyle: React.CSSProperties = {
   padding: "8px 14px",
   cursor: "pointer",
   fontSize: 14,
+};
+const stationPromptStyle: React.CSSProperties = {
+  position: "absolute",
+  bottom: 88,
+  left: "50%",
+  transform: "translateX(-50%)",
+  background: "rgba(20,18,16,0.86)",
+  color: "#f3efe9",
+  border: "1px solid #6a5a3a",
+  borderRadius: 10,
+  padding: "12px 20px",
+  cursor: "pointer",
+  fontSize: 16,
+  fontWeight: 600,
+  boxShadow: "0 6px 24px rgba(0,0,0,0.4)",
 };
 const dirBtnStyle: React.CSSProperties = {
   background: "rgba(20,18,16,0.72)",

@@ -35,7 +35,7 @@ export default function TopNav({
       {inLibrary ? (
         username && (
           <Link href={`/@${username}/museum`} className="topbar-link">
-            Walk in 3D
+            Explore in 3D
           </Link>
         )
       ) : (
@@ -50,7 +50,7 @@ export default function TopNav({
           )}
           {username && (
             <Link href={`/@${username}/museum`} className="topbar-link">
-              Walk in 3D
+              Explore in 3D
             </Link>
           )}
         </>

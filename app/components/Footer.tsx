@@ -8,6 +8,7 @@ export default function Footer() {
         <nav className="site-footer-links">
           <Link href="/museums">Museums</Link>
           <Link href="/museums#how-search-works">How search works</Link>
+          <Link href="/credits">Credits &amp; Thanks</Link>
           <Link href="/terms">Terms</Link>
           <Link href="/privacy">Privacy</Link>
         </nav>

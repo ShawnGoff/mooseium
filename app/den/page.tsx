@@ -60,7 +60,7 @@ export default async function DenPage() {
         </div>
         {username && (
           <Link href={`/@${username}/museum`} className="walk-3d-btn">
-            Walk in 3D
+            Explore in 3D
           </Link>
         )}
       </div>

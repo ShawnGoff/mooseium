@@ -2846,3 +2846,14 @@ button.reader-back, button.reader-notes-link {
   background: rgba(20,18,16,0.82); color: #e6d3a3;
   font-size: 0.7rem; font-weight: 600; padding: 2px 7px; border-radius: 999px;
 }
+
+/* Credits & Thanks page */
+.credits { max-width: 760px; }
+.credits-intro { font-size: 1.05rem; line-height: 1.7; opacity: 0.92; margin: 8px 0 28px; }
+.credits-section { margin-bottom: 30px; }
+.credits-section h2 { font-size: 1.2rem; margin: 0 0 10px; }
+.credits-section p { line-height: 1.65; opacity: 0.9; }
+.credits-list { margin: 10px 0; padding-left: 20px; line-height: 1.9; }
+.credits-list li { margin: 2px 0; }
+.credits .credits-fine { font-size: 0.85rem; opacity: 0.55; margin-top: 12px; }
+.credits-outro { font-size: 1.05rem; margin-top: 12px; opacity: 0.92; }

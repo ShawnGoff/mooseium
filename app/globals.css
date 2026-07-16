@@ -2634,3 +2634,34 @@ a {
 button.reader-back, button.reader-notes-link {
   background: transparent; border: none; cursor: pointer; font: inherit; padding: 0;
 }
+
+/* The Den — top tabs + discovery home */
+.den-root { margin-top: 12px; }
+.den-toptabs { margin-bottom: 18px; }
+.den-discover { max-width: 1000px; }
+.den-discover-search { display: flex; gap: 8px; margin: 4px 0 24px; }
+.den-discover-search input { flex: 1; font-size: 1rem; padding: 10px 12px; }
+.den-home-section { margin-bottom: 30px; }
+.den-home-section h2 { font-size: 1.15rem; margin: 0 0 12px; font-weight: 600; }
+.den-home-section h2 em { font-style: italic; opacity: 0.95; }
+.den-section-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.den-subject-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.den-subject-chips button {
+  border: 1px solid rgba(255,255,255,0.22); background: transparent; color: inherit;
+  border-radius: 999px; padding: 7px 15px; cursor: pointer; font-size: 0.9rem;
+}
+.den-subject-chips button:hover { background: rgba(230,211,163,0.16); }
+.den-shelf-row {
+  display: flex; gap: 18px; overflow-x: auto; padding-bottom: 8px;
+  scroll-snap-type: x proximity;
+}
+.den-shelf-row .den-book-card { flex: 0 0 132px; scroll-snap-align: start; }
+.den-save-btn {
+  margin-top: 6px; width: 100%; font-size: 0.8rem; padding: 5px 0; border-radius: 6px;
+  border: 1px solid rgba(230,211,163,0.5); background: transparent; color: inherit; cursor: pointer;
+}
+.den-save-btn:hover:not(:disabled) { background: rgba(230,211,163,0.16); }
+.den-save-btn.saved { border-color: rgba(255,255,255,0.15); opacity: 0.6; cursor: default; }
+.den-connected-empty { max-width: 42ch; }
+.text-link { background: none; border: none; color: inherit; cursor: pointer; text-decoration: underline; opacity: 0.75; font-size: 0.85rem; }
+.text-link:hover { opacity: 1; }

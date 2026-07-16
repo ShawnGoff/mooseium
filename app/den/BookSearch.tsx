@@ -73,7 +73,7 @@ export default function BookSearch({
         author: r.author,
         cover_url: r.coverUrl,
       })
-      .select("id, folder_id, title, author, cover_url")
+      .select("id, folder_id, title, author, cover_url, external_id")
       .single();
     setSavingId(null);
     if (error) {

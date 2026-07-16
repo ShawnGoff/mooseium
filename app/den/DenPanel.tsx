@@ -55,7 +55,7 @@ export default function DenPanel({
         supabase.from("den_folders").select("id, parent_folder_id, name, sort").order("sort"),
         supabase
           .from("den_books")
-          .select("id, folder_id, title, author, cover_url")
+          .select("id, folder_id, title, author, cover_url, external_id")
           .order("created_at"),
         supabase
           .from("den_documents")

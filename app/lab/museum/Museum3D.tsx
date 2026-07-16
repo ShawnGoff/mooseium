@@ -80,9 +80,11 @@ type Layout = {
 const MUSEUM_FONT =
   "https://cdn.jsdelivr.net/npm/@fontsource/cinzel@5.2.8/files/cinzel-latin-600-normal.woff";
 
-// Background music playlist. Drop more .mp3 files in /public and add their
-// paths here to let visitors cycle through songs with the ⏭ button.
-const MUSIC_TRACKS = ["/museum-music.mp3"];
+// Background music. Drop .mp3 files in /public and add { name, src } entries;
+// the track menu lets visitors pick one, and it loops until they choose another.
+const MUSIC_TRACKS: { name: string; src: string }[] = [
+  { name: "Museum Theme", src: "/museum-music.mp3" },
+];
 
 const rect = (x0: number, x1: number, z0: number, z1: number): AABB => ({ x0, x1, z0, z1 });
 const inset = (a: AABB, d: number): AABB => rect(a.x0 + d, a.x1 - d, a.z0 + d, a.z1 - d);
@@ -1555,6 +1557,7 @@ export default function Museum3D({
   const audioRef = useRef<HTMLAudioElement>(null);
   const [musicOn, setMusicOn] = useState(false);
   const [trackIdx, setTrackIdx] = useState(0);
+  const [musicMenu, setMusicMenu] = useState(false);
   const toggleMusic = () => {
     const a = audioRef.current;
     if (!a) return;
@@ -1566,7 +1569,20 @@ export default function Museum3D({
       a.play().then(() => setMusicOn(true)).catch(() => {});
     }
   };
-  const nextTrack = () => setTrackIdx((i) => (i + 1) % MUSIC_TRACKS.length);
+  // Pick a track from the menu — it starts playing (and loops).
+  const pickTrack = (i: number) => {
+    setMusicMenu(false);
+    setMusicOn(true);
+    if (i === trackIdx) {
+      const a = audioRef.current;
+      if (a) {
+        a.volume = 0.32;
+        a.play().catch(() => {});
+      }
+    } else {
+      setTrackIdx(i); // the effect below plays the new track
+    }
+  };
   // When the track changes while playing, start the new one.
   useEffect(() => {
     const a = audioRef.current;
@@ -1761,8 +1777,8 @@ export default function Museum3D({
         </button>
       )}
 
-      {/* Background music — the chosen track loops; ⏭ switches which one plays */}
-      <audio ref={audioRef} loop preload="none" src={MUSIC_TRACKS[trackIdx]} />
+      {/* Background music — the chosen track loops; the menu switches tracks */}
+      <audio ref={audioRef} loop preload="none" src={MUSIC_TRACKS[trackIdx].src} />
       {/* Rain loop uses Web Audio (see the rain effect above) from public/rain.mp3 */}
 
       {view === "ready" && isOwner && (
@@ -1806,10 +1822,34 @@ export default function Museum3D({
           <button onClick={toggleMusic} style={musicBtnStyle} aria-label="Toggle music">
             {musicOn ? "🔊 Music on" : "🔈 Music off"}
           </button>
-          {musicOn && MUSIC_TRACKS.length > 1 && (
-            <button onClick={nextTrack} style={musicBtnStyle} aria-label="Next song" title="Next song">
-              ⏭
-            </button>
+          {MUSIC_TRACKS.length > 1 && (
+            <div style={{ position: "relative" }}>
+              <button
+                onClick={() => setMusicMenu((o) => !o)}
+                style={musicBtnStyle}
+                aria-label="Choose track"
+                title="Choose a track"
+              >
+                🎵 {MUSIC_TRACKS[trackIdx].name} ▾
+              </button>
+              {musicMenu && (
+                <div style={musicMenuStyle}>
+                  {MUSIC_TRACKS.map((t, i) => (
+                    <button
+                      key={t.src}
+                      onClick={() => pickTrack(i)}
+                      style={{
+                        ...musicMenuItemStyle,
+                        ...(i === trackIdx ? { color: "#e6d3a3" } : null),
+                      }}
+                    >
+                      {i === trackIdx ? "♪ " : ""}
+                      {t.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           )}
         </div>
       )}
@@ -1933,6 +1973,32 @@ const musicBtnStyle: React.CSSProperties = {
   padding: "8px 14px",
   cursor: "pointer",
   fontSize: 14,
+};
+const musicMenuStyle: React.CSSProperties = {
+  position: "absolute",
+  bottom: "calc(100% + 6px)",
+  right: 0,
+  minWidth: 180,
+  maxHeight: 280,
+  overflowY: "auto",
+  background: "rgba(20,18,16,0.96)",
+  border: "1px solid #4a423b",
+  borderRadius: 8,
+  padding: 4,
+  display: "flex",
+  flexDirection: "column",
+  boxShadow: "0 8px 24px rgba(0,0,0,0.5)",
+};
+const musicMenuItemStyle: React.CSSProperties = {
+  background: "transparent",
+  border: "none",
+  color: "#f3efe9",
+  textAlign: "left",
+  padding: "8px 10px",
+  borderRadius: 6,
+  cursor: "pointer",
+  fontSize: 13,
+  whiteSpace: "nowrap",
 };
 const skyToggleStyle: React.CSSProperties = {
   position: "absolute",

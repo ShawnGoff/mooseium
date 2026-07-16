@@ -887,9 +887,9 @@ function skyTexture(seed = 1, overcast = false): THREE.Texture {
   const ctx = c.getContext("2d")!;
   const grad = ctx.createLinearGradient(0, 0, 0, 256);
   if (overcast) {
-    grad.addColorStop(0, "#1b2b47");
-    grad.addColorStop(0.55, "#2c4267");
-    grad.addColorStop(1, "#42597e");
+    grad.addColorStop(0, "#3b5077");
+    grad.addColorStop(0.55, "#526b92");
+    grad.addColorStop(1, "#6c85ac");
   } else {
     grad.addColorStop(0, "#5a8ed4");
     grad.addColorStop(0.55, "#93bde9");
@@ -897,14 +897,14 @@ function skyTexture(seed = 1, overcast = false): THREE.Texture {
   }
   ctx.fillStyle = grad;
   ctx.fillRect(0, 0, 256, 256);
-  const cloud = overcast ? "210,220,235" : "255,255,255";
+  const cloud = overcast ? "226,233,244" : "255,255,255";
   const puff = (cx: number, cy: number, sz: number) => {
     for (let i = 0; i < 7; i++) {
       const x = cx + (rnd() - 0.5) * sz * 1.7;
       const y = cy + (rnd() - 0.5) * sz * 0.55;
       const r = sz * (0.4 + rnd() * 0.55);
       const g = ctx.createRadialGradient(x, y, 0, x, y, r);
-      g.addColorStop(0, `rgba(${cloud},${overcast ? 0.6 : 0.92})`);
+      g.addColorStop(0, `rgba(${cloud},${overcast ? 0.7 : 0.92})`);
       g.addColorStop(1, `rgba(${cloud},0)`);
       ctx.fillStyle = g;
       ctx.beginPath();
@@ -1145,7 +1145,7 @@ function Skylight({ sky, lowPower }: { sky: Sky; lowPower: boolean }) {
         ) : sky === "rain" ? (
           <meshBasicMaterial map={rainTex} />
         ) : (
-          <meshBasicMaterial color="#0c1428" />
+          <meshBasicMaterial color="#1e2f56" />
         )}
       </mesh>
     </group>

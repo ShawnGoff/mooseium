@@ -38,7 +38,7 @@ export default function BookReader({
   const [noteDocId, setNoteDocId] = useState<string | null>(initialNoteDocId);
   const [flash, setFlash] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const [theme, setTheme] = useState<"dark" | "paper">("dark");
+  const [theme, setTheme] = useState<"dark" | "paper">("paper");
   const [fontScale, setFontScale] = useState(1.15);
   const [showSettings, setShowSettings] = useState(false);
 
@@ -266,12 +266,19 @@ export default function BookReader({
               📝 Notes
             </Link>
           ))}
+        <button
+          className="reader-theme-toggle"
+          onClick={() => setTheme((t) => (t === "paper" ? "dark" : "paper"))}
+          title="Switch theme"
+        >
+          {theme === "paper" ? "☾ Dark" : "☀ Paper"}
+        </button>
         <div className="reader-settings-wrap">
           <button
             className="reader-aa"
             onClick={() => setShowSettings((v) => !v)}
-            aria-label="Reading settings"
-            title="Text size & theme"
+            aria-label="Text size"
+            title="Text size"
           >
             Aa
           </button>
@@ -285,23 +292,6 @@ export default function BookReader({
                   </button>
                   <button onClick={() => setFontScale((f) => Math.min(1.7, +(f + 0.05).toFixed(2)))}>
                     A+
-                  </button>
-                </div>
-              </div>
-              <div className="reader-settings-row">
-                <span>Theme</span>
-                <div className="reader-font-btns">
-                  <button
-                    className={theme === "paper" ? "active" : ""}
-                    onClick={() => setTheme("paper")}
-                  >
-                    Paper
-                  </button>
-                  <button
-                    className={theme === "dark" ? "active" : ""}
-                    onClick={() => setTheme("dark")}
-                  >
-                    Dark
                   </button>
                 </div>
               </div>

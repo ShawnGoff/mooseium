@@ -2720,3 +2720,12 @@ button.reader-back, button.reader-notes-link {
 }
 .reader-font-btns button.active { background: rgba(230,211,163,0.28); border-color: rgba(230,211,163,0.7); }
 .reader-font-btns button:hover { background: rgba(128,128,128,0.18); }
+
+/* The Den — visible theme toggle in the reader bar */
+.reader-theme-toggle {
+  background: transparent; border: 1px solid rgba(255,255,255,0.22); color: inherit;
+  border-radius: 6px; padding: 3px 10px; cursor: pointer; font-size: 0.82rem; white-space: nowrap;
+}
+.reader-theme-toggle:hover { background: rgba(255,255,255,0.1); }
+.reader-paper .reader-theme-toggle { color: #33291b; border-color: rgba(0,0,0,0.2); }
+.reader-paper .reader-theme-toggle:hover { background: rgba(0,0,0,0.06); }

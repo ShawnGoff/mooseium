@@ -1090,10 +1090,10 @@ function SkyRain({ lowPower }: { lowPower: boolean }) {
   const drops = useMemo(
     () =>
       Array.from({ length: count }, () => ({
-        x: -2.1 + Math.random() * 4.2,
-        z: -2.1 + Math.random() * 4.2,
-        y: H - 0.03 - Math.random() * 0.1,
-        v: 0.8 + Math.random() * 0.6,
+        x: -1.9 + Math.random() * 3.8,
+        z: -1.9 + Math.random() * 3.8,
+        y: H - 0.03 - Math.random() * 0.08,
+        v: 0.7 + Math.random() * 0.5,
       })),
     [count]
   );
@@ -1103,10 +1103,10 @@ function SkyRain({ lowPower }: { lowPower: boolean }) {
     g.children.forEach((c, i) => {
       const d = drops[i];
       d.y -= d.v * dt;
-      d.x += d.v * 0.14 * dt; // the angle across the glass
-      if (d.y < H - 0.14) {
+      d.x += d.v * 0.12 * dt; // the angle across the glass
+      if (d.y < H - 0.12) {
         d.y = H - 0.03;
-        d.x = -2.1 + Math.random() * 4.2;
+        d.x = -1.9 + Math.random() * 3.8;
       }
       c.position.set(d.x, d.y, d.z);
     });
@@ -1136,16 +1136,36 @@ function Skylight({ sky, lowPower }: { sky: Sky; lowPower: boolean }) {
     <group>
       {sky === "night" && <SkyStars />}
       {sky === "rain" && <SkyRain lowPower={lowPower} />}
-      {/* Unlit (basic) so the atrium ceiling light can't burn a hotspot into
-          the "sky". A sky isn't lit by the room. */}
+      {/* Self-lit sky: black diffuse + emissive texture, so the atrium ceiling
+          light has no diffuse/specular to hotspot — the sky shows on its own. */}
       <mesh position={[0, H - 0.03, 0]} rotation={[Math.PI / 2, 0, 0]}>
         <planeGeometry args={[6, 6]} />
         {sky === "day" ? (
-          <meshBasicMaterial map={dayTex} />
+          <meshStandardMaterial
+            color="#000000"
+            emissive="#ffffff"
+            emissiveMap={dayTex}
+            emissiveIntensity={1}
+            roughness={1}
+            metalness={0}
+          />
         ) : sky === "rain" ? (
-          <meshBasicMaterial map={rainTex} />
+          <meshStandardMaterial
+            color="#000000"
+            emissive="#ffffff"
+            emissiveMap={rainTex}
+            emissiveIntensity={1}
+            roughness={1}
+            metalness={0}
+          />
         ) : (
-          <meshBasicMaterial color="#1e2f56" />
+          <meshStandardMaterial
+            color="#000000"
+            emissive="#1e2f56"
+            emissiveIntensity={1}
+            roughness={1}
+            metalness={0}
+          />
         )}
       </mesh>
     </group>

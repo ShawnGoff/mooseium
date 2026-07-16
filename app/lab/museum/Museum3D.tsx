@@ -40,8 +40,8 @@ const WING_HALF = 5; // wing room half-size
 const COLL_HALF = 4.5; // gallery room half-size
 const ATR_WING_CORR = 10; // atrium→wing corridor length (spaces the wings out)
 const WING_COLL_CORR = 3; // wing→gallery corridor length
-const VEST_HALF = 4; // entrance vestibule half-width
-const VEST_LEN = 10; // entrance vestibule depth
+const VEST_HALF = 6; // entrance vestibule / Den half-width
+const VEST_LEN = 14; // entrance vestibule / Den depth
 const ENTR_HALF = 2; // entrance doorway half-width
 const EPS = 0.03; // wall inset so shared walls don't z-fight
 const INSET = 0.4; // walkable inset from walls
@@ -166,6 +166,15 @@ function buildMuseum(m: Museum): Layout {
   rooms.push(vest);
   open(atrium, vest, "S", ENTR_HALF, walk);
   walk.push(inset(vest.rect, INSET));
+
+  // "THE DEN" carved on the room's back (south) wall — you spawn here in your
+  // private study and walk north out into the museum.
+  labels.push({
+    text: "THE DEN",
+    pos: [0, DOORH + 0.4, A + VEST_LEN - 0.06],
+    rot: [0, Math.PI, 0],
+    size: 0.34,
+  });
 
   // museum name above the entrance, facing the arriving visitor
   labels.push({
@@ -622,6 +631,239 @@ function HintSign({ pos, rot }: Hint) {
   );
 }
 
+// ---------------------------------------------------------------------------
+// The Den — procedural furniture in the spawn room. Built from primitives so it
+// works with no downloaded assets; swap in .glb models later via useGLTF.
+// ---------------------------------------------------------------------------
+
+const WOOD_DARK = "#3f2c1d";
+const WOOD_MID = "#5c4227";
+const BOOK_COLORS = ["#7c2f2f", "#2f4a6b", "#3f5f3a", "#6b532f", "#4a3560", "#83603a", "#566066"];
+
+function BookRow({ y, width }: { y: number; width: number }) {
+  const books: React.ReactElement[] = [];
+  let x = -width / 2 + 0.04;
+  let i = 0;
+  while (x < width / 2 - 0.08 && i < 40) {
+    const w = 0.05 + (i % 3) * 0.018;
+    const h = 0.3 + ((i * 7) % 5) * 0.03;
+    const c = BOOK_COLORS[(i * 3) % BOOK_COLORS.length];
+    books.push(
+      <mesh key={i} position={[x + w / 2, y + h / 2, 0]} castShadow>
+        <boxGeometry args={[w, h, 0.2]} />
+        <meshStandardMaterial color={c} roughness={0.85} />
+      </mesh>
+    );
+    x += w + 0.012;
+    i++;
+  }
+  return <>{books}</>;
+}
+
+function Bookshelf({
+  position,
+  rotation,
+}: {
+  position: [number, number, number];
+  rotation: [number, number, number];
+}) {
+  const W = 2.4;
+  const Ht = 2.6;
+  const D = 0.4;
+  const t = 0.06;
+  const shelfYs = [0, 0.67, 1.34, 2.01, Ht - t];
+  return (
+    <group position={position} rotation={rotation}>
+      <mesh position={[0, Ht / 2, -D / 2 + t / 2]}>
+        <boxGeometry args={[W, Ht, t]} />
+        <meshStandardMaterial color={WOOD_DARK} roughness={0.7} />
+      </mesh>
+      <mesh position={[-W / 2 + t / 2, Ht / 2, 0]}>
+        <boxGeometry args={[t, Ht, D]} />
+        <meshStandardMaterial color={WOOD_DARK} roughness={0.7} />
+      </mesh>
+      <mesh position={[W / 2 - t / 2, Ht / 2, 0]}>
+        <boxGeometry args={[t, Ht, D]} />
+        <meshStandardMaterial color={WOOD_DARK} roughness={0.7} />
+      </mesh>
+      {shelfYs.map((y, i) => (
+        <mesh key={i} position={[0, y + t / 2, 0]}>
+          <boxGeometry args={[W - t * 2, t, D - t]} />
+          <meshStandardMaterial color={WOOD_MID} roughness={0.7} />
+        </mesh>
+      ))}
+      {[0.06, 0.73, 1.4, 2.07].map((y, i) => (
+        <group key={i} position={[0, y, 0.03]}>
+          <BookRow y={0} width={W - 0.28} />
+        </group>
+      ))}
+    </group>
+  );
+}
+
+function Desk({
+  position,
+  rotation,
+}: {
+  position: [number, number, number];
+  rotation: [number, number, number];
+}) {
+  const W = 1.8;
+  const D = 0.85;
+  const topY = 0.75;
+  const leg = (x: number, z: number) => (
+    <mesh position={[x, topY / 2, z]}>
+      <boxGeometry args={[0.08, topY, 0.08]} />
+      <meshStandardMaterial color={WOOD_DARK} roughness={0.6} />
+    </mesh>
+  );
+  return (
+    <group position={position} rotation={rotation}>
+      <mesh position={[0, topY, 0]} castShadow>
+        <boxGeometry args={[W, 0.06, D]} />
+        <meshStandardMaterial color={WOOD_MID} roughness={0.5} />
+      </mesh>
+      {/* modesty panel (back) */}
+      <mesh position={[0, topY - 0.28, -D / 2 + 0.04]}>
+        <boxGeometry args={[W - 0.2, 0.4, 0.04]} />
+        <meshStandardMaterial color={WOOD_DARK} roughness={0.6} />
+      </mesh>
+      {leg(-W / 2 + 0.1, -D / 2 + 0.1)}
+      {leg(W / 2 - 0.1, -D / 2 + 0.1)}
+      {leg(-W / 2 + 0.1, D / 2 - 0.1)}
+      {leg(W / 2 - 0.1, D / 2 - 0.1)}
+      {/* a closed book + lamp glow on the desk */}
+      <mesh position={[0.4, topY + 0.05, 0]} rotation={[0, 0.3, 0]}>
+        <boxGeometry args={[0.32, 0.05, 0.24]} />
+        <meshStandardMaterial color="#6b2f2f" roughness={0.8} />
+      </mesh>
+      <mesh position={[-0.55, topY + 0.16, -0.15]}>
+        <sphereGeometry args={[0.1, 12, 12]} />
+        <meshStandardMaterial color="#fff3d0" emissive="#ffdf9e" emissiveIntensity={1.4} />
+      </mesh>
+    </group>
+  );
+}
+
+function Chair({
+  position,
+  rotation,
+}: {
+  position: [number, number, number];
+  rotation: [number, number, number];
+}) {
+  return (
+    <group position={position} rotation={rotation}>
+      <mesh position={[0, 0.46, 0]} castShadow>
+        <boxGeometry args={[0.5, 0.07, 0.5]} />
+        <meshStandardMaterial color={WOOD_MID} roughness={0.6} />
+      </mesh>
+      <mesh position={[0, 0.75, -0.22]}>
+        <boxGeometry args={[0.5, 0.55, 0.06]} />
+        <meshStandardMaterial color={WOOD_MID} roughness={0.6} />
+      </mesh>
+      {[
+        [-0.21, -0.21],
+        [0.21, -0.21],
+        [-0.21, 0.21],
+        [0.21, 0.21],
+      ].map(([x, z], i) => (
+        <mesh key={i} position={[x, 0.23, z]}>
+          <boxGeometry args={[0.06, 0.46, 0.06]} />
+          <meshStandardMaterial color={WOOD_DARK} roughness={0.6} />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
+function Armchair({
+  position,
+  rotation,
+}: {
+  position: [number, number, number];
+  rotation: [number, number, number];
+}) {
+  const c = "#5a4a3a";
+  return (
+    <group position={position} rotation={rotation}>
+      <mesh position={[0, 0.32, 0]} castShadow>
+        <boxGeometry args={[0.9, 0.28, 0.9]} />
+        <meshStandardMaterial color={c} roughness={0.9} />
+      </mesh>
+      <mesh position={[0, 0.5, 0]}>
+        <boxGeometry args={[0.78, 0.18, 0.78]} />
+        <meshStandardMaterial color="#6b5a48" roughness={0.9} />
+      </mesh>
+      <mesh position={[0, 0.7, -0.4]}>
+        <boxGeometry args={[0.9, 0.75, 0.16]} />
+        <meshStandardMaterial color={c} roughness={0.9} />
+      </mesh>
+      <mesh position={[-0.44, 0.55, 0]}>
+        <boxGeometry args={[0.16, 0.5, 0.9]} />
+        <meshStandardMaterial color={c} roughness={0.9} />
+      </mesh>
+      <mesh position={[0.44, 0.55, 0]}>
+        <boxGeometry args={[0.16, 0.5, 0.9]} />
+        <meshStandardMaterial color={c} roughness={0.9} />
+      </mesh>
+    </group>
+  );
+}
+
+function DenFurniture({ lowPower }: { lowPower: boolean }) {
+  const wW = VEST_HALF; // wall x
+  const zS = A + VEST_LEN; // south wall z
+  const zMid = A + VEST_LEN / 2;
+  return (
+    <group>
+      {/* rug in the middle of the room */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, zMid]}>
+        <planeGeometry args={[6.4, 5]} />
+        <meshStandardMaterial color="#5b2f2c" roughness={0.95} />
+      </mesh>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.015, zMid]}>
+        <planeGeometry args={[7, 5.6]} />
+        <meshStandardMaterial color="#3c2320" roughness={0.95} />
+      </mesh>
+
+      {/* bookshelves along the west and east walls */}
+      <Bookshelf position={[-wW + 0.22, 0, zMid - 2.6]} rotation={[0, Math.PI / 2, 0]} />
+      <Bookshelf position={[-wW + 0.22, 0, zMid + 0.3]} rotation={[0, Math.PI / 2, 0]} />
+      <Bookshelf position={[wW - 0.22, 0, zMid - 2.6]} rotation={[0, -Math.PI / 2, 0]} />
+
+      {/* writing desk against the south (back) wall, chair facing it */}
+      <Desk position={[2.6, 0, zS - 0.9]} rotation={[0, Math.PI, 0]} />
+      <Chair position={[2.6, 0, zS - 1.9]} rotation={[0, 0, 0]} />
+
+      {/* reading nook: armchair, side table + lamp near the SW corner */}
+      <Armchair position={[-2.8, 0, zS - 1.6]} rotation={[0, -Math.PI / 5, 0]} />
+      <mesh position={[-3.9, 0.3, zS - 2.6]}>
+        <cylinderGeometry args={[0.28, 0.28, 0.6, 16]} />
+        <meshStandardMaterial color={WOOD_DARK} roughness={0.6} />
+      </mesh>
+      {/* floor lamp */}
+      <mesh position={[-4.4, 0.9, zS - 1.4]}>
+        <cylinderGeometry args={[0.025, 0.025, 1.8, 8]} />
+        <meshStandardMaterial color="#2a2a2a" />
+      </mesh>
+      <mesh position={[-4.4, 1.85, zS - 1.4]}>
+        <coneGeometry args={[0.22, 0.3, 16, 1, true]} />
+        <meshStandardMaterial color="#fff2cf" emissive="#ffd98f" emissiveIntensity={1.2} side={2} />
+      </mesh>
+      {!lowPower && (
+        <pointLight
+          position={[-4.4, 1.7, zS - 1.4]}
+          intensity={6}
+          distance={7}
+          decay={2}
+          color="#ffdca0"
+        />
+      )}
+    </group>
+  );
+}
+
 function Scene({
   layout,
   previews,
@@ -683,6 +925,8 @@ function Scene({
       {layout.rooms.map((room, i) => (
         <RoomMesh key={i} room={room} />
       ))}
+
+      <DenFurniture lowPower={lowPower} />
 
       {layout.hints.map((h, i) => (
         <HintSign key={i} pos={h.pos} rot={h.rot} />

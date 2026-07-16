@@ -2687,3 +2687,36 @@ button.reader-back, button.reader-notes-link {
 .reader-seek button:hover { background: rgba(255,255,255,0.1); }
 .reader-progress { cursor: pointer; }
 .reader-progress:hover .reader-progress-fill { background: rgba(230,211,163,1); }
+
+/* The Den — reader comfort (paper theme + settings menu) */
+.reader-paper { background: #f4ecd9; }
+.reader-paper .reader-bar { background: #ece1c8; color: #33291b; border-bottom-color: rgba(0,0,0,0.12); }
+.reader-paper .reader-back, .reader-paper .reader-notes-link,
+.reader-paper .reader-aa, .reader-paper .reader-seek button { color: #33291b; border-color: rgba(0,0,0,0.2); }
+.reader-paper .reader-seek button:hover, .reader-paper .reader-aa:hover { background: rgba(0,0,0,0.06); }
+.reader-paper .reader-progress { background: rgba(0,0,0,0.1); }
+.reader-paper .reader-scroll { background: #f4ecd9; }
+.reader-paper .reader-text { color: #33291b; }
+.reader-paper .reader-rich img { filter: none; }
+
+.reader-settings-wrap { position: relative; }
+.reader-aa {
+  background: transparent; border: 1px solid rgba(255,255,255,0.22); color: inherit;
+  border-radius: 6px; padding: 3px 9px; cursor: pointer; font-size: 0.85rem; font-weight: 600;
+}
+.reader-aa:hover { background: rgba(255,255,255,0.1); }
+.reader-settings {
+  position: absolute; top: 120%; right: 0; z-index: 5; min-width: 190px;
+  background: rgba(28,25,22,0.98); border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 10px; padding: 10px 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+  display: flex; flex-direction: column; gap: 10px;
+}
+.reader-paper .reader-settings { background: #fff8ea; color: #33291b; border-color: rgba(0,0,0,0.15); }
+.reader-settings-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 0.85rem; }
+.reader-font-btns { display: flex; gap: 6px; }
+.reader-font-btns button {
+  background: transparent; border: 1px solid rgba(128,128,128,0.4); color: inherit;
+  border-radius: 6px; padding: 3px 10px; cursor: pointer; font-size: 0.82rem;
+}
+.reader-font-btns button.active { background: rgba(230,211,163,0.28); border-color: rgba(230,211,163,0.7); }
+.reader-font-btns button:hover { background: rgba(128,128,128,0.18); }

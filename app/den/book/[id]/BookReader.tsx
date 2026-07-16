@@ -38,6 +38,30 @@ export default function BookReader({
   const [noteDocId, setNoteDocId] = useState<string | null>(initialNoteDocId);
   const [flash, setFlash] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [theme, setTheme] = useState<"dark" | "paper">("dark");
+  const [fontScale, setFontScale] = useState(1.15);
+  const [showSettings, setShowSettings] = useState(false);
+
+  // Reading prefs persist across books.
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("den-reader-prefs");
+      if (raw) {
+        const p = JSON.parse(raw);
+        if (p.theme === "paper" || p.theme === "dark") setTheme(p.theme);
+        if (typeof p.fontScale === "number") setFontScale(p.fontScale);
+      }
+    } catch {
+      /* ignore */
+    }
+  }, []);
+  useEffect(() => {
+    try {
+      localStorage.setItem("den-reader-prefs", JSON.stringify({ theme, fontScale }));
+    } catch {
+      /* ignore */
+    }
+  }, [theme, fontScale]);
 
   const supabase = useMemo(() => createClient(), []);
   const scrollRef = useRef<HTMLDivElement | null>(null);
@@ -139,6 +163,30 @@ export default function BookReader({
     if (max > 0) el.scrollTop = Math.max(0, Math.min(1, fraction)) * max;
   }
 
+  // Page a screenful at a time — the familiar reading gesture.
+  const pageBy = useCallback((dir: 1 | -1) => {
+    const el = scrollRef.current;
+    if (!el) return;
+    userInteracted.current = true;
+    el.scrollBy({ top: dir * el.clientHeight * 0.88, behavior: "smooth" });
+  }, []);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA")) return;
+      if (e.key === " " || e.key === "PageDown" || e.key === "ArrowDown") {
+        e.preventDefault();
+        pageBy(e.shiftKey && e.key === " " ? -1 : 1);
+      } else if (e.key === "PageUp" || e.key === "ArrowUp") {
+        e.preventDefault();
+        pageBy(-1);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [pageBy]);
+
   function captureSelection() {
     const s = window.getSelection()?.toString().trim() ?? "";
     setSelection(s.length > 1 ? s : "");
@@ -190,7 +238,7 @@ export default function BookReader({
   }
 
   return (
-    <div className="reader">
+    <div className={`reader reader-${theme}`}>
       <header className="reader-bar">
         {onBack ? (
           <button className="reader-back" onClick={onBack}>
@@ -218,6 +266,48 @@ export default function BookReader({
               📝 Notes
             </Link>
           ))}
+        <div className="reader-settings-wrap">
+          <button
+            className="reader-aa"
+            onClick={() => setShowSettings((v) => !v)}
+            aria-label="Reading settings"
+            title="Text size & theme"
+          >
+            Aa
+          </button>
+          {showSettings && (
+            <div className="reader-settings">
+              <div className="reader-settings-row">
+                <span>Text size</span>
+                <div className="reader-font-btns">
+                  <button onClick={() => setFontScale((f) => Math.max(0.9, +(f - 0.05).toFixed(2)))}>
+                    A−
+                  </button>
+                  <button onClick={() => setFontScale((f) => Math.min(1.7, +(f + 0.05).toFixed(2)))}>
+                    A+
+                  </button>
+                </div>
+              </div>
+              <div className="reader-settings-row">
+                <span>Theme</span>
+                <div className="reader-font-btns">
+                  <button
+                    className={theme === "paper" ? "active" : ""}
+                    onClick={() => setTheme("paper")}
+                  >
+                    Paper
+                  </button>
+                  <button
+                    className={theme === "dark" ? "active" : ""}
+                    onClick={() => setTheme("dark")}
+                  >
+                    Dark
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
         <div className="reader-seek">
           <button onClick={() => seekBy(-0.05)} aria-label="Back 5%" title="Back 5%">
             −5%
@@ -257,10 +347,13 @@ export default function BookReader({
         ) : "html" in content ? (
           <article
             className="reader-text reader-rich"
+            style={{ fontSize: `${fontScale}rem` }}
             dangerouslySetInnerHTML={{ __html: content.html }}
           />
         ) : (
-          <article className="reader-text">{content.text}</article>
+          <article className="reader-text" style={{ fontSize: `${fontScale}rem` }}>
+            {content.text}
+          </article>
         )}
       </div>
 

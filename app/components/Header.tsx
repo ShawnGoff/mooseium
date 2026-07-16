@@ -50,6 +50,11 @@ export default async function Header() {
               🏛 My Museum
             </Link>
           )}
+          {signedIn && (
+            <Link href="/den" className="topbar-link">
+              📖 The Den
+            </Link>
+          )}
         </nav>
       </div>
       <nav className="topbar-auth">

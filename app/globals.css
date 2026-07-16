@@ -2645,12 +2645,24 @@ button.reader-back, button.reader-notes-link {
 .den-home-section h2 { font-size: 1.15rem; margin: 0 0 12px; font-weight: 600; }
 .den-home-section h2 em { font-style: italic; opacity: 0.95; }
 .den-section-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
-.den-subject-chips { display: flex; flex-wrap: wrap; gap: 8px; }
-.den-subject-chips button {
-  border: 1px solid rgba(255,255,255,0.22); background: transparent; color: inherit;
-  border-radius: 999px; padding: 7px 15px; cursor: pointer; font-size: 0.9rem;
+.den-subject-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 14px;
 }
-.den-subject-chips button:hover { background: rgba(230,211,163,0.16); }
+.den-subject-card {
+  position: relative; aspect-ratio: 3 / 2; border-radius: 10px; overflow: hidden;
+  border: none; cursor: pointer; color: #fff; padding: 0;
+  background-color: #2b2620; background-size: cover; background-position: center;
+  display: flex; align-items: flex-end;
+}
+.den-subject-card::after {
+  content: ""; position: absolute; inset: 0;
+  background: linear-gradient(to top, rgba(0,0,0,0.75) 0%, rgba(0,0,0,0.15) 55%, rgba(0,0,0,0.1) 100%);
+}
+.den-subject-card span {
+  position: relative; z-index: 1; padding: 10px 12px; font-weight: 600; font-size: 0.95rem;
+  text-shadow: 0 1px 4px rgba(0,0,0,0.6);
+}
+.den-subject-card:hover { outline: 2px solid rgba(230,211,163,0.6); }
 .den-shelf-row {
   display: flex; gap: 18px; overflow-x: auto; padding-bottom: 8px;
   scroll-snap-type: x proximity;

@@ -46,6 +46,7 @@ export default function DenDiscover({
   const [heading, setHeading] = useState("");
   const [searching, setSearching] = useState(false);
   const [shelves, setShelves] = useState<Shelf[] | null>(null);
+  const [subjectCovers, setSubjectCovers] = useState<Record<string, string>>({});
   const [savingId, setSavingId] = useState<string | null>(null);
   const [justSaved, setJustSaved] = useState<Set<string>>(new Set());
 
@@ -56,6 +57,23 @@ export default function DenDiscover({
       .then((r) => r.json())
       .then((d) => setShelves(d.shelves ?? []))
       .catch(() => setShelves([]));
+  }, []);
+
+  // A representative cover per subject so the category cards are filled out.
+  useEffect(() => {
+    let cancelled = false;
+    SUBJECTS.forEach((s) => {
+      fetch(`/api/den/books/search?topic=${encodeURIComponent(s)}`)
+        .then((r) => r.json())
+        .then((d) => {
+          const cover = (d.results ?? []).find((r: Result) => r.coverUrl)?.coverUrl;
+          if (!cancelled && cover) setSubjectCovers((p) => ({ ...p, [s]: cover }));
+        })
+        .catch(() => {});
+    });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const isSaved = (id: string) => savedIds.has(id) || justSaved.has(id);
@@ -174,10 +192,19 @@ export default function DenDiscover({
         <>
           <section className="den-home-section">
             <h2>Browse by subject</h2>
-            <div className="den-subject-chips">
+            <div className="den-subject-grid">
               {SUBJECTS.map((s) => (
-                <button key={s} onClick={() => run(`topic=${encodeURIComponent(s)}`, s)}>
-                  {s}
+                <button
+                  key={s}
+                  className="den-subject-card"
+                  onClick={() => run(`topic=${encodeURIComponent(s)}`, s)}
+                  style={
+                    subjectCovers[s]
+                      ? { backgroundImage: `url(${subjectCovers[s]})` }
+                      : undefined
+                  }
+                >
+                  <span>{s}</span>
                 </button>
               ))}
             </div>

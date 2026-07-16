@@ -19,6 +19,30 @@ export default function DocEditor({
   const [status, setStatus] = useState<"idle" | "saving" | "saved" | "error">(
     "idle",
   );
+  const [theme, setTheme] = useState<"dark" | "paper">("paper");
+  const [fontScale, setFontScale] = useState(1.15);
+  const [showSettings, setShowSettings] = useState(false);
+
+  // Shares the reader's saved look (paper/dark + size).
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("den-reader-prefs");
+      if (raw) {
+        const p = JSON.parse(raw);
+        if (p.theme === "paper" || p.theme === "dark") setTheme(p.theme);
+        if (typeof p.fontScale === "number") setFontScale(p.fontScale);
+      }
+    } catch {
+      /* ignore */
+    }
+  }, []);
+  useEffect(() => {
+    try {
+      localStorage.setItem("den-reader-prefs", JSON.stringify({ theme, fontScale }));
+    } catch {
+      /* ignore */
+    }
+  }, [theme, fontScale]);
 
   const supabase = useMemo(() => createClient(), []);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -49,9 +73,44 @@ export default function DocEditor({
   }, [title, body, id, supabase]);
 
   return (
-    <div className="doc-editor">
+    <div className={`doc-editor doc-${theme}`}>
+      <div className="doc-toolbar">
+        <button
+          className="reader-theme-toggle"
+          onClick={() => setTheme((t) => (t === "paper" ? "dark" : "paper"))}
+          title="Switch theme"
+        >
+          {theme === "paper" ? "☾ Dark" : "☀ Paper"}
+        </button>
+        <div className="reader-settings-wrap">
+          <button
+            className="reader-aa"
+            onClick={() => setShowSettings((v) => !v)}
+            aria-label="Text size"
+            title="Text size"
+          >
+            Aa
+          </button>
+          {showSettings && (
+            <div className="reader-settings">
+              <div className="reader-settings-row">
+                <span>Text size</span>
+                <div className="reader-font-btns">
+                  <button onClick={() => setFontScale((f) => Math.max(0.9, +(f - 0.05).toFixed(2)))}>
+                    A−
+                  </button>
+                  <button onClick={() => setFontScale((f) => Math.min(1.7, +(f + 0.05).toFixed(2)))}>
+                    A+
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
       <input
         className="doc-title"
+        style={{ fontSize: `${(fontScale * 1.4).toFixed(2)}rem` }}
         value={title}
         placeholder="Untitled"
         onChange={(e) => setTitle(e.target.value)}
@@ -59,6 +118,7 @@ export default function DocEditor({
       />
       <textarea
         className="doc-body"
+        style={{ fontSize: `${fontScale}rem` }}
         value={body}
         placeholder="Start writing…"
         onChange={(e) => setBody(e.target.value)}

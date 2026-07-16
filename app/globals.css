@@ -2729,3 +2729,19 @@ button.reader-back, button.reader-notes-link {
 .reader-theme-toggle:hover { background: rgba(255,255,255,0.1); }
 .reader-paper .reader-theme-toggle { color: #33291b; border-color: rgba(0,0,0,0.2); }
 .reader-paper .reader-theme-toggle:hover { background: rgba(0,0,0,0.06); }
+
+/* The Den — writing desk theme (mirrors the reader) */
+.doc-toolbar { display: flex; justify-content: flex-end; gap: 8px; margin-bottom: 6px; position: relative; }
+.doc-paper {
+  background: #f4ecd9; color: #33291b; border-radius: 10px;
+  padding: 14px 18px 4px; margin: -6px -8px 0;
+}
+.doc-paper .doc-title { color: #33291b; border-bottom-color: rgba(0,0,0,0.18); }
+.doc-paper .doc-title::placeholder, .doc-paper .doc-body::placeholder { color: rgba(51,41,27,0.4); }
+.doc-paper .doc-body { color: #33291b; }
+.doc-paper .doc-status { color: rgba(51,41,27,0.6); }
+.doc-paper .reader-theme-toggle, .doc-paper .reader-aa {
+  color: #33291b; border-color: rgba(0,0,0,0.2);
+}
+.doc-paper .reader-theme-toggle:hover, .doc-paper .reader-aa:hover { background: rgba(0,0,0,0.06); }
+.doc-paper .reader-settings { background: #fff8ea; color: #33291b; border-color: rgba(0,0,0,0.15); }

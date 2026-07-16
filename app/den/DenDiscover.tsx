@@ -21,30 +21,34 @@ type Shelf = { artist: string; books: Result[] };
 
 // Session caches so the discovery feeds fetch once, not on every remount
 // (switching to the Discover tab remounts this component).
-let coverCache: Record<string, string> = {};
 let popularCache: Result[] | null = null;
 let shelvesCache: Shelf[] | null = null;
 
-const SUBJECTS = [
-  "Fiction",
-  "Poetry",
-  "Philosophy",
-  "History",
-  "Adventure",
-  "Science Fiction",
-  "Drama",
-  "Children",
-  "Short Stories",
-  "Biography",
-  "Mystery",
-  "Romance",
-  "Fantasy",
-  "Horror",
-  "Fairy Tales",
-  "Travel",
-  "Nature",
-  "Humor",
+// Each subject shows a fixed representative cover straight from gutenberg.org's
+// image CDN — no Gutendex calls, so the page loads instantly. (id = a well-known
+// public-domain book in that subject.)
+const SUBJECTS: { name: string; coverId: number }[] = [
+  { name: "Fiction", coverId: 2701 }, // Moby Dick
+  { name: "Poetry", coverId: 1322 }, // Leaves of Grass
+  { name: "Philosophy", coverId: 2680 }, // Meditations
+  { name: "History", coverId: 1404 }, // The Federalist Papers
+  { name: "Adventure", coverId: 120 }, // Treasure Island
+  { name: "Science Fiction", coverId: 36 }, // The War of the Worlds
+  { name: "Drama", coverId: 1513 }, // Romeo and Juliet
+  { name: "Children", coverId: 11 }, // Alice in Wonderland
+  { name: "Short Stories", coverId: 2814 }, // Dubliners
+  { name: "Biography", coverId: 148 }, // Autobiography of Benjamin Franklin
+  { name: "Mystery", coverId: 1661 }, // Adventures of Sherlock Holmes
+  { name: "Romance", coverId: 1342 }, // Pride and Prejudice
+  { name: "Fantasy", coverId: 16 }, // Peter Pan
+  { name: "Horror", coverId: 345 }, // Dracula
+  { name: "Fairy Tales", coverId: 2591 }, // Grimms' Fairy Tales
+  { name: "Travel", coverId: 103 }, // Around the World in Eighty Days
+  { name: "Nature", coverId: 205 }, // Walden
+  { name: "Humor", coverId: 308 }, // Three Men in a Boat
 ];
+const subjectCover = (id: number) =>
+  `https://www.gutenberg.org/cache/epub/${id}/pg${id}.cover.medium.jpg`;
 
 export default function DenDiscover({
   userId,
@@ -63,8 +67,6 @@ export default function DenDiscover({
   const [searching, setSearching] = useState(false);
   const [shelves, setShelves] = useState<Shelf[] | null>(shelvesCache);
   const [popular, setPopular] = useState<Result[] | null>(popularCache);
-  const [subjectCovers, setSubjectCovers] =
-    useState<Record<string, string>>(coverCache);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [justSaved, setJustSaved] = useState<Set<string>>(new Set());
   const [baseParams, setBaseParams] = useState("");
@@ -97,28 +99,6 @@ export default function DenDiscover({
         })
         .catch(() => setPopular([]));
     }
-  }, []);
-
-  // A representative cover per subject so the category cards are filled out.
-  // Cached per session so we don't burst 18 lookups on every remount.
-  useEffect(() => {
-    if (Object.keys(coverCache).length > 0) return;
-    let cancelled = false;
-    SUBJECTS.forEach((s) => {
-      fetch(`/api/den/books/search?topic=${encodeURIComponent(s)}`)
-        .then((r) => r.json())
-        .then((d) => {
-          const cover = (d.results ?? []).find((r: Result) => r.coverUrl)?.coverUrl;
-          if (cover) {
-            coverCache = { ...coverCache, [s]: cover };
-            if (!cancelled) setSubjectCovers((p) => ({ ...p, [s]: cover }));
-          }
-        })
-        .catch(() => {});
-    });
-    return () => {
-      cancelled = true;
-    };
   }, []);
 
   const isSaved = (id: string) => savedIds.has(id) || justSaved.has(id);
@@ -323,16 +303,12 @@ export default function DenDiscover({
             <div className="den-subject-grid">
               {SUBJECTS.map((s) => (
                 <button
-                  key={s}
+                  key={s.name}
                   className="den-subject-card"
-                  onClick={() => run(`topic=${encodeURIComponent(s)}`, s)}
-                  style={
-                    subjectCovers[s]
-                      ? { backgroundImage: `url(${subjectCovers[s]})` }
-                      : undefined
-                  }
+                  onClick={() => run(`topic=${encodeURIComponent(s.name)}`, s.name)}
+                  style={{ backgroundImage: `url(${subjectCover(s.coverId)})` }}
                 >
-                  <span>{s}</span>
+                  <span>{s.name}</span>
                 </button>
               ))}
             </div>

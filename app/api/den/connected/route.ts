@@ -57,7 +57,7 @@ export async function GET(req: NextRequest) {
 
   const topArtists = [...counts.entries()]
     .sort((a, b) => b[1] - a[1])
-    .slice(0, 4)
+    .slice(0, 3)
     .map(([name]) => name);
 
   const shelves = await Promise.all(

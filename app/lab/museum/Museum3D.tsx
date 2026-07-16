@@ -10,7 +10,7 @@
 //     teleports you straight to any gallery.
 // Isolated under /lab; reads ?u=<handle>.
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import * as THREE from "three";
 import { Canvas, useFrame } from "@react-three/fiber";
 import { Text, MeshReflectorMaterial } from "@react-three/drei";
@@ -1185,10 +1185,37 @@ function Skylight({ sky, lowPower }: { sky: Sky; lowPower: boolean }) {
 
 // Interactive stations in the Den. Standing near one shows a prompt that opens
 // the matching 2D tool (the writing desk, the library / reader).
-type Station = { id: string; label: string; cx: number; cz: number; r: number; href: string };
+type SeatPose = { x: number; z: number; y: number; yaw: number };
+type Station = {
+  id: string;
+  label: string;
+  cx: number;
+  cz: number;
+  r: number;
+  href: string;
+  sit?: SeatPose; // if set, the player sits down here before the tool opens
+};
 const DEN_STATIONS: Station[] = [
-  { id: "desk", label: "✍️  Sit and write", cx: VEST_HALF - 2.4, cz: A + VEST_LEN - 3, r: 1.9, href: "/den" },
-  { id: "chair", label: "📖  Sit and read", cx: -2.8, cz: A + VEST_LEN - 1.6, r: 1.9, href: "/den" },
+  {
+    id: "desk",
+    label: "✍️  Sit and write",
+    cx: VEST_HALF - 2.4,
+    cz: A + VEST_LEN - 3,
+    r: 1.9,
+    href: "/den",
+    // seated at the desk chair, lowered, facing the desk/east window
+    sit: { x: VEST_HALF - 1.75, z: A + VEST_LEN - 3, y: 1.15, yaw: -Math.PI / 2 },
+  },
+  {
+    id: "chair",
+    label: "📖  Sit and read",
+    cx: -2.8,
+    cz: A + VEST_LEN - 1.6,
+    r: 1.9,
+    href: "/den",
+    // sunk into the armchair, facing into the room
+    sit: { x: -2.8, z: A + VEST_LEN - 1.6, y: 1.05, yaw: -0.48 },
+  },
   {
     id: "shelves",
     label: "📚  Browse your library",
@@ -1424,8 +1451,28 @@ export default function Museum3D({
   const [sky, setSky] = useState<Sky>("day");
   const [lightsOn, setLightsOn] = useState(true);
   const [rainSound, setRainSound] = useState(true);
+
+  // Sit-down animation state (walk to a chair → the camera sinks into the seat,
+  // then the tool opens; standing back up on close).
+  const sitRef = useRef<{ x: number; z: number; y: number; yaw: number } | null>(null);
+  const sitPhase = useRef<"none" | "sitting" | "seated" | "standing">("none");
+  const seatPose = useRef<{ x: number; z: number; y: number; yaw: number } | null>(null);
+  const pendingTab = useRef<"library" | "writing">("library");
+  const [, forceRender] = useReducer((n: number) => n + 1, 0);
+
+  const onSeated = useCallback(() => {
+    if (sitPhase.current === "sitting") {
+      sitPhase.current = "seated";
+      setDenPanel(pendingTab.current);
+    } else if (sitPhase.current === "standing") {
+      sitPhase.current = "none";
+      sitRef.current = null;
+      forceRender();
+    }
+  }, []);
+
   const pausedRef = useRef(false);
-  pausedRef.current = denPanel !== null;
+  pausedRef.current = denPanel !== null || sitPhase.current !== "none";
 
   // Rain ambience via Web Audio, looped sample-accurately with the encoder's
   // silent padding trimmed off both ends so it loops seamlessly (an <audio loop>
@@ -1585,21 +1632,44 @@ export default function Museum3D({
 
   const station = DEN_STATIONS.find((s) => s.id === nearStation) ?? null;
   const enterStation = () => {
-    if (station) setDenPanel(station.id === "desk" ? "writing" : "library");
+    if (!station || denPanel || sitPhase.current !== "none") return;
+    const tab = station.id === "desk" ? "writing" : "library";
+    pendingTab.current = tab;
+    if (station.sit) {
+      // Sit down first; onSeated opens the tool once we've settled in.
+      seatPose.current = station.sit;
+      sitRef.current = station.sit;
+      sitPhase.current = "sitting";
+      forceRender();
+    } else {
+      seatPose.current = null; // shelves: browse standing, no sit
+      setDenPanel(tab);
+    }
   };
 
-  // Press E / Enter to open the tool at a nearby station.
+  // Press E / Enter to use a nearby station.
   useEffect(() => {
     if (!station || denPanel) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "e" || e.key === "E" || e.key === "Enter") {
         e.preventDefault();
-        setDenPanel(station.id === "desk" ? "writing" : "library");
+        enterStation();
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [station, denPanel]);
+
+  // Closing the tool: stand back up if we were seated, then release control.
+  const closeDenPanel = () => {
+    setDenPanel(null);
+    if (seatPose.current) {
+      sitRef.current = { ...seatPose.current, y: EYE_Y };
+      sitPhase.current = "standing";
+      forceRender();
+    }
+  };
 
   const handleSelect = (p: Piece) => {
     if (!dragRef.current) setSelected(p);
@@ -1670,12 +1740,14 @@ export default function Museum3D({
             constrain={constrain}
             posRef={posRef}
             pausedRef={pausedRef}
+            sitRef={sitRef}
+            onSeated={onSeated}
           />
         )}
       </Canvas>
 
       {isOwner && denPanel && (
-        <DenPanel initialTab={denPanel} onClose={() => setDenPanel(null)} />
+        <DenPanel initialTab={denPanel} onClose={closeDenPanel} />
       )}
 
       {isTouch && view === "ready" && <JoystickPad joyRef={joyRef} />}

@@ -96,6 +96,8 @@ export function Player({
   onEnter,
   posRef,
   pausedRef,
+  sitRef,
+  onSeated,
 }: {
   dragRef: React.MutableRefObject<boolean>;
   joyRef: React.MutableRefObject<{ x: number; y: number }>;
@@ -106,11 +108,16 @@ export function Player({
   onEnter?: (wing: number) => void;
   posRef?: React.MutableRefObject<{ x: number; z: number }>;
   pausedRef?: React.MutableRefObject<boolean>;
+  // When set, the camera animates into this seated pose (and calls onSeated on
+  // arrival) instead of responding to movement.
+  sitRef?: React.MutableRefObject<{ x: number; z: number; y: number; yaw: number } | null>;
+  onSeated?: () => void;
 }) {
   const { camera, gl } = useThree();
   const yaw = useRef(spawnYaw);
   const pitch = useRef(0);
   const pos = useRef(new THREE.Vector3(spawn[0], EYE_Y, spawn[2]));
+  const eyeY = useRef(EYE_Y);
   const keys = useRef<Record<string, boolean>>({});
 
   useEffect(() => {
@@ -164,6 +171,39 @@ export function Player({
   }, [gl, dragRef]);
 
   useFrame((_, delta) => {
+    // Sit / stand animation takes over the camera when a seated pose is set.
+    const sit = sitRef?.current;
+    if (sit) {
+      const p = pos.current;
+      const t = Math.min(1, delta * 6);
+      p.x += (sit.x - p.x) * t;
+      p.z += (sit.z - p.z) * t;
+      eyeY.current += (sit.y - eyeY.current) * t;
+      let dyaw = sit.yaw - yaw.current;
+      while (dyaw > Math.PI) dyaw -= 2 * Math.PI;
+      while (dyaw < -Math.PI) dyaw += 2 * Math.PI;
+      yaw.current += dyaw * t;
+      pitch.current += (0 - pitch.current) * t;
+      camera.position.set(p.x, eyeY.current, p.z);
+      camera.quaternion.setFromEuler(
+        new THREE.Euler(pitch.current, yaw.current, 0, "YXZ")
+      );
+      if (posRef) {
+        posRef.current.x = p.x;
+        posRef.current.z = p.z;
+      }
+      if (
+        Math.abs(sit.x - p.x) < 0.02 &&
+        Math.abs(sit.z - p.z) < 0.02 &&
+        Math.abs(sit.y - eyeY.current) < 0.02 &&
+        Math.abs(dyaw) < 0.02
+      ) {
+        onSeated?.();
+      }
+      keys.current = {};
+      return;
+    }
+    eyeY.current = EYE_Y;
     if (pausedRef?.current) {
       keys.current = {};
       return;

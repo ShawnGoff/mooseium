@@ -1015,6 +1015,95 @@ function DenWindow({
   );
 }
 
+// The atrium skylight, sharing the day / night / rain state. Rain falls across
+// it at an angle (seen from below); night shows stars through the glass.
+const SKYLIGHT_LOOK: Record<Sky, { col: string; emis: string; int: number }> = {
+  day: { col: "#f4f8ff", emis: "#dfeaff", int: 0.7 },
+  night: { col: "#0d1730", emis: "#12213f", int: 0.3 },
+  rain: { col: "#6a7078", emis: "#5f666f", int: 0.45 },
+};
+
+function SkyStars() {
+  const stars = useMemo(
+    () =>
+      Array.from({ length: 40 }, () => ({
+        x: -2.6 + Math.random() * 5.2,
+        z: -2.6 + Math.random() * 5.2,
+        s: 0.012 + Math.random() * 0.022,
+      })),
+    []
+  );
+  return (
+    <group>
+      {stars.map((st, i) => (
+        <mesh key={i} position={[st.x, H - 0.08, st.z]}>
+          <sphereGeometry args={[st.s, 6, 6]} />
+          <meshStandardMaterial color="#fdfbf0" emissive="#fdfbf0" emissiveIntensity={1.6} />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
+function SkyRain({ lowPower }: { lowPower: boolean }) {
+  const ref = useRef<THREE.Group>(null);
+  const count = lowPower ? 30 : 60;
+  const drops = useMemo(
+    () =>
+      Array.from({ length: count }, () => ({
+        x: -2.6 + Math.random() * 5.2,
+        z: -2.6 + Math.random() * 5.2,
+        y: H - 0.02 - Math.random() * 0.6,
+        v: 2.5 + Math.random() * 2.5,
+      })),
+    [count]
+  );
+  useFrame((_, dt) => {
+    const g = ref.current;
+    if (!g) return;
+    g.children.forEach((c, i) => {
+      const d = drops[i];
+      d.y -= d.v * dt;
+      d.x += d.v * 0.28 * dt; // the angle across the glass
+      if (d.y < H - 0.65) {
+        d.y = H - 0.02;
+        d.x = -2.6 + Math.random() * 5.2;
+      }
+      c.position.set(d.x, d.y, d.z);
+    });
+  });
+  return (
+    <group ref={ref}>
+      {drops.map((d, i) => (
+        <mesh key={i} position={[d.x, d.y, d.z]} rotation={[0, 0, 0.35]}>
+          <boxGeometry args={[0.006, 0.24, 0.006]} />
+          <meshStandardMaterial
+            color="#aebfce"
+            transparent
+            opacity={0.5}
+            emissive="#8ba0b5"
+            emissiveIntensity={0.4}
+          />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
+function Skylight({ sky, lowPower }: { sky: Sky; lowPower: boolean }) {
+  const look = SKYLIGHT_LOOK[sky];
+  return (
+    <group>
+      <mesh position={[0, H - 0.03, 0]} rotation={[Math.PI / 2, 0, 0]}>
+        <planeGeometry args={[6, 6]} />
+        <meshStandardMaterial color={look.col} emissive={look.emis} emissiveIntensity={look.int} />
+      </mesh>
+      {sky === "night" && <SkyStars />}
+      {sky === "rain" && <SkyRain lowPower={lowPower} />}
+    </group>
+  );
+}
+
 // Interactive stations in the Den. Standing near one shows a prompt that opens
 // the matching 2D tool (the writing desk, the library / reader).
 type Station = { id: string; label: string; cx: number; cz: number; r: number; href: string };
@@ -1098,11 +1187,8 @@ function Scene({
           color={i === 0 ? "#fff4e4" : "#ffe6bd"}
         />
       ))}
-      {/* Atrium skylight: a glowing ceiling panel over the entrance hall */}
-      <mesh position={[0, H - 0.03, 0]} rotation={[Math.PI / 2, 0, 0]}>
-        <planeGeometry args={[6, 6]} />
-        <meshStandardMaterial color="#f4f8ff" emissive="#dfeaff" emissiveIntensity={0.7} />
-      </mesh>
+      {/* Atrium skylight — shares the owner's day/night/rain state */}
+      <Skylight sky={sky} lowPower={lowPower} />
       {/* Polished atrium floor — one reflection pass, desktop only */}
       {reflect && (
         <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.012, 0]}>

@@ -2857,3 +2857,13 @@ button.reader-back, button.reader-notes-link {
 .credits-list li { margin: 2px 0; }
 .credits .credits-fine { font-size: 0.85rem; opacity: 0.55; margin-top: 12px; }
 .credits-outro { font-size: 1.05rem; margin-top: 12px; opacity: 0.92; }
+
+/* Mobile: declutter the reader bar and make the seek bar tappable */
+@media (max-width: 640px) {
+  .reader-bar { gap: 6px; padding: 8px 10px; }
+  .reader-author { display: none; }
+  .reader-title { font-size: 0.85rem; }
+  .reader-seek button { display: none; } /* keep the % + tap the progress bar */
+  .reader-progress { height: 9px; }
+  .reader-settings { right: 0; }
+}

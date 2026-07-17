@@ -1881,7 +1881,7 @@ export default function Museum3D({
       {/* Rain loop uses Web Audio (see the rain effect above) from public/rain.mp3 */}
 
       {view === "ready" && isOwner && (
-        <div style={skyToggleStyle}>
+        <div style={{ ...skyToggleStyle, bottom: isTouch ? 156 : 14 }}>
           {(["day", "night", "rain"] as Sky[]).map((s) => (
             <button
               key={s}

@@ -969,7 +969,8 @@ function DenFurniture({ lowPower, lightsOn }: { lowPower: boolean; lightsOn: boo
 
 // Procedural daytime sky: a blue gradient with soft clouds. Seeded so each
 // window/skylight gets its own cloud layout (they shouldn't match).
-function skyTexture(seed = 1, overcast = false): THREE.Texture {
+type SkyMood = "day" | "rain" | "snow";
+function skyTexture(seed = 1, mood: SkyMood = "day"): THREE.Texture {
   let s = (seed * 9301 + 49297) % 233280;
   const rnd = () => {
     s = (s * 9301 + 49297) % 233280;
@@ -980,10 +981,16 @@ function skyTexture(seed = 1, overcast = false): THREE.Texture {
   c.height = 256;
   const ctx = c.getContext("2d")!;
   const grad = ctx.createLinearGradient(0, 0, 0, 256);
-  if (overcast) {
-    grad.addColorStop(0, "#565e66");
-    grad.addColorStop(0.55, "#6b747d");
-    grad.addColorStop(1, "#828b94");
+  if (mood === "rain") {
+    // Moody dusk-blue storm sky (not flat gray) — the look Shawn preferred.
+    grad.addColorStop(0, "#233a5c");
+    grad.addColorStop(0.55, "#33507a");
+    grad.addColorStop(1, "#4c6c99");
+  } else if (mood === "snow") {
+    // Soft silvery overcast, cool and pale.
+    grad.addColorStop(0, "#7c8898");
+    grad.addColorStop(0.55, "#98a3b1");
+    grad.addColorStop(1, "#bcc4ce");
   } else {
     grad.addColorStop(0, "#5a8ed4");
     grad.addColorStop(0.55, "#93bde9");
@@ -991,14 +998,16 @@ function skyTexture(seed = 1, overcast = false): THREE.Texture {
   }
   ctx.fillStyle = grad;
   ctx.fillRect(0, 0, 256, 256);
-  const cloud = overcast ? "226,233,244" : "255,255,255";
+  const cloud =
+    mood === "day" ? "255,255,255" : mood === "snow" ? "236,240,246" : "206,217,233";
+  const cloudA = mood === "day" ? 0.92 : mood === "snow" ? 0.82 : 0.78;
   const puff = (cx: number, cy: number, sz: number) => {
     for (let i = 0; i < 7; i++) {
       const x = cx + (rnd() - 0.5) * sz * 1.7;
       const y = cy + (rnd() - 0.5) * sz * 0.55;
       const r = sz * (0.4 + rnd() * 0.55);
       const g = ctx.createRadialGradient(x, y, 0, x, y, r);
-      g.addColorStop(0, `rgba(${cloud},${overcast ? 0.7 : 0.92})`);
+      g.addColorStop(0, `rgba(${cloud},${cloudA})`);
       g.addColorStop(1, `rgba(${cloud},0)`);
       ctx.fillStyle = g;
       ctx.beginPath();
@@ -1006,8 +1015,8 @@ function skyTexture(seed = 1, overcast = false): THREE.Texture {
       ctx.fill();
     }
   };
-  // 3–4 clouds at seed-varied spots
-  const n = 3 + Math.floor(rnd() * 2);
+  // day: 3–4 scattered clouds; rain/snow: 4–5, heavier overcast
+  const n = (mood === "day" ? 3 : 4) + Math.floor(rnd() * 2);
   for (let i = 0; i < n; i++) {
     puff(30 + rnd() * 200, 40 + rnd() * 180, 20 + rnd() * 16);
   }
@@ -1016,12 +1025,13 @@ function skyTexture(seed = 1, overcast = false): THREE.Texture {
   return t;
 }
 
-// Windows on the Den's side walls you can toggle between day, night, and rain.
-type Sky = "day" | "night" | "rain";
+// Windows you can toggle between day, night, rain, and snow.
+type Sky = "day" | "night" | "rain" | "snow";
 const SKY_LOOK: Record<Sky, { sky: string; int: number; light: string; li: number }> = {
   day: { sky: "#a9cbf0", int: 1.0, light: "#dbe6ff", li: 9 },
   night: { sky: "#0e1830", int: 0.45, light: "#2b3a5c", li: 2.5 },
-  rain: { sky: "#5f666f", int: 0.7, light: "#5b6672", li: 4 },
+  rain: { sky: "#3a557d", int: 0.7, light: "#4a5f80", li: 4 },
+  snow: { sky: "#98a3b1", int: 0.8, light: "#c3ccd8", li: 6 },
 };
 
 function RainStreaks({
@@ -1074,6 +1084,62 @@ function RainStreaks({
   );
 }
 
+function SnowFall({
+  zW,
+  xWall,
+  dir,
+  lowPower,
+}: {
+  zW: number;
+  xWall: number;
+  dir: number;
+  lowPower: boolean;
+}) {
+  const ref = useRef<THREE.Group>(null);
+  const t = useRef(0);
+  const count = lowPower ? 34 : 64;
+  const flakes = useMemo(
+    () =>
+      Array.from({ length: count }, () => ({
+        y: 1.3 + Math.random() * 2.4,
+        z: zW - 1.4 + Math.random() * 2.8,
+        v: 0.35 + Math.random() * 0.35,
+        ph: Math.random() * Math.PI * 2,
+        sway: 0.1 + Math.random() * 0.14,
+        s: 0.02 + Math.random() * 0.022,
+      })),
+    [count, zW]
+  );
+  useFrame((_, dt) => {
+    t.current += dt;
+    const g = ref.current;
+    if (!g) return;
+    g.children.forEach((c, i) => {
+      const f = flakes[i];
+      f.y -= f.v * dt;
+      if (f.y < 1.3) f.y = 3.7;
+      c.position.y = f.y;
+      c.position.z = f.z + Math.sin(t.current * 0.8 + f.ph) * f.sway;
+    });
+  });
+  return (
+    <group ref={ref}>
+      {flakes.map((f, i) => (
+        <mesh key={i} position={[xWall + dir * 0.1, f.y, f.z]}>
+          <sphereGeometry args={[f.s, 6, 6]} />
+          <meshStandardMaterial
+            color="#ffffff"
+            emissive="#eef3fb"
+            emissiveIntensity={0.7}
+            transparent
+            opacity={0.96}
+          />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
 function Stars({ zW, xWall, dir }: { zW: number; xWall: number; dir: number }) {
   const stars = useMemo(
     () =>
@@ -1110,7 +1176,11 @@ function DenWindow({
   const dir = side === "W" ? 1 : -1; // toward the room interior
   const faceRot: [number, number, number] = [0, dir * (Math.PI / 2), 0];
   const look = SKY_LOOK[sky];
-  const dayTex = useMemo(() => skyTexture(side === "W" ? 11 : 27), [side]);
+  const seed = side === "W" ? 11 : 27;
+  const dayTex = useMemo(() => skyTexture(seed, "day"), [seed]);
+  const rainTex = useMemo(() => skyTexture(seed, "rain"), [seed]);
+  const snowTex = useMemo(() => skyTexture(seed, "snow"), [seed]);
+  const paneTex = sky === "rain" ? rainTex : sky === "snow" ? snowTex : dayTex;
   const frameCol = "#2e2117";
   const bar = (args: [number, number, number], pos: [number, number, number]) => (
     <mesh position={pos}>
@@ -1123,14 +1193,20 @@ function DenWindow({
       {/* sky pane */}
       <mesh position={[xWall + dir * 0.06, 2.5, zW]} rotation={faceRot}>
         <planeGeometry args={[3, 2.4]} />
-        {sky === "day" ? (
-          <meshStandardMaterial map={dayTex} emissiveMap={dayTex} emissive="#ffffff" emissiveIntensity={0.45} />
-        ) : (
+        {sky === "night" ? (
           <meshStandardMaterial color={look.sky} emissive={look.sky} emissiveIntensity={look.int} />
+        ) : (
+          <meshStandardMaterial
+            map={paneTex}
+            emissiveMap={paneTex}
+            emissive="#ffffff"
+            emissiveIntensity={sky === "day" ? 0.45 : sky === "rain" ? 0.32 : 0.42}
+          />
         )}
       </mesh>
       {sky === "night" && <Stars zW={zW} xWall={xWall} dir={dir} />}
       {sky === "rain" && <RainStreaks zW={zW} xWall={xWall} dir={dir} lowPower={lowPower} />}
+      {sky === "snow" && <SnowFall zW={zW} xWall={xWall} dir={dir} lowPower={lowPower} />}
       {/* frame + muntins */}
       {bar([0.16, 0.14, 3.26], [xWall + dir * 0.12, 3.77, zW])}
       {bar([0.16, 0.14, 3.26], [xWall + dir * 0.12, 1.23, zW])}
@@ -1227,6 +1303,54 @@ function SkyRain({ lowPower }: { lowPower: boolean }) {
   );
 }
 
+function SkySnow({ lowPower }: { lowPower: boolean }) {
+  const ref = useRef<THREE.Group>(null);
+  const t = useRef(0);
+  const count = lowPower ? 28 : 54;
+  const flakes = useMemo(
+    () =>
+      Array.from({ length: count }, () => ({
+        x: -2.7 + Math.random() * 5.4,
+        z: -2.7 + Math.random() * 5.4,
+        y: H - 0.03 - Math.random() * 0.04,
+        v: 0.16 + Math.random() * 0.16,
+        ph: Math.random() * Math.PI * 2,
+        s: 0.02 + Math.random() * 0.02,
+      })),
+    [count]
+  );
+  useFrame((_, dt) => {
+    t.current += dt;
+    const g = ref.current;
+    if (!g) return;
+    g.children.forEach((c, i) => {
+      const f = flakes[i];
+      f.y -= f.v * dt;
+      if (f.y < H - 0.08) {
+        f.y = H - 0.03;
+        f.x = -2.7 + Math.random() * 5.4;
+      }
+      c.position.set(f.x + Math.sin(t.current * 0.6 + f.ph) * 0.06, f.y, f.z);
+    });
+  });
+  return (
+    <group ref={ref}>
+      {flakes.map((f, i) => (
+        <mesh key={i} position={[f.x, f.y, f.z]}>
+          <sphereGeometry args={[f.s, 6, 6]} />
+          <meshStandardMaterial
+            color="#ffffff"
+            emissive="#eef3fb"
+            emissiveIntensity={0.85}
+            transparent
+            opacity={0.96}
+          />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
 // A steel-and-glass skylight frame — a perimeter curb + a mullion grid — so the
 // opening reads as glazing, not a hole in the roof.
 function SkylightFrame() {
@@ -1258,13 +1382,15 @@ function SkylightFrame() {
 }
 
 function Skylight({ sky, lowPower }: { sky: Sky; lowPower: boolean }) {
-  const dayTex = useMemo(() => skyTexture(41), []);
-  const rainTex = useMemo(() => skyTexture(53, true), []);
+  const dayTex = useMemo(() => skyTexture(41, "day"), []);
+  const rainTex = useMemo(() => skyTexture(53, "rain"), []);
+  const snowTex = useMemo(() => skyTexture(61, "snow"), []);
   return (
     <group>
       <SkylightFrame />
       {sky === "night" && <SkyStars />}
       {sky === "rain" && <SkyRain lowPower={lowPower} />}
+      {sky === "snow" && <SkySnow lowPower={lowPower} />}
       {/* Self-lit sky: black diffuse + emissive texture, so the atrium ceiling
           light has no diffuse/specular to hotspot — the sky shows on its own. */}
       <mesh position={[0, H - 0.03, 0]} rotation={[Math.PI / 2, 0, 0]}>
@@ -1273,6 +1399,8 @@ function Skylight({ sky, lowPower }: { sky: Sky; lowPower: boolean }) {
           <meshLambertMaterial color="#000000" emissive="#ffffff" emissiveMap={dayTex} emissiveIntensity={1} />
         ) : sky === "rain" ? (
           <meshLambertMaterial color="#000000" emissive="#ffffff" emissiveMap={rainTex} emissiveIntensity={1} />
+        ) : sky === "snow" ? (
+          <meshLambertMaterial color="#000000" emissive="#ffffff" emissiveMap={snowTex} emissiveIntensity={1} />
         ) : (
           <meshLambertMaterial color="#000000" emissive="#1e2f56" emissiveIntensity={1} />
         )}
@@ -1824,14 +1952,14 @@ export default function Museum3D({
   // the bottom-right control column on phones.
   const weatherButtons = (
     <>
-      {(["day", "night", "rain"] as Sky[]).map((s) => (
+      {(["day", "night", "rain", "snow"] as Sky[]).map((s) => (
         <button
           key={s}
           onClick={() => setSky(s)}
           style={{ ...skyBtnStyle, ...(sky === s ? skyBtnActiveStyle : null) }}
           aria-label={s}
         >
-          {s === "day" ? "☀️" : s === "night" ? "🌙" : "🌧"}
+          {s === "day" ? "☀️" : s === "night" ? "🌙" : s === "rain" ? "🌧" : "❄️"}
         </button>
       ))}
       {sky === "rain" && (

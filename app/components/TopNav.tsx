@@ -28,6 +28,9 @@ export default function TopNav({
         <Link href="/galleries" className="topbar-link">
           Galleries
         </Link>
+        <Link href="/den" className="topbar-link">
+          📖 Library
+        </Link>
       </nav>
     );
   }

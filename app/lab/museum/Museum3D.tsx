@@ -1104,15 +1104,18 @@ function SnowFall({
   const ref = useRef<THREE.Group>(null);
   const t = useRef(0);
   const count = lowPower ? 34 : 64;
+  // Inset well inside the pane (which spans y 1.3–3.7, z ±1.5) and swaying
+  // gently, so flakes never reach the frame edge where a grazing view would
+  // catch them poking out of the recess.
   const flakes = useMemo(
     () =>
       Array.from({ length: count }, () => ({
-        y: 1.3 + Math.random() * 2.4,
-        z: zW - 1.4 + Math.random() * 2.8,
+        y: 1.5 + Math.random() * 2.0,
+        z: zW - 1.15 + Math.random() * 2.3,
         v: 0.35 + Math.random() * 0.35,
         ph: Math.random() * Math.PI * 2,
-        sway: 0.1 + Math.random() * 0.14,
-        s: 0.014 + Math.random() * 0.016,
+        sway: 0.05 + Math.random() * 0.08,
+        s: 0.012 + Math.random() * 0.013,
       })),
     [count, zW]
   );
@@ -1123,7 +1126,7 @@ function SnowFall({
     g.children.forEach((c, i) => {
       const f = flakes[i];
       f.y -= f.v * dt;
-      if (f.y < 1.3) f.y = 3.7;
+      if (f.y < 1.5) f.y = 3.5;
       c.position.y = f.y;
       c.position.z = f.z + Math.sin(t.current * 0.8 + f.ph) * f.sway;
     });
@@ -1131,7 +1134,7 @@ function SnowFall({
   return (
     <group ref={ref}>
       {flakes.map((f, i) => (
-        <mesh key={i} position={[xWall + dir * 0.075, f.y, f.z]}>
+        <mesh key={i} position={[xWall + dir * 0.07, f.y, f.z]}>
           <sphereGeometry args={[f.s, 6, 6]} />
           <meshStandardMaterial
             color="#ffffff"

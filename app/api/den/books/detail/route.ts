@@ -5,6 +5,7 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { GUTENDEX_HEADERS } from "@/lib/gutendex";
 
 type Gutendex = {
   title: string;
@@ -25,6 +26,7 @@ export async function GET(req: NextRequest) {
   let meta: Gutendex;
   try {
     const r = await fetch(`https://gutendex.com/books/${gid}`, {
+      headers: GUTENDEX_HEADERS,
       next: { revalidate: 86400 },
     });
     if (!r.ok) throw new Error();

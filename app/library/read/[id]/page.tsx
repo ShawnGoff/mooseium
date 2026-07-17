@@ -3,12 +3,14 @@
 
 import Link from "next/link";
 import BookReader from "@/app/den/book/[id]/BookReader";
+import { GUTENDEX_HEADERS } from "@/lib/gutendex";
 
 export const dynamic = "force-dynamic";
 
 async function meta(gid: string): Promise<{ title: string; author: string | null }> {
   try {
     const r = await fetch(`https://gutendex.com/books/${gid}`, {
+      headers: GUTENDEX_HEADERS,
       next: { revalidate: 86400 },
     });
     if (r.ok) {

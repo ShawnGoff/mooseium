@@ -5,6 +5,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import sanitizeHtml from "sanitize-html";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { GUTENDEX_HEADERS } from "@/lib/gutendex";
 
 type GutendexBook = {
   title: string;
@@ -63,6 +64,7 @@ export async function GET(req: NextRequest) {
   if (!got) {
     try {
       const mr = await fetch(`https://gutendex.com/books/${gid}`, {
+        headers: GUTENDEX_HEADERS,
         next: { revalidate: 86400 },
       });
       if (mr.ok) {

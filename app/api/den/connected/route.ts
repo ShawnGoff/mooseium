@@ -6,6 +6,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { GUTENDEX_HEADERS } from "@/lib/gutendex";
 import type { NextRequest } from "next/server";
 
 type GutendexBook = {
@@ -65,7 +66,7 @@ export async function GET(req: NextRequest) {
       try {
         const r = await fetch(
           `https://gutendex.com/books?search=${encodeURIComponent(artist)}`,
-          { next: { revalidate: 86400 } },
+          { headers: GUTENDEX_HEADERS, next: { revalidate: 86400 } },
         );
         if (!r.ok) return null;
         const d = (await r.json()) as { results?: GutendexBook[] };

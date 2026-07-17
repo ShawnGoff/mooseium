@@ -1592,10 +1592,14 @@ export default function Museum3D({
   const rainSrcRef = useRef<AudioBufferSourceNode | null>(null);
   const rainGainRef = useRef<GainNode | null>(null);
 
-  // iOS keeps Web Audio locked until audio starts inside a user gesture. Unlock
-  // the rain context on the first tap so rain plays even if music was never on.
+  // iOS keeps Web Audio locked until a sound actually PLAYS inside a user
+  // gesture (a bare resume() isn't enough). On each tap until it's unlocked, we
+  // resume the context AND play a 1-sample silent buffer to prime it, so the
+  // rain plays later even if music was never turned on.
+  const audioPrimed = useRef(false);
   useEffect(() => {
     const unlock = () => {
+      if (audioPrimed.current) return;
       let ctx = rainCtxRef.current;
       if (!ctx) {
         const AC =
@@ -1610,8 +1614,19 @@ export default function Museum3D({
         rainGainRef.current = g;
       }
       if (ctx.state === "suspended") ctx.resume().catch(() => {});
+      try {
+        const b = ctx.createBuffer(1, 1, 22050);
+        const s = ctx.createBufferSource();
+        s.buffer = b;
+        s.connect(ctx.destination);
+        s.start(0);
+        audioPrimed.current = true;
+        window.removeEventListener("pointerdown", unlock);
+      } catch {
+        /* try again on the next tap */
+      }
     };
-    window.addEventListener("pointerdown", unlock, { once: true });
+    window.addEventListener("pointerdown", unlock);
     return () => window.removeEventListener("pointerdown", unlock);
   }, []);
 

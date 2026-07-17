@@ -24,37 +24,46 @@ export async function GET(req: NextRequest) {
   const page = pageRaw && /^\d+$/.test(pageRaw) ? Math.min(50, +pageRaw) : 1;
   if (!q && !topic) return NextResponse.json({ results: [], hasMore: false });
 
-  // `topic` filters by Gutenberg bookshelf/subject (Browse by subject); `search`
-  // matches titles + author names.
-  const param = topic
-    ? `topic=${encodeURIComponent(topic)}`
-    : `search=${encodeURIComponent(q!)}`;
   // Only add page for "load more" — page 1 uses the bare URL that worked before.
   const pageParam = page > 1 ? `&page=${page}` : "";
 
-  let upstream: Response;
-  try {
-    upstream = await fetch(`https://gutendex.com/books?${param}${pageParam}`, {
-      next: { revalidate: 3600 },
-    });
-  } catch {
-    return NextResponse.json({ error: "Book search is unavailable." }, { status: 502 });
-  }
-  if (!upstream.ok) {
-    return NextResponse.json({ error: "Book search failed." }, { status: 502 });
-  }
-
-  const data = (await upstream.json()) as {
-    results?: GutendexBook[];
-    next?: string | null;
-  };
-  const results = (data.results ?? []).map((b) => ({
+  const norm = (b: GutendexBook) => ({
     source: "gutenberg",
     externalId: String(b.id),
     title: b.title,
     author: b.authors[0]?.name ?? null,
     coverUrl: b.formats["image/jpeg"] ?? null,
-  }));
+  });
 
-  return NextResponse.json({ results, hasMore: Boolean(data.next) });
+  // Fetch one Gutendex query; returns null on any upstream/network failure.
+  async function fetchGutendex(param: string) {
+    try {
+      const r = await fetch(`https://gutendex.com/books?${param}${pageParam}`, {
+        next: { revalidate: 3600 },
+      });
+      if (!r.ok) return null;
+      const d = (await r.json()) as { results?: GutendexBook[]; next?: string | null };
+      return { results: (d.results ?? []).map(norm), hasMore: Boolean(d.next) };
+    } catch {
+      return null;
+    }
+  }
+
+  // `topic` filters by Gutenberg bookshelf/subject (Browse by subject); `search`
+  // matches titles + author names. If a subject topic yields nothing (Gutendex
+  // bookshelf names drift), fall back to a keyword search so the shelf isn't
+  // empty.
+  let out = topic
+    ? await fetchGutendex(`topic=${encodeURIComponent(topic)}`)
+    : await fetchGutendex(`search=${encodeURIComponent(q!)}`);
+
+  if (topic && (!out || out.results.length === 0)) {
+    const fallback = await fetchGutendex(`search=${encodeURIComponent(topic)}`);
+    if (fallback && fallback.results.length > 0) out = fallback;
+  }
+
+  if (!out) {
+    return NextResponse.json({ error: "Book search is unavailable." }, { status: 502 });
+  }
+  return NextResponse.json(out);
 }

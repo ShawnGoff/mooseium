@@ -40,9 +40,14 @@ export default function MobileMenu({
         <>
           <div className="mobile-menu-scrim" onClick={() => setOpen(false)} />
           <nav className="mobile-menu-panel" onClick={() => setOpen(false)}>
-            <Link href="/">🏛 My Museum</Link>
-            {signedIn && <Link href="/den">📖 My Library</Link>}
+            {signedIn && <Link href="/">🏛 My Museum</Link>}
+            {signedIn ? (
+              <Link href="/den">📖 My Library</Link>
+            ) : (
+              <Link href="/library">📖 Library</Link>
+            )}
             <Link href="/museums">Museums</Link>
+            {!signedIn && <Link href="/galleries">Galleries</Link>}
             {signedIn && <Link href="/collections">Collections</Link>}
             {signedIn && username && (
               <Link href={`/@${username}/museum`}>Explore in 3D</Link>

@@ -56,7 +56,9 @@ export default function DenDiscover({
   onSaved,
   onOpenBook,
 }: {
-  userId: string;
+  // userId is null in public (signed-out) mode: saving/opening prompt sign-in
+  // and reading routes to the public reader by Gutenberg id.
+  userId: string | null;
   savedIds: Set<string>;
   onSaved: (b: DenBook) => void;
   onOpenBook?: (id: string) => void;
@@ -79,7 +81,10 @@ export default function DenDiscover({
   const router = useRouter();
 
   useEffect(() => {
-    if (shelvesCache === null) {
+    // The "connected to your art" shelf needs a signed-in user's collection.
+    if (!userId) {
+      setShelves([]);
+    } else if (shelvesCache === null) {
       fetch("/api/den/connected")
         .then((r) => r.json())
         .then((d) => {
@@ -99,7 +104,8 @@ export default function DenDiscover({
         })
         .catch(() => setPopular([]));
     }
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId]);
 
   const isSaved = (id: string) => savedIds.has(id) || justSaved.has(id);
 
@@ -152,6 +158,10 @@ export default function DenDiscover({
   }
 
   async function save(r: Result) {
+    if (!userId) {
+      router.push("/login");
+      return;
+    }
     if (isSaved(r.externalId)) return;
     setSavingId(r.externalId);
     const { data, error } = await supabase
@@ -177,6 +187,13 @@ export default function DenDiscover({
 
   // Save (or find, if already saved) and open the reader.
   async function openBook(r: Result) {
+    // Public mode: read straight from the public reader by Gutenberg id — no
+    // saved row needed.
+    if (!userId) {
+      setDetailBook(null);
+      router.push(`/library/read/${encodeURIComponent(r.externalId)}`);
+      return;
+    }
     setSavingId(r.externalId);
     let id: string | null = null;
     const { data, error } = await supabase

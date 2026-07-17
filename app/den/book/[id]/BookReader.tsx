@@ -17,9 +17,12 @@ export default function BookReader({
   initialNoteDocId,
   onBack,
   onOpenDoc,
+  backHref = "/den",
 }: {
-  id: string;
-  userId: string;
+  // In public (signed-out) mode id and userId are null: progress is kept in
+  // localStorage and note-saving is replaced with a sign-in prompt.
+  id: string | null;
+  userId: string | null;
   gid: string;
   title: string;
   author: string | null;
@@ -28,6 +31,7 @@ export default function BookReader({
   // Embedded (overlay) mode: use callbacks instead of navigating.
   onBack?: () => void;
   onOpenDoc?: (id: string) => void;
+  backHref?: string;
 }) {
   const [content, setContent] = useState<
     { html: string } | { text: string } | null
@@ -69,6 +73,46 @@ export default function BookReader({
   const restored = useRef(false);
   const userInteracted = useRef(false);
   const lastPct = useRef(initialPercent);
+  // Where reading resumes. In public mode we seed it from localStorage on mount.
+  const startPct = useRef(initialPercent);
+  const progKey = `den-progress-${gid}`;
+
+  // Public mode: restore the saved place from localStorage (no DB row).
+  useEffect(() => {
+    if (id) return;
+    try {
+      const v = localStorage.getItem(progKey);
+      if (v) {
+        const p = Math.min(1, Math.max(0, parseFloat(v)));
+        startPct.current = p;
+        lastPct.current = p;
+        setProgress(p);
+      }
+    } catch {
+      /* ignore */
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, gid]);
+
+  // Persist the current fraction — to the DB when signed in, else localStorage.
+  const persist = useCallback(
+    (pct: number) => {
+      if (id) {
+        supabase
+          .from("den_books")
+          .update({ progress: { percent: pct } })
+          .eq("id", id)
+          .then(() => {});
+      } else {
+        try {
+          localStorage.setItem(progKey, String(pct));
+        } catch {
+          /* ignore */
+        }
+      }
+    },
+    [id, supabase, progKey]
+  );
 
   // Load the illustrated HTML; fall back to plain text if unavailable.
   useEffect(() => {
@@ -105,11 +149,11 @@ export default function BookReader({
     if (content === null || restored.current) return;
     restored.current = true;
     const el = scrollRef.current;
-    if (!el || initialPercent <= 0) return;
+    if (!el || startPct.current <= 0) return;
     const apply = () => {
       if (userInteracted.current) return;
       const max = el.scrollHeight - el.clientHeight;
-      if (max > 0) el.scrollTop = initialPercent * max;
+      if (max > 0) el.scrollTop = startPct.current * max;
     };
     apply();
     const timers = [80, 300, 700, 1400, 2500].map((ms) => setTimeout(apply, ms));
@@ -119,19 +163,15 @@ export default function BookReader({
       timers.forEach(clearTimeout);
       imgs.forEach((im) => im.removeEventListener("load", apply));
     };
-  }, [content, initialPercent]);
+  }, [content]);
 
   // Save the latest position when the reader unmounts (closing before the
   // debounce fires would otherwise lose the last few seconds of reading).
   useEffect(
     () => () => {
-      supabase
-        .from("den_books")
-        .update({ progress: { percent: lastPct.current } })
-        .eq("id", id)
-        .then(() => {});
+      persist(lastPct.current);
     },
-    [id, supabase]
+    [persist]
   );
 
   const onScroll = useCallback(() => {
@@ -142,14 +182,8 @@ export default function BookReader({
     setProgress(pct);
     lastPct.current = pct;
     if (saveTimer.current) clearTimeout(saveTimer.current);
-    saveTimer.current = setTimeout(() => {
-      supabase
-        .from("den_books")
-        .update({ progress: { percent: pct } })
-        .eq("id", id)
-        .then(() => {});
-    }, 800);
-  }, [id, supabase]);
+    saveTimer.current = setTimeout(() => persist(pct), 800);
+  }, [persist]);
 
   // Jump by a fraction (±5% buttons) or to an absolute fraction (progress bar).
   function seekBy(delta: number) {
@@ -245,8 +279,8 @@ export default function BookReader({
             ← Back
           </button>
         ) : (
-          <Link href="/den" className="reader-back">
-            ← The Library
+          <Link href={backHref} className="reader-back">
+            ← {backHref === "/library" ? "Library" : "The Library"}
           </Link>
         )}
         <div className="reader-meta">
@@ -355,9 +389,15 @@ export default function BookReader({
             <>
               <span className="reader-quote">“{selection.slice(0, 80)}
                 {selection.length > 80 ? "…" : ""}”</span>
-              <button onClick={saveHighlight} disabled={saving}>
-                {saving ? "Saving…" : "＋ Save to notes"}
-              </button>
+              {userId ? (
+                <button onClick={saveHighlight} disabled={saving}>
+                  {saving ? "Saving…" : "＋ Save to notes"}
+                </button>
+              ) : (
+                <Link href="/login" className="reader-signin-note">
+                  Sign in to save notes
+                </Link>
+              )}
             </>
           )}
         </div>

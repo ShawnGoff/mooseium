@@ -1119,6 +1119,10 @@ function SnowFall({
       })),
     [count, zW]
   );
+  // Flat, window-facing flakes sitting right on the glass plane — a flat quad
+  // has no depth, so it can never poke through the frame at a grazing angle
+  // (spheres did). Rotated to face the room like the sky pane.
+  const faceRot: [number, number, number] = [0, dir * (Math.PI / 2), 0];
   useFrame((_, dt) => {
     t.current += dt;
     const g = ref.current;
@@ -1134,14 +1138,15 @@ function SnowFall({
   return (
     <group ref={ref}>
       {flakes.map((f, i) => (
-        <mesh key={i} position={[xWall + dir * 0.07, f.y, f.z]}>
-          <sphereGeometry args={[f.s, 6, 6]} />
+        <mesh key={i} position={[xWall + dir * 0.063, f.y, f.z]} rotation={faceRot}>
+          <circleGeometry args={[f.s, 10]} />
           <meshStandardMaterial
             color="#ffffff"
             emissive="#eef3fb"
             emissiveIntensity={0.7}
             transparent
             opacity={0.96}
+            side={THREE.DoubleSide}
           />
         </mesh>
       ))}
@@ -2327,9 +2332,9 @@ const skyBtnActiveStyle: React.CSSProperties = {
 };
 const stationPromptStyle: React.CSSProperties = {
   position: "absolute",
-  bottom: 88,
+  top: "50%",
   left: "50%",
-  transform: "translateX(-50%)",
+  transform: "translate(-50%, -50%)",
   background: "rgba(20,18,16,0.86)",
   color: "#f3efe9",
   border: "1px solid #6a5a3a",

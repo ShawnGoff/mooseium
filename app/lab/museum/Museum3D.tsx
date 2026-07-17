@@ -1969,7 +1969,6 @@ export default function Museum3D({
 
       <div style={panelStyle}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <strong style={{ flex: 1 }}>{museum?.name ?? "Museum"}</strong>
           {view === "ready" && (
             <button
               onClick={() => setInfoOpen((o) => !o)}
@@ -1980,6 +1979,7 @@ export default function Museum3D({
               {infoOpen ? "▾" : "ⓘ"}
             </button>
           )}
+          <strong style={{ flex: 1 }}>{museum?.name ?? "Museum"}</strong>
         </div>
         {view === "ready" && infoOpen && (
           <div style={{ opacity: 0.85, marginTop: 6 }}>

@@ -17,17 +17,30 @@ export default function TopNav({
   const path = usePathname() || "/";
   const inLibrary = path.startsWith("/den");
 
+  // Signed out: "My Museum"/"My Library" are personal and "My Museum" just
+  // duplicates the logo, so show only public browse links.
+  if (!signedIn) {
+    return (
+      <nav className="topbar-nav">
+        <Link href="/museums" className="topbar-link">
+          Museums
+        </Link>
+        <Link href="/galleries" className="topbar-link">
+          Galleries
+        </Link>
+      </nav>
+    );
+  }
+
   return (
     <nav className="topbar-nav">
-      {/* Space anchors, always first */}
+      {/* Personal space anchors, always first */}
       <Link href="/" className={`topbar-link${!inLibrary ? " active" : ""}`}>
         🏛 My Museum
       </Link>
-      {signedIn && (
-        <Link href="/den" className={`topbar-link${inLibrary ? " active" : ""}`}>
-          📖 My Library
-        </Link>
-      )}
+      <Link href="/den" className={`topbar-link${inLibrary ? " active" : ""}`}>
+        📖 My Library
+      </Link>
 
       <span className="topbar-sep" aria-hidden />
 
@@ -43,11 +56,9 @@ export default function TopNav({
           <Link href="/museums" className="topbar-link">
             Museums
           </Link>
-          {signedIn && (
-            <Link href="/collections" className="topbar-link">
-              Collections
-            </Link>
-          )}
+          <Link href="/collections" className="topbar-link">
+            Collections
+          </Link>
           {username && (
             <Link href={`/@${username}/museum`} className="topbar-link">
               Explore in 3D

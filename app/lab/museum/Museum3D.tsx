@@ -1546,6 +1546,14 @@ export default function Museum3D({
       typeof window !== "undefined" &&
       ("ontouchstart" in window || navigator.maxTouchPoints > 0)
   );
+  // Controls panel starts collapsed on phones (where it crowds the view).
+  const [infoOpen, setInfoOpen] = useState(
+    () =>
+      !(
+        typeof window !== "undefined" &&
+        ("ontouchstart" in window || navigator.maxTouchPoints > 0)
+      )
+  );
   const [hot, setHot] = useState<string[]>([]);
   const [nearStation, setNearStation] = useState<string | null>(null);
   const [denPanel, setDenPanel] = useState<null | "library" | "writing">(null);
@@ -1959,12 +1967,26 @@ export default function Museum3D({
       )}
 
       <div style={panelStyle}>
-        <strong>{museum?.name ?? "Museum"}</strong>
-        <div style={{ opacity: 0.85 }}>
-          {view === "ready"
-            ? `${isTouch ? "Joystick to walk · drag to look" : "WASD to walk · drag to look"} · wings open ahead, then left & right · Directory jumps anywhere`
-            : "Loading…"}
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <strong style={{ flex: 1 }}>{museum?.name ?? "Museum"}</strong>
+          {view === "ready" && (
+            <button
+              onClick={() => setInfoOpen((o) => !o)}
+              style={infoToggleStyle}
+              aria-label={infoOpen ? "Hide controls" : "Show controls"}
+              title={infoOpen ? "Hide controls" : "Show controls"}
+            >
+              {infoOpen ? "▾" : "ⓘ"}
+            </button>
+          )}
         </div>
+        {view === "ready" && infoOpen && (
+          <div style={{ opacity: 0.85, marginTop: 6 }}>
+            {isTouch ? "Joystick to walk · drag to look" : "WASD to walk · drag to look"}{" "}
+            · wings open ahead, then left &amp; right · Directory jumps anywhere
+          </div>
+        )}
+        {view !== "ready" && <div style={{ opacity: 0.85 }}>Loading…</div>}
       </div>
 
       {view === "ready" && layout && layout.nav.length > 0 && (
@@ -2061,6 +2083,16 @@ const panelStyle: React.CSSProperties = {
   fontSize: 13,
   maxWidth: 320,
   lineHeight: 1.5,
+};
+const infoToggleStyle: React.CSSProperties = {
+  background: "transparent",
+  border: "none",
+  color: "#f3efe9",
+  cursor: "pointer",
+  fontSize: 15,
+  lineHeight: 1,
+  padding: 2,
+  opacity: 0.8,
 };
 const musicRowStyle: React.CSSProperties = {
   position: "absolute",

@@ -182,11 +182,13 @@ a {
 }
 
 @media (max-width: 640px) {
-  .topbar-nav,
-  .topbar-auth {
+  /* Scoped with .topbar so these beat the base .topbar-auth rule that's defined
+     later in the file (otherwise the auth cluster never hides on mobile). */
+  .topbar .topbar-nav,
+  .topbar .topbar-auth {
     display: none;
   }
-  .mobile-menu {
+  .topbar .mobile-menu {
     display: block;
   }
 }

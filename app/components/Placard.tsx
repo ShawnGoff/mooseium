@@ -127,6 +127,18 @@ export default function Placard({
   const mainImage = chosenImage ?? full.image;
   // Zoom uses full resolution when available (the display image is ~800px).
   const zoomImage = chosenImage ?? full.imageFull ?? full.image;
+  // Route museum images through our proxy: it sends the User-Agent/Referer that
+  // some CDNs (Harvard's IIIF) require and bounds oversized IIIF originals that
+  // mobile Safari refuses to decode. Falls back to the direct URL on error.
+  const proxied = (u?: string) =>
+    u ? `/api/img?url=${encodeURIComponent(u)}` : undefined;
+  const onImgError = (e: React.SyntheticEvent<HTMLImageElement>, direct?: string) => {
+    const img = e.currentTarget;
+    if (direct && !img.dataset.fallback) {
+      img.dataset.fallback = "1";
+      img.src = direct;
+    }
+  };
   const hasAbout = Boolean(full.description || full.funFact || full.artistBio);
   const provenanceRows: [string, string | undefined][] = [
     ["Credit", full.creditLine],
@@ -170,7 +182,13 @@ export default function Placard({
               aria-label="Zoom image"
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              {mainImage && <img src={mainImage} alt={full.title} />}
+              {mainImage && (
+                <img
+                  src={proxied(mainImage)}
+                  alt={full.title}
+                  onError={(e) => onImgError(e, mainImage)}
+                />
+              )}
             </button>
             {images.length > 1 && (
               <div className="placard-thumbs">
@@ -182,7 +200,7 @@ export default function Placard({
                     aria-label="View this image"
                   >
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={u} alt="" />
+                    <img src={proxied(u)} alt="" onError={(e) => onImgError(e, u)} />
                   </button>
                 ))}
               </div>
@@ -311,7 +329,11 @@ export default function Placard({
             ✕
           </button>
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={zoomImage} alt={full.title} />
+          <img
+            src={proxied(zoomImage)}
+            alt={full.title}
+            onError={(e) => onImgError(e, zoomImage)}
+          />
         </div>
       )}
     </div>

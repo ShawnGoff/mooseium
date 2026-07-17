@@ -41,6 +41,7 @@ const MUSIC: { title: string; artist: string; via: string }[] = [
     via: "Pixabay",
   },
   { title: "Timeless Love Acoustic Loop", artist: "Sonican", via: "Pixabay" },
+  { title: "Art Gallery Museum", artist: "Franzian-Deo", via: "Pixabay" },
   { title: "Rain Sound", artist: "Boon Freak", via: "Pixabay" },
 ];
 

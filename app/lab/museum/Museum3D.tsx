@@ -85,6 +85,7 @@ const MUSEUM_FONT =
 // (src paths URL-encode the spaces in the filenames.)
 const MUSIC_TRACKS: { name: string; src: string }[] = [
   { name: "Acoustic", src: "/Acoustic.mp3" },
+  { name: "Art Gallery", src: "/Art%20Gallery.mp3" },
   { name: "Chill 1", src: "/Chill%201.mp3" },
   { name: "Chill 2", src: "/Chill%202.mp3" },
   { name: "Jazz 1", src: "/jazz.mp3" },

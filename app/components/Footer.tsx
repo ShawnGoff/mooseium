@@ -7,6 +7,7 @@ export default function Footer() {
         <span className="site-footer-brand">Mooseium</span>
         <nav className="site-footer-links">
           <Link href="/about">About</Link>
+          <Link href="/tutorial">Tutorial</Link>
           <Link href="/museums">Museums</Link>
           <Link href="/museums#how-search-works">How search works</Link>
           <Link href="/credits">Credits &amp; Thanks</Link>

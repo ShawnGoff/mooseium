@@ -1889,42 +1889,6 @@ export default function Museum3D({
       <audio ref={audioRef} loop preload="none" src={MUSIC_TRACKS[trackIdx].src} />
       {/* Rain loop uses Web Audio (see the rain effect above) from public/rain.mp3 */}
 
-      {view === "ready" && isOwner && (
-        <div style={{ ...skyToggleStyle, bottom: isTouch ? 156 : 14 }}>
-          {(["day", "night", "rain"] as Sky[]).map((s) => (
-            <button
-              key={s}
-              onClick={() => setSky(s)}
-              style={{
-                ...skyBtnStyle,
-                ...(sky === s ? skyBtnActiveStyle : null),
-              }}
-              aria-label={s}
-            >
-              {s === "day" ? "☀️" : s === "night" ? "🌙" : "🌧"}
-            </button>
-          ))}
-          {sky === "rain" && (
-            <button
-              onClick={() => setRainSound((v) => !v)}
-              style={{ ...skyBtnStyle, ...(rainSound ? skyBtnActiveStyle : null) }}
-              aria-label="Toggle rain sound"
-              title={rainSound ? "Rain sound on" : "Rain sound off"}
-            >
-              {rainSound ? "🔊" : "🔇"}
-            </button>
-          )}
-          <span style={{ width: 1, background: "#4a423b", margin: "2px 2px" }} />
-          <button
-            onClick={() => setLightsOn((v) => !v)}
-            style={{ ...skyBtnStyle, ...(lightsOn ? skyBtnActiveStyle : null) }}
-            aria-label="Toggle lights"
-            title={lightsOn ? "Lights on" : "Lights off"}
-          >
-            💡
-          </button>
-        </div>
-      )}
       {view === "ready" && (
         <div
           style={{
@@ -1964,6 +1928,39 @@ export default function Museum3D({
           <button onClick={toggleMusic} style={musicBtnStyle} aria-label="Toggle music">
             {musicOn ? "🔊 Music on" : "🔈 Music off"}
           </button>
+          {isOwner && (
+            <div style={skyToggleStyle}>
+              {(["day", "night", "rain"] as Sky[]).map((s) => (
+                <button
+                  key={s}
+                  onClick={() => setSky(s)}
+                  style={{ ...skyBtnStyle, ...(sky === s ? skyBtnActiveStyle : null) }}
+                  aria-label={s}
+                >
+                  {s === "day" ? "☀️" : s === "night" ? "🌙" : "🌧"}
+                </button>
+              ))}
+              {sky === "rain" && (
+                <button
+                  onClick={() => setRainSound((v) => !v)}
+                  style={{ ...skyBtnStyle, ...(rainSound ? skyBtnActiveStyle : null) }}
+                  aria-label="Toggle rain sound"
+                  title={rainSound ? "Rain sound on" : "Rain sound off"}
+                >
+                  {rainSound ? "🔊" : "🔇"}
+                </button>
+              )}
+              <span style={{ width: 1, background: "#4a423b", margin: "2px 2px" }} />
+              <button
+                onClick={() => setLightsOn((v) => !v)}
+                style={{ ...skyBtnStyle, ...(lightsOn ? skyBtnActiveStyle : null) }}
+                aria-label="Toggle lights"
+                title={lightsOn ? "Lights on" : "Lights off"}
+              >
+                💡
+              </button>
+            </div>
+          )}
         </div>
       )}
 
@@ -2112,6 +2109,9 @@ const musicBtnStyle: React.CSSProperties = {
   padding: "8px 14px",
   cursor: "pointer",
   fontSize: 14,
+  width: 172,
+  boxSizing: "border-box",
+  textAlign: "center",
 };
 const musicMenuStyle: React.CSSProperties = {
   position: "absolute",
@@ -2140,9 +2140,6 @@ const musicMenuItemStyle: React.CSSProperties = {
   whiteSpace: "nowrap",
 };
 const skyToggleStyle: React.CSSProperties = {
-  position: "absolute",
-  bottom: 14,
-  left: 14,
   display: "flex",
   gap: 4,
   background: "rgba(20,18,16,0.72)",

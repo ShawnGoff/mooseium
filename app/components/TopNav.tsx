@@ -21,7 +21,7 @@ export default function TopNav({
     <nav className="topbar-nav">
       {/* Space anchors, always first */}
       <Link href="/" className={`topbar-link${!inLibrary ? " active" : ""}`}>
-        🏛 Museum
+        🏛 My Museum
       </Link>
       {signedIn && (
         <Link href="/den" className={`topbar-link${inLibrary ? " active" : ""}`}>

@@ -2425,26 +2425,24 @@ const closeBtnStyle: React.CSSProperties = {
   padding: "5px 14px",
   cursor: "pointer",
 };
-// Sticky bar at the top of the artwork card so the ✕ is always reachable. It
-// extends over the card's padding and has a solid background to mask content
-// scrolling beneath it.
+// A small ✕ that floats in the card's top-right corner and stays there while
+// the body scrolls (position: sticky) — no background bar, so it never covers
+// the artwork.
 const cardCloseRowStyle: React.CSSProperties = {
   position: "sticky",
   top: 0,
   zIndex: 3,
+  height: 0,
   display: "flex",
   justifyContent: "flex-end",
-  margin: "-16px -20px 10px",
-  padding: "10px 14px 6px",
-  background: "rgba(20,18,16,0.96)",
-  borderTopLeftRadius: 14,
-  borderTopRightRadius: 14,
+  pointerEvents: "none",
 };
 const cardCloseXStyle: React.CSSProperties = {
+  pointerEvents: "auto",
   width: 32,
   height: 32,
   borderRadius: "50%",
-  background: "rgba(60,54,48,0.92)",
+  background: "rgba(20,18,16,0.7)",
   border: "1px solid #6a5f54",
   color: "#f3efe9",
   fontSize: 15,
@@ -2453,4 +2451,5 @@ const cardCloseXStyle: React.CSSProperties = {
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
+  boxShadow: "0 2px 8px rgba(0,0,0,0.5)",
 };

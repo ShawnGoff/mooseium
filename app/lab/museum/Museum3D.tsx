@@ -1592,14 +1592,50 @@ export default function Museum3D({
   const rainSrcRef = useRef<AudioBufferSourceNode | null>(null);
   const rainGainRef = useRef<GainNode | null>(null);
 
-  // iOS keeps Web Audio locked until a sound actually PLAYS inside a user
-  // gesture (a bare resume() isn't enough). On each tap until it's unlocked, we
-  // resume the context AND play a 1-sample silent buffer to prime it, so the
-  // rain plays later even if music was never turned on.
+  // iOS won't play Web Audio (used for the gapless rain loop) until the audio
+  // SESSION has been unlocked, and on iOS that only happens when a real
+  // HTMLMediaElement plays inside a user gesture — a Web Audio silent buffer
+  // isn't enough (hence the "turn music on/off first" workaround). So on the
+  // first tap we (1) play a genuinely silent <audio> element to unlock the
+  // session the same way the music does, and (2) resume the rain context.
   const audioPrimed = useRef(false);
   useEffect(() => {
+    // Build a tiny silent WAV once so we can play it through an <audio> element.
+    const sampleRate = 8000;
+    const frames = Math.floor(sampleRate * 0.1);
+    const dataSize = frames * 2;
+    const ab = new ArrayBuffer(44 + dataSize);
+    const dv = new DataView(ab);
+    const str = (o: number, s: string) => {
+      for (let i = 0; i < s.length; i++) dv.setUint8(o + i, s.charCodeAt(i));
+    };
+    str(0, "RIFF");
+    dv.setUint32(4, 36 + dataSize, true);
+    str(8, "WAVE");
+    str(12, "fmt ");
+    dv.setUint32(16, 16, true);
+    dv.setUint16(20, 1, true);
+    dv.setUint16(22, 1, true);
+    dv.setUint32(24, sampleRate, true);
+    dv.setUint32(28, sampleRate * 2, true);
+    dv.setUint16(32, 2, true);
+    dv.setUint16(34, 16, true);
+    str(36, "data");
+    dv.setUint32(40, dataSize, true);
+    const url = URL.createObjectURL(new Blob([ab], { type: "audio/wav" }));
+
     const unlock = () => {
       if (audioPrimed.current) return;
+      audioPrimed.current = true;
+      // (1) Unlock the iOS audio session via a real (silent) media element.
+      try {
+        const a = new Audio(url);
+        a.volume = 0;
+        a.play().catch(() => {});
+      } catch {
+        /* ignore */
+      }
+      // (2) Create + resume the rain context inside the same gesture.
       let ctx = rainCtxRef.current;
       if (!ctx) {
         const AC =
@@ -1614,20 +1650,13 @@ export default function Museum3D({
         rainGainRef.current = g;
       }
       if (ctx.state === "suspended") ctx.resume().catch(() => {});
-      try {
-        const b = ctx.createBuffer(1, 1, 22050);
-        const s = ctx.createBufferSource();
-        s.buffer = b;
-        s.connect(ctx.destination);
-        s.start(0);
-        audioPrimed.current = true;
-        window.removeEventListener("pointerdown", unlock);
-      } catch {
-        /* try again on the next tap */
-      }
+      window.removeEventListener("pointerdown", unlock);
     };
     window.addEventListener("pointerdown", unlock);
-    return () => window.removeEventListener("pointerdown", unlock);
+    return () => {
+      window.removeEventListener("pointerdown", unlock);
+      URL.revokeObjectURL(url);
+    };
   }, []);
 
   useEffect(() => {

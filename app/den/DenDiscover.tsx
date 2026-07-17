@@ -351,7 +351,7 @@ export default function DenDiscover({
                 Searching public-domain books…
                 <br />
                 <span className="den-searching-sub">
-                  this can take a few seconds.
+                  this can take up to a minute — hang tight.
                 </span>
               </p>
             </div>

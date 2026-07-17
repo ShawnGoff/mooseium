@@ -971,7 +971,10 @@ function DenFurniture({ lowPower, lightsOn }: { lowPower: boolean; lightsOn: boo
 // window/skylight gets its own cloud layout (they shouldn't match).
 type SkyMood = "day" | "rain" | "snow";
 function skyTexture(seed = 1, mood: SkyMood = "day"): THREE.Texture {
-  let s = (seed * 9301 + 49297) % 233280;
+  // Offset the RNG stream per mood so rain/snow get their OWN cloud layouts
+  // instead of the daytime clouds in a different color.
+  const moodSeed = seed + (mood === "rain" ? 137 : mood === "snow" ? 613 : 0);
+  let s = (moodSeed * 9301 + 49297) % 233280;
   const rnd = () => {
     s = (s * 9301 + 49297) % 233280;
     return s / 233280;
@@ -1001,13 +1004,16 @@ function skyTexture(seed = 1, mood: SkyMood = "day"): THREE.Texture {
   const cloud =
     mood === "day" ? "255,255,255" : mood === "snow" ? "236,240,246" : "206,217,233";
   const cloudA = mood === "day" ? 0.92 : mood === "snow" ? 0.82 : 0.78;
+  // Rain/snow clouds are lumpier and more irregular than the tidy day puffs.
+  const lumps = mood === "day" ? 7 : 11;
+  const spread = mood === "day" ? 1.7 : 2.3;
   const puff = (cx: number, cy: number, sz: number) => {
-    for (let i = 0; i < 7; i++) {
-      const x = cx + (rnd() - 0.5) * sz * 1.7;
-      const y = cy + (rnd() - 0.5) * sz * 0.55;
-      const r = sz * (0.4 + rnd() * 0.55);
+    for (let i = 0; i < lumps; i++) {
+      const x = cx + (rnd() - 0.5) * sz * spread;
+      const y = cy + (rnd() - 0.5) * sz * (mood === "day" ? 0.55 : 0.9);
+      const r = sz * (mood === "day" ? 0.4 + rnd() * 0.55 : 0.28 + rnd() * 0.95);
       const g = ctx.createRadialGradient(x, y, 0, x, y, r);
-      g.addColorStop(0, `rgba(${cloud},${cloudA})`);
+      g.addColorStop(0, `rgba(${cloud},${cloudA * (0.7 + rnd() * 0.3)})`);
       g.addColorStop(1, `rgba(${cloud},0)`);
       ctx.fillStyle = g;
       ctx.beginPath();
@@ -1015,10 +1021,10 @@ function skyTexture(seed = 1, mood: SkyMood = "day"): THREE.Texture {
       ctx.fill();
     }
   };
-  // day: 3–4 scattered clouds; rain/snow: 4–5, heavier overcast
-  const n = (mood === "day" ? 3 : 4) + Math.floor(rnd() * 2);
+  // day: 3–4 scattered clouds; rain/snow: 5–7, heavier & more overcast
+  const n = (mood === "day" ? 3 : 5) + Math.floor(rnd() * (mood === "day" ? 2 : 3));
   for (let i = 0; i < n; i++) {
-    puff(30 + rnd() * 200, 40 + rnd() * 180, 20 + rnd() * 16);
+    puff(20 + rnd() * 220, 30 + rnd() * 200, 18 + rnd() * (mood === "day" ? 16 : 26));
   }
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace;
@@ -1398,9 +1404,10 @@ function Skylight({ sky, lowPower }: { sky: Sky; lowPower: boolean }) {
         {sky === "day" ? (
           <meshLambertMaterial color="#000000" emissive="#ffffff" emissiveMap={dayTex} emissiveIntensity={1} />
         ) : sky === "rain" ? (
-          <meshLambertMaterial color="#000000" emissive="#ffffff" emissiveMap={rainTex} emissiveIntensity={1} />
+          // Dimmer than day so the overcast storm reads moody, not bright blue.
+          <meshLambertMaterial color="#000000" emissive="#b7c4d6" emissiveMap={rainTex} emissiveIntensity={0.6} />
         ) : sky === "snow" ? (
-          <meshLambertMaterial color="#000000" emissive="#ffffff" emissiveMap={snowTex} emissiveIntensity={1} />
+          <meshLambertMaterial color="#000000" emissive="#d7dee7" emissiveMap={snowTex} emissiveIntensity={0.72} />
         ) : (
           <meshLambertMaterial color="#000000" emissive="#1e2f56" emissiveIntensity={1} />
         )}

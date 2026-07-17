@@ -99,6 +99,38 @@ a {
     transform: rotate(360deg);
   }
 }
+.den-searching {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 48px 16px;
+  text-align: center;
+  color: var(--muted, #8a8580);
+}
+.den-spinner {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  border: 3px solid var(--border, #4a423b);
+  border-top-color: var(--accent, #e6d3a3);
+  animation: spin 0.8s linear infinite;
+}
+.den-searching p {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.5;
+}
+.den-searching-sub {
+  font-size: 13px;
+  opacity: 0.7;
+}
+@media (prefers-reduced-motion: reduce) {
+  .den-spinner {
+    animation-duration: 2s;
+  }
+}
 @media (prefers-reduced-motion: reduce) {
   .spinner {
     animation-duration: 2.4s;

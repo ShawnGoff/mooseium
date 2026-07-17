@@ -328,26 +328,39 @@ export default function DenDiscover({
         </button>
       </form>
 
-      {results ? (
+      {results !== null || searching ? (
         <section className="den-home-section">
           <div className="den-section-head">
-            <h2>{heading}</h2>
-            <button
-              className="text-link"
-              onClick={() => {
-                setResults(null);
-                setHeading("");
-              }}
-            >
-              ← Back to discover
-            </button>
+            <h2>{heading || "Searching…"}</h2>
+            {!searching && (
+              <button
+                className="text-link"
+                onClick={() => {
+                  setResults(null);
+                  setHeading("");
+                }}
+              >
+                ← Back to discover
+              </button>
+            )}
           </div>
-          {results.length === 0 ? (
+          {searching ? (
+            <div className="den-searching" role="status" aria-live="polite">
+              <span className="den-spinner" aria-hidden />
+              <p>
+                Searching public-domain books…
+                <br />
+                <span className="den-searching-sub">
+                  this can take a few seconds.
+                </span>
+              </p>
+            </div>
+          ) : results && results.length === 0 ? (
             <p className="status">No books found. Try another search.</p>
           ) : (
             <>
               <div className="den-grid">
-                {results.map((r) => (
+                {(results ?? []).map((r) => (
                   <Card key={r.externalId} r={r} />
                 ))}
               </div>

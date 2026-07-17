@@ -38,14 +38,60 @@ export default function BookDetail({
 
   useEffect(() => {
     let alive = true;
-    fetch(`/api/den/books/detail?gid=${encodeURIComponent(book.externalId)}`)
-      .then((r) => r.json())
-      .then((d) => alive && setDetail(d))
-      .catch(() => alive && setDetail({ subjects: [], downloads: null, description: null }));
+    // Fetch metadata straight from Gutendex + Open Library in the browser —
+    // both allow CORS, and this dodges the datacenter block on our server.
+    (async () => {
+      let subjects: string[] = [];
+      let downloads: number | null = null;
+      let title = book.title;
+      let author = book.author ?? "";
+      try {
+        const r = await fetch(`https://gutendex.com/books/${book.externalId}`);
+        if (r.ok) {
+          const m = (await r.json()) as {
+            title?: string;
+            authors?: { name: string }[];
+            subjects?: string[];
+            download_count?: number;
+          };
+          title = m.title || title;
+          author = m.authors?.[0]?.name ?? author;
+          downloads = m.download_count ?? null;
+          subjects = Array.from(
+            new Set((m.subjects ?? []).map((s) => s.split(" -- ")[0].trim()))
+          )
+            .filter(Boolean)
+            .slice(0, 6);
+        }
+      } catch {
+        /* subjects/downloads just stay empty */
+      }
+      let description: string | null = null;
+      try {
+        const params = new URLSearchParams({ title, limit: "1" });
+        if (author) params.set("author", author);
+        const sr = await fetch(
+          `https://openlibrary.org/search.json?${params}&fields=key,first_sentence`
+        );
+        if (sr.ok) {
+          const sd = (await sr.json()) as {
+            docs?: { key?: string; first_sentence?: string[] | { value: string } }[];
+          };
+          const doc = sd.docs?.[0];
+          const fs = doc?.first_sentence;
+          if (Array.isArray(fs)) description = fs[0] ?? null;
+          else if (fs && typeof fs === "object") description = fs.value ?? null;
+        }
+      } catch {
+        /* no description */
+      }
+      if (description) description = description.split(/\n\s*[-([]/)[0].trim().slice(0, 900);
+      if (alive) setDetail({ subjects, downloads, description });
+    })();
     return () => {
       alive = false;
     };
-  }, [book.externalId]);
+  }, [book.externalId, book.title, book.author]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();

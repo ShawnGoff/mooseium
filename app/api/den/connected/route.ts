@@ -6,15 +6,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { GUTENDEX_HEADERS } from "@/lib/gutendex";
 import type { NextRequest } from "next/server";
-
-type GutendexBook = {
-  id: number;
-  title: string;
-  authors: { name: string }[];
-  formats: Record<string, string>;
-};
 
 const GENERIC = new Set([
   "unknown",
@@ -38,7 +30,7 @@ export async function GET(req: NextRequest) {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ shelves: [] });
+  if (!user) return NextResponse.json({ artists: [] });
 
   const { data } = await supabase
     .from("saved_artworks")
@@ -61,28 +53,7 @@ export async function GET(req: NextRequest) {
     .slice(0, 3)
     .map(([name]) => name);
 
-  const shelves = await Promise.all(
-    topArtists.map(async (artist) => {
-      try {
-        const r = await fetch(
-          `https://gutendex.com/books?search=${encodeURIComponent(artist)}`,
-          { headers: GUTENDEX_HEADERS, next: { revalidate: 86400 } },
-        );
-        if (!r.ok) return null;
-        const d = (await r.json()) as { results?: GutendexBook[] };
-        const books = (d.results ?? []).slice(0, 8).map((b) => ({
-          source: "gutenberg",
-          externalId: String(b.id),
-          title: b.title,
-          author: b.authors[0]?.name ?? null,
-          coverUrl: b.formats["image/jpeg"] ?? null,
-        }));
-        return books.length ? { artist, books } : null;
-      } catch {
-        return null;
-      }
-    }),
-  );
-
-  return NextResponse.json({ shelves: shelves.filter(Boolean) });
+  // Return names only — the client fetches each artist's books from Gutendex
+  // directly (Gutendex blocks our datacenter IP, but not the visitor's).
+  return NextResponse.json({ artists: topArtists });
 }

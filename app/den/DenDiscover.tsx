@@ -50,6 +50,33 @@ const SUBJECTS: { name: string; coverId: number }[] = [
 const subjectCover = (id: number) =>
   `https://www.gutenberg.org/cache/epub/${id}/pg${id}.cover.medium.jpg`;
 
+// Gutendex blocks Vercel's datacenter IPs, so we call it straight from the
+// browser (each visitor's own IP is fine, and Gutendex allows CORS). Reading
+// still goes through our API since that fetches gutenberg.org, which isn't
+// blocked.
+const GUTENDEX = "https://gutendex.com/books";
+type GBook = {
+  id: number;
+  title: string;
+  authors: { name: string }[];
+  formats: Record<string, string>;
+};
+function normalize(b: GBook): Result {
+  return {
+    source: "gutenberg",
+    externalId: String(b.id),
+    title: b.title,
+    author: b.authors?.[0]?.name ?? null,
+    coverUrl: b.formats?.["image/jpeg"] ?? null,
+  };
+}
+async function gxFetch(query: string): Promise<{ results: Result[]; hasMore: boolean }> {
+  const r = await fetch(`${GUTENDEX}?${query}`);
+  if (!r.ok) throw new Error("gutendex");
+  const d = (await r.json()) as { results?: GBook[]; next?: string | null };
+  return { results: (d.results ?? []).map(normalize), hasMore: Boolean(d.next) };
+}
+
 export default function DenDiscover({
   userId,
   savedIds,
@@ -82,25 +109,38 @@ export default function DenDiscover({
 
   useEffect(() => {
     // The "connected to your art" shelf needs a signed-in user's collection.
+    // The API returns just the artist NAMES (a DB read); we fetch their books
+    // from Gutendex in the browser to dodge the datacenter block.
     if (!userId) {
       setShelves([]);
     } else if (shelvesCache === null) {
       fetch("/api/den/connected")
         .then((r) => r.json())
-        .then((d) => {
-          const s = d.shelves ?? [];
+        .then(async (d) => {
+          const artists: string[] = d.artists ?? [];
+          const built = await Promise.all(
+            artists.map(async (artist) => {
+              try {
+                const { results } = await gxFetch(
+                  `search=${encodeURIComponent(artist)}`
+                );
+                return { artist, books: results.slice(0, 8) };
+              } catch {
+                return { artist, books: [] as Result[] };
+              }
+            })
+          );
+          const s = built.filter((sh) => sh.books.length > 0);
           if (s.length) shelvesCache = s; // don't cache an empty/failed result
           setShelves(s);
         })
         .catch(() => setShelves([]));
     }
     if (popularCache === null) {
-      fetch("/api/den/books/popular")
-        .then((r) => r.json())
-        .then((d) => {
-          const res = d.results ?? [];
-          if (res.length) popularCache = res; // don't cache an empty/failed result
-          setPopular(res);
+      gxFetch("")
+        .then(({ results }) => {
+          if (results.length) popularCache = results;
+          setPopular(results);
         })
         .catch(() => setPopular([]));
     }
@@ -109,17 +149,29 @@ export default function DenDiscover({
 
   const isSaved = (id: string) => savedIds.has(id) || justSaved.has(id);
 
+  // `params` is a Gutendex query, e.g. `search=…` or `topic=…`.
   async function run(params: string, label: string) {
     setSearching(true);
     setHeading(label);
-    setBaseParams(params);
     setPage(1);
     try {
-      const res = await fetch(`/api/den/books/search?${params}&page=1`);
-      const d = await res.json();
-      setResults(d.results ?? []);
-      setHasMore(Boolean(d.hasMore));
+      let out = await gxFetch(params);
+      let effective = params;
+      // Subject names drift out of Gutendex's bookshelves; fall back to a
+      // keyword search so a subject shelf isn't empty.
+      if (params.startsWith("topic=") && out.results.length === 0) {
+        const term = params.slice("topic=".length);
+        const fb = await gxFetch(`search=${term}`);
+        if (fb.results.length) {
+          out = fb;
+          effective = `search=${term}`;
+        }
+      }
+      setBaseParams(effective);
+      setResults(out.results);
+      setHasMore(out.hasMore);
     } catch {
+      setBaseParams(params);
       setResults([]);
       setHasMore(false);
     } finally {
@@ -132,16 +184,16 @@ export default function DenDiscover({
     setLoadingMore(true);
     const next = page + 1;
     try {
-      const res = await fetch(`/api/den/books/search?${baseParams}&page=${next}`);
-      const d = await res.json();
-      const more: Result[] = d.results ?? [];
+      const { results: more, hasMore: hm } = await gxFetch(
+        `${baseParams}&page=${next}`
+      );
       // De-dupe by id in case pages overlap.
       setResults((prev) => {
         const base = prev ?? [];
         const seen = new Set(base.map((r) => r.externalId));
         return [...base, ...more.filter((r) => !seen.has(r.externalId))];
       });
-      setHasMore(Boolean(d.hasMore));
+      setHasMore(hm);
       setPage(next);
     } catch {
       setHasMore(false);
@@ -154,7 +206,7 @@ export default function DenDiscover({
     e.preventDefault();
     const t = q.trim();
     if (!t) return;
-    run(`q=${encodeURIComponent(t)}`, `Results for “${t}”`);
+    run(`search=${encodeURIComponent(t)}`, `Results for “${t}”`);
   }
 
   async function save(r: Result) {

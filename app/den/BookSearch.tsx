@@ -48,10 +48,29 @@ export default function BookSearch({
     setSearching(true);
     setError(null);
     try {
-      const res = await fetch(`/api/den/books/search?q=${encodeURIComponent(term)}`);
-      const data = await res.json();
+      // Call Gutendex from the browser — our datacenter IP is blocked, the
+      // visitor's isn't.
+      const res = await fetch(
+        `https://gutendex.com/books?search=${encodeURIComponent(term)}`
+      );
       if (!res.ok) throw new Error();
-      setResults(data.results ?? []);
+      const data = (await res.json()) as {
+        results?: {
+          id: number;
+          title: string;
+          authors: { name: string }[];
+          formats: Record<string, string>;
+        }[];
+      };
+      setResults(
+        (data.results ?? []).map((b) => ({
+          source: "gutenberg",
+          externalId: String(b.id),
+          title: b.title,
+          author: b.authors?.[0]?.name ?? null,
+          coverUrl: b.formats?.["image/jpeg"] ?? null,
+        }))
+      );
     } catch {
       setError("Search failed. Try again.");
     } finally {

@@ -1992,9 +1992,10 @@ export default function Museum3D({
         </div>
       )}
 
-      {/* Desktop: weather back in its original bottom-left spot. */}
+      {/* Desktop: weather bottom-left, lifted to align with the middle of the
+          music control stack on the right. */}
       {view === "ready" && isOwner && !isTouch && (
-        <div style={{ ...skyToggleStyle, position: "absolute", bottom: 14, left: 14 }}>
+        <div style={{ ...skyToggleStyle, position: "absolute", bottom: 44, left: 14 }}>
           {weatherButtons}
         </div>
       )}

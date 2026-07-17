@@ -1932,9 +1932,6 @@ export default function Museum3D({
             bottom: isTouch ? "calc(env(safe-area-inset-bottom, 0px) + 84px)" : 14,
           }}
         >
-          <button onClick={toggleMusic} style={musicBtnStyle} aria-label="Toggle music">
-            {musicOn ? "🔊 Music on" : "🔈 Music off"}
-          </button>
           {MUSIC_TRACKS.length > 1 && (
             <div style={{ position: "relative" }}>
               <button
@@ -1964,6 +1961,9 @@ export default function Museum3D({
               )}
             </div>
           )}
+          <button onClick={toggleMusic} style={musicBtnStyle} aria-label="Toggle music">
+            {musicOn ? "🔊 Music on" : "🔈 Music off"}
+          </button>
         </div>
       )}
 
@@ -2100,6 +2100,8 @@ const musicRowStyle: React.CSSProperties = {
   bottom: 14,
   right: 14,
   display: "flex",
+  flexDirection: "column",
+  alignItems: "flex-end",
   gap: 6,
 };
 const musicBtnStyle: React.CSSProperties = {

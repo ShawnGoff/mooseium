@@ -2181,6 +2181,17 @@ export default function Museum3D({
               : cardStyle
           }
         >
+          {/* Always-visible close: sticks to the top of the card while the body
+              scrolls beneath, so it's reachable no matter how long the text is. */}
+          <div style={cardCloseRowStyle}>
+            <button
+              onClick={() => setSelected(null)}
+              aria-label="Close"
+              style={cardCloseXStyle}
+            >
+              ✕
+            </button>
+          </div>
           {selected.image && (
             /* eslint-disable-next-line @next/next/no-img-element */
             <img
@@ -2211,12 +2222,10 @@ export default function Museum3D({
                 fontSize: 13,
                 lineHeight: 1.5,
                 marginTop: 10,
-                maxHeight: 150,
-                overflowY: "auto",
                 color: "#ece6da",
               }}
             >
-              {selected.description}
+              {selected.description.replace(/<\/?[^>]+>/g, "")}
             </div>
           )}
           <div style={{ display: "flex", alignItems: "center", gap: 14, marginTop: 12 }}>
@@ -2415,4 +2424,33 @@ const closeBtnStyle: React.CSSProperties = {
   borderRadius: 8,
   padding: "5px 14px",
   cursor: "pointer",
+};
+// Sticky bar at the top of the artwork card so the ✕ is always reachable. It
+// extends over the card's padding and has a solid background to mask content
+// scrolling beneath it.
+const cardCloseRowStyle: React.CSSProperties = {
+  position: "sticky",
+  top: 0,
+  zIndex: 3,
+  display: "flex",
+  justifyContent: "flex-end",
+  margin: "-16px -20px 10px",
+  padding: "10px 14px 6px",
+  background: "rgba(20,18,16,0.96)",
+  borderTopLeftRadius: 14,
+  borderTopRightRadius: 14,
+};
+const cardCloseXStyle: React.CSSProperties = {
+  width: 32,
+  height: 32,
+  borderRadius: "50%",
+  background: "rgba(60,54,48,0.92)",
+  border: "1px solid #6a5f54",
+  color: "#f3efe9",
+  fontSize: 15,
+  lineHeight: 1,
+  cursor: "pointer",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
 };

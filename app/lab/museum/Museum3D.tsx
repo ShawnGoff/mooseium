@@ -1584,26 +1584,23 @@ export default function Museum3D({
   const pausedRef = useRef(false);
   pausedRef.current = denPanel !== null || sitPhase.current !== "none";
 
-  // Rain ambience via Web Audio, looped sample-accurately with the encoder's
-  // silent padding trimmed off both ends so it loops seamlessly (an <audio loop>
-  // tag can't do this — MP3 padding leaves an audible gap each pass).
-  const rainCtxRef = useRef<AudioContext | null>(null);
-  const rainBufRef = useRef<AudioBuffer | null>(null);
-  const rainSrcRef = useRef<AudioBufferSourceNode | null>(null);
-  const rainGainRef = useRef<GainNode | null>(null);
+  // Rain ambience via a plain looping <audio> element. We originally used Web
+  // Audio for a seamless loop, but iOS re-suspends a Web Audio context that
+  // isn't backed by an active media element — so the rain would play for a
+  // second and die unless music (a persistent <audio>) was also running. A
+  // dedicated <audio loop> element holds the audio session open itself and can
+  // never be suspended out from under us. (The faint loop seam is inaudible in
+  // rain noise.)
+  const rainAudioRef = useRef<HTMLAudioElement | null>(null);
 
-  // iOS won't play Web Audio (used for the gapless rain loop) until the audio
-  // SESSION has been unlocked, and on iOS that only happens when a real
-  // HTMLMediaElement plays inside a user gesture — a Web Audio silent buffer
-  // isn't enough (hence the "turn music on/off first" workaround). So on the
-  // first tap we (1) play a genuinely silent <audio> element to unlock the
-  // session the same way the music does, and (2) resume the rain context.
-  const audioPrimed = useRef(false);
+  // iOS blocks the first-ever media play unless it happens inside a user
+  // gesture. The rain's play() fires from an effect (not synchronously in the
+  // tap), so on the first tap we play a silent <audio> element — an
+  // HTMLMediaElement play in a gesture unlocks the audio session globally, so
+  // the rain element can then play from anywhere.
   useEffect(() => {
-    // Build a tiny silent WAV once so we can play it through an <audio> element.
     const sampleRate = 8000;
-    const frames = Math.floor(sampleRate * 0.1);
-    const dataSize = frames * 2;
+    const dataSize = Math.floor(sampleRate * 0.05) * 2;
     const ab = new ArrayBuffer(44 + dataSize);
     const dv = new DataView(ab);
     const str = (o: number, s: string) => {
@@ -1623,11 +1620,10 @@ export default function Museum3D({
     str(36, "data");
     dv.setUint32(40, dataSize, true);
     const url = URL.createObjectURL(new Blob([ab], { type: "audio/wav" }));
-
+    let done = false;
     const unlock = () => {
-      if (audioPrimed.current) return;
-      audioPrimed.current = true;
-      // (1) Unlock the iOS audio session via a real (silent) media element.
+      if (done) return;
+      done = true;
       try {
         const a = new Audio(url);
         a.volume = 0;
@@ -1635,21 +1631,6 @@ export default function Museum3D({
       } catch {
         /* ignore */
       }
-      // (2) Create + resume the rain context inside the same gesture.
-      let ctx = rainCtxRef.current;
-      if (!ctx) {
-        const AC =
-          window.AudioContext ||
-          (window as unknown as { webkitAudioContext: typeof AudioContext })
-            .webkitAudioContext;
-        ctx = new AC();
-        rainCtxRef.current = ctx;
-        const g = ctx.createGain();
-        g.gain.value = 0.4;
-        g.connect(ctx.destination);
-        rainGainRef.current = g;
-      }
-      if (ctx.state === "suspended") ctx.resume().catch(() => {});
       window.removeEventListener("pointerdown", unlock);
     };
     window.addEventListener("pointerdown", unlock);
@@ -1660,64 +1641,31 @@ export default function Museum3D({
   }, []);
 
   useEffect(() => {
-    let cancelled = false;
-    async function startRain() {
-      try {
-        let ctx = rainCtxRef.current;
-        if (!ctx) {
-          const AC =
-            window.AudioContext ||
-            (window as unknown as { webkitAudioContext: typeof AudioContext })
-              .webkitAudioContext;
-          ctx = new AC();
-          rainCtxRef.current = ctx;
-          const g = ctx.createGain();
-          g.gain.value = 0.4;
-          g.connect(ctx.destination);
-          rainGainRef.current = g;
-        }
-        if (ctx.state === "suspended") await ctx.resume();
-        if (!rainBufRef.current) {
-          const res = await fetch("/rain.mp3");
-          rainBufRef.current = await ctx.decodeAudioData(await res.arrayBuffer());
-        }
-        if (cancelled || rainSrcRef.current) return;
-        const buf = rainBufRef.current;
-        const src = ctx.createBufferSource();
-        src.buffer = buf;
-        src.loop = true;
-        src.loopStart = Math.min(0.12, buf.duration * 0.1);
-        src.loopEnd = Math.max(src.loopStart + 0.1, buf.duration - 0.12);
-        src.connect(rainGainRef.current!);
-        src.start(0, src.loopStart);
-        rainSrcRef.current = src;
-      } catch {
-        /* ignore */
+    let a = rainAudioRef.current;
+    if (sky === "rain" && rainSound) {
+      if (!a) {
+        a = new Audio("/rain.mp3");
+        a.loop = true;
+        a.volume = 0.4;
+        a.preload = "auto";
+        rainAudioRef.current = a;
       }
+      a.play().catch(() => {
+        /* iOS may block until a gesture unlocks audio; the next toggle retries */
+      });
+    } else if (a) {
+      a.pause();
     }
-    function stopRain() {
-      const s = rainSrcRef.current;
-      if (s) {
-        try {
-          s.stop();
-        } catch {
-          /* already stopped */
-        }
-        s.disconnect();
-        rainSrcRef.current = null;
-      }
-    }
-    if (sky === "rain" && rainSound) startRain();
-    else stopRain();
-    return () => {
-      cancelled = true;
-    };
   }, [sky, rainSound]);
 
   useEffect(
     () => () => {
-      rainSrcRef.current?.disconnect();
-      rainCtxRef.current?.close().catch(() => {});
+      const a = rainAudioRef.current;
+      if (a) {
+        a.pause();
+        a.src = "";
+        rainAudioRef.current = null;
+      }
     },
     []
   );

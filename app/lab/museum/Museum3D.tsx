@@ -1112,7 +1112,7 @@ function SnowFall({
         v: 0.35 + Math.random() * 0.35,
         ph: Math.random() * Math.PI * 2,
         sway: 0.1 + Math.random() * 0.14,
-        s: 0.02 + Math.random() * 0.022,
+        s: 0.014 + Math.random() * 0.016,
       })),
     [count, zW]
   );
@@ -1131,7 +1131,7 @@ function SnowFall({
   return (
     <group ref={ref}>
       {flakes.map((f, i) => (
-        <mesh key={i} position={[xWall + dir * 0.1, f.y, f.z]}>
+        <mesh key={i} position={[xWall + dir * 0.075, f.y, f.z]}>
           <sphereGeometry args={[f.s, 6, 6]} />
           <meshStandardMaterial
             color="#ffffff"

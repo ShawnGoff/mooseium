@@ -60,6 +60,11 @@ export default async function Header() {
         )}
       </nav>
 
+      {!signedIn && (
+        <Link href="/login" className="mobile-signin">
+          Sign in
+        </Link>
+      )}
       <MobileMenu signedIn={signedIn} displayName={displayName} username={username} />
     </header>
   );

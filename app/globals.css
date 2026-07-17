@@ -230,6 +230,25 @@ a {
   .topbar .mobile-menu {
     display: block;
   }
+  /* Prominent Sign in on phones — the auth cluster is hidden, so signed-out
+     visitors need an obvious entry point beside the hamburger. Scoped with
+     .topbar so it beats the later base `.mobile-signin { display:none }`. */
+  .topbar .mobile-signin {
+    display: inline-flex;
+    align-items: center;
+    margin-left: auto;
+    margin-right: 8px;
+    background: var(--accent);
+    color: #1c1810;
+    font-weight: 600;
+    font-size: 14px;
+    padding: 8px 16px;
+    border-radius: 8px;
+    text-decoration: none;
+  }
+}
+.mobile-signin {
+  display: none;
 }
 
 .topbar-auth {

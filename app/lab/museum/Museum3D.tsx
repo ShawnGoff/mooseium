@@ -1592,6 +1592,29 @@ export default function Museum3D({
   const rainSrcRef = useRef<AudioBufferSourceNode | null>(null);
   const rainGainRef = useRef<GainNode | null>(null);
 
+  // iOS keeps Web Audio locked until audio starts inside a user gesture. Unlock
+  // the rain context on the first tap so rain plays even if music was never on.
+  useEffect(() => {
+    const unlock = () => {
+      let ctx = rainCtxRef.current;
+      if (!ctx) {
+        const AC =
+          window.AudioContext ||
+          (window as unknown as { webkitAudioContext: typeof AudioContext })
+            .webkitAudioContext;
+        ctx = new AC();
+        rainCtxRef.current = ctx;
+        const g = ctx.createGain();
+        g.gain.value = 0.4;
+        g.connect(ctx.destination);
+        rainGainRef.current = g;
+      }
+      if (ctx.state === "suspended") ctx.resume().catch(() => {});
+    };
+    window.addEventListener("pointerdown", unlock, { once: true });
+    return () => window.removeEventListener("pointerdown", unlock);
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
     async function startRain() {
@@ -1805,6 +1828,42 @@ export default function Museum3D({
     setTp((t) => ({ spawn, yaw, k: t.k + 1 }));
   };
 
+  // Weather + light controls, rendered bottom-left on desktop but grouped into
+  // the bottom-right control column on phones.
+  const weatherButtons = (
+    <>
+      {(["day", "night", "rain"] as Sky[]).map((s) => (
+        <button
+          key={s}
+          onClick={() => setSky(s)}
+          style={{ ...skyBtnStyle, ...(sky === s ? skyBtnActiveStyle : null) }}
+          aria-label={s}
+        >
+          {s === "day" ? "☀️" : s === "night" ? "🌙" : "🌧"}
+        </button>
+      ))}
+      {sky === "rain" && (
+        <button
+          onClick={() => setRainSound((v) => !v)}
+          style={{ ...skyBtnStyle, ...(rainSound ? skyBtnActiveStyle : null) }}
+          aria-label="Toggle rain sound"
+          title={rainSound ? "Rain sound on" : "Rain sound off"}
+        >
+          {rainSound ? "🔊" : "🔇"}
+        </button>
+      )}
+      <span style={{ width: 1, background: "#4a423b", margin: "2px 2px" }} />
+      <button
+        onClick={() => setLightsOn((v) => !v)}
+        style={{ ...skyBtnStyle, ...(lightsOn ? skyBtnActiveStyle : null) }}
+        aria-label="Toggle lights"
+        title={lightsOn ? "Lights on" : "Lights off"}
+      >
+        💡
+      </button>
+    </>
+  );
+
   return (
     <div
       style={{
@@ -1928,39 +1987,15 @@ export default function Museum3D({
           <button onClick={toggleMusic} style={musicBtnStyle} aria-label="Toggle music">
             {musicOn ? "🔊 Music on" : "🔈 Music off"}
           </button>
-          {isOwner && (
-            <div style={skyToggleStyle}>
-              {(["day", "night", "rain"] as Sky[]).map((s) => (
-                <button
-                  key={s}
-                  onClick={() => setSky(s)}
-                  style={{ ...skyBtnStyle, ...(sky === s ? skyBtnActiveStyle : null) }}
-                  aria-label={s}
-                >
-                  {s === "day" ? "☀️" : s === "night" ? "🌙" : "🌧"}
-                </button>
-              ))}
-              {sky === "rain" && (
-                <button
-                  onClick={() => setRainSound((v) => !v)}
-                  style={{ ...skyBtnStyle, ...(rainSound ? skyBtnActiveStyle : null) }}
-                  aria-label="Toggle rain sound"
-                  title={rainSound ? "Rain sound on" : "Rain sound off"}
-                >
-                  {rainSound ? "🔊" : "🔇"}
-                </button>
-              )}
-              <span style={{ width: 1, background: "#4a423b", margin: "2px 2px" }} />
-              <button
-                onClick={() => setLightsOn((v) => !v)}
-                style={{ ...skyBtnStyle, ...(lightsOn ? skyBtnActiveStyle : null) }}
-                aria-label="Toggle lights"
-                title={lightsOn ? "Lights on" : "Lights off"}
-              >
-                💡
-              </button>
-            </div>
-          )}
+          {/* Phones: weather sits in this right-side column, below the music. */}
+          {isOwner && isTouch && <div style={skyToggleStyle}>{weatherButtons}</div>}
+        </div>
+      )}
+
+      {/* Desktop: weather back in its original bottom-left spot. */}
+      {view === "ready" && isOwner && !isTouch && (
+        <div style={{ ...skyToggleStyle, position: "absolute", bottom: 14, left: 14 }}>
+          {weatherButtons}
         </div>
       )}
 

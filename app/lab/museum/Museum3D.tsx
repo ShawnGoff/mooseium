@@ -2001,10 +2001,10 @@ export default function Museum3D({
 
   return (
     <div
+      className="museum-viewport"
       style={{
         position: "relative",
         width: "100%",
-        height: "calc(100vh - 60px)",
         touchAction: "none",
         background: "#eceae4",
       }}
@@ -2087,7 +2087,7 @@ export default function Museum3D({
         <div
           style={{
             ...musicRowStyle,
-            bottom: isTouch ? "calc(env(safe-area-inset-bottom, 0px) + 84px)" : 14,
+            bottom: isTouch ? "calc(env(safe-area-inset-bottom, 0px) + 20px)" : 14,
           }}
         >
           {MUSIC_TRACKS.length > 1 && (

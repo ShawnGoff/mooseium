@@ -651,9 +651,9 @@ export function JoystickPad({
       style={{
         position: "absolute",
         left: 22,
-        // Clear Safari's bottom toolbar (present when the URL bar is at the top)
-        // so the joystick is always reachable.
-        bottom: "calc(env(safe-area-inset-bottom, 0px) + 64px)",
+        // The viewport now uses dvh (ends above Safari's toolbar), so a small
+        // inset keeps the joystick just above the visible bottom edge.
+        bottom: "calc(env(safe-area-inset-bottom, 0px) + 24px)",
         width: 116,
         height: 116,
         borderRadius: "50%",

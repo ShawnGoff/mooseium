@@ -99,6 +99,13 @@ a {
     transform: rotate(360deg);
   }
 }
+/* The 3D museum viewport. dvh = the visible area that ends above Safari's
+   bottom toolbar; plain vh runs behind it and hid the bottom controls. The vh
+   line is the fallback for browsers without dvh. */
+.museum-viewport {
+  height: calc(100vh - 60px);
+  height: calc(100dvh - 60px);
+}
 .den-searching {
   display: flex;
   flex-direction: column;

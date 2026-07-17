@@ -1917,7 +1917,12 @@ export default function Museum3D({
         </div>
       )}
       {view === "ready" && (
-        <div style={musicRowStyle}>
+        <div
+          style={{
+            ...musicRowStyle,
+            bottom: isTouch ? "calc(env(safe-area-inset-bottom, 0px) + 84px)" : 14,
+          }}
+        >
           <button onClick={toggleMusic} style={musicBtnStyle} aria-label="Toggle music">
             {musicOn ? "🔊 Music on" : "🔈 Music off"}
           </button>

@@ -49,7 +49,7 @@ export default function LoginPage() {
     <main className="container">
       <div className="brand">
         <h1>Mooseium</h1>
-        <span className="tag">sign in to start curating</span>
+        <span className="tag">sign up or sign in to start curating</span>
       </div>
 
       {!configured ? (
@@ -69,6 +69,11 @@ export default function LoginPage() {
         </div>
       ) : (
         <div className="auth-card">
+          <p className="auth-intro">
+            New here or coming back — same button. We&apos;ll create your account
+            if you don&apos;t have one, then you&apos;ll pick your <strong>@handle</strong>.
+          </p>
+
           <button className="google-btn" onClick={signInWithGoogle} type="button">
             Continue with Google
           </button>

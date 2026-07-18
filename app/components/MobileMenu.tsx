@@ -65,7 +65,7 @@ export default function MobileMenu({
                 </form>
               </>
             ) : (
-              <Link href="/login">Sign in</Link>
+              <Link href="/login">Sign up / Sign in</Link>
             )}
           </nav>
         </>

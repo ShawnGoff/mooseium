@@ -1,36 +1,50 @@
 "use client";
 
 // Keeps the server-rendered UI (Header, etc.) in sync with the browser's auth
-// session. Without this, signing in/out or switching accounts updates the
-// client but leaves stale server components — e.g. the Header still showing
-// "Sign in", or one account's name beside another's data. On a real identity
-// change we call router.refresh() to re-render the server tree with the new
-// session.
+// session. Two cases:
+//   1. Desync on load — the browser has a session the server render didn't see
+//      (e.g. right after an OAuth callback): the header shows "Sign in" or the
+//      wrong account. We compare the browser's user id to what the server
+//      rendered (`serverUid`) and refresh once if they disagree.
+//   2. Live transitions — signing in/out or switching accounts in-tab.
+// The one-shot guard on the desync path avoids any refresh loop if the server
+// genuinely can't read the cookie.
 
 import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
 
-export default function AuthRefresh() {
+export default function AuthRefresh({ serverUid }: { serverUid: string | null }) {
   const router = useRouter();
-  // undefined = haven't seen the first event yet (don't refresh on initial load)
-  const prevUid = useRef<string | null | undefined>(undefined);
+  const desyncFixed = useRef(false);
 
   useEffect(() => {
     if (!isSupabaseConfigured()) return;
     const supabase = createClient();
+    let prev = serverUid;
+
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    } = supabase.auth.onAuthStateChange((event, session) => {
       const uid = session?.user?.id ?? null;
-      if (prevUid.current !== undefined && prevUid.current !== uid) {
-        // Sign-in (null→id), sign-out (id→null), or account switch (a→b).
-        router.refresh();
+
+      if (event === "INITIAL_SESSION") {
+        // Browser session vs. what the server rendered.
+        if (uid !== serverUid && !desyncFixed.current) {
+          desyncFixed.current = true;
+          router.refresh();
+        }
+        prev = uid;
+      } else if (event === "SIGNED_IN" || event === "SIGNED_OUT") {
+        if (uid !== prev) {
+          prev = uid;
+          router.refresh();
+        }
       }
-      prevUid.current = uid;
     });
+
     return () => subscription.unsubscribe();
-  }, [router]);
+  }, [serverUid, router]);
 
   return null;
 }

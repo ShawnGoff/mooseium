@@ -6,6 +6,8 @@ import Header from "./components/Header";
 import Footer from "./components/Footer";
 import AuthRefresh from "./components/AuthRefresh";
 import { safeJsonLd } from "@/lib/jsonld";
+import { isSupabaseConfigured } from "@/lib/supabase/client";
+import { createClient } from "@/lib/supabase/server";
 
 const SITE_URL =
   process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "") || "http://localhost:3000";
@@ -79,11 +81,22 @@ export const metadata: Metadata = {
 // rather than caching it statically.
 export const dynamic = "force-dynamic";
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  // The server's view of the current user, handed to AuthRefresh so the client
+  // can detect (and fix) a header/body auth desync.
+  let serverUid: string | null = null;
+  if (isSupabaseConfigured()) {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    serverUid = user?.id ?? null;
+  }
+
   return (
     <html lang="en">
       <body>
@@ -94,7 +107,7 @@ export default function RootLayout({
         <a href="#main-content" className="skip-link">
           Skip to content
         </a>
-        <AuthRefresh />
+        <AuthRefresh serverUid={serverUid} />
         <Header />
         <div id="main-content">{children}</div>
         <Footer />

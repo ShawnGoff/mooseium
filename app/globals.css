@@ -258,6 +258,11 @@ a {
   color: var(--muted, #8a8580);
   text-align: center;
 }
+.den-shelf-blurb {
+  margin: -4px 0 10px;
+  font-size: 13px;
+  color: var(--muted, #8a8580);
+}
 
 .topbar-auth {
   display: flex;

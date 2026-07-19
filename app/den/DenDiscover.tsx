@@ -89,6 +89,67 @@ async function gxFetch(query: string): Promise<{ results: Result[]; hasMore: boo
   return { results: (d.results ?? []).map(normalize), hasMore: Boolean(d.next) };
 }
 
+// Themed discovery shelves. STEP 1: hardcoded to prove the UI — later these come
+// from an LLM-generated, daily-rotating cache (`{ title, blurb, query }` each;
+// the model curates the theme + query, Gutendex fills the books in the browser).
+type ThemedShelfDef = { title: string; blurb: string; query: string };
+const THEMED_SHELVES: ThemedShelfDef[] = [
+  {
+    title: "Voices from the Ancient World",
+    blurb: "Epics, myth, and philosophy from antiquity.",
+    query: "topic=ancient",
+  },
+  {
+    title: "Chilling Tales for a Dark Night",
+    blurb: "Gothic horror and things that go bump.",
+    query: "topic=horror",
+  },
+  {
+    title: "Great Adventures",
+    blurb: "Voyages, quests, and derring-do on land and sea.",
+    query: "topic=adventure",
+  },
+];
+
+// One themed shelf: resolves its query against Gutendex in the browser and
+// renders the resulting books. Module-level so it doesn't remount (and refetch)
+// every time the parent re-renders (e.g. typing in the search box).
+function ThemedShelf({
+  shelf,
+  renderCard,
+}: {
+  shelf: ThemedShelfDef;
+  renderCard: (r: Result) => React.ReactNode;
+}) {
+  const [books, setBooks] = useState<Result[] | null>(null);
+  useEffect(() => {
+    let alive = true;
+    gxFetch(shelf.query)
+      .then(({ results }) => alive && setBooks(results.slice(0, 12)))
+      .catch(() => alive && setBooks([]));
+    return () => {
+      alive = false;
+    };
+  }, [shelf.query]);
+
+  // Hide a shelf that resolved to nothing rather than showing an empty row.
+  if (books !== null && books.length === 0) return null;
+
+  return (
+    <section className="den-home-section">
+      <h2>{shelf.title}</h2>
+      <p className="den-shelf-blurb">{shelf.blurb}</p>
+      <div className="den-shelf-row">
+        {books === null ? (
+          <p className="status">Loading…</p>
+        ) : (
+          books.map((r) => renderCard(r))
+        )}
+      </div>
+    </section>
+  );
+}
+
 export default function DenDiscover({
   userId,
   savedIds,
@@ -418,6 +479,14 @@ export default function DenDiscover({
               </div>
             </section>
           )}
+
+          {THEMED_SHELVES.map((sh) => (
+            <ThemedShelf
+              key={sh.title}
+              shelf={sh}
+              renderCard={(r) => <Card key={r.externalId} r={r} />}
+            />
+          ))}
 
           {shelves === null ? (
             <p className="status">Finding books connected to your art…</p>

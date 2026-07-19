@@ -671,28 +671,6 @@ export default function HomeClient() {
         </div>
       )}
 
-      {/* Quick pivots only while browsing results — on the landing view the
-          theme cards + era row below cover discovery without duplication. */}
-      {searched && (
-        <>
-          <div className="chips">
-            {CHIPS.map((chip) => (
-              <button key={chip} className="chip" onClick={() => runChip(chip)}>
-                {chip}
-              </button>
-            ))}
-          </div>
-          <div className="chips">
-            <span className="chips-label">By era:</span>
-            {ERAS.map((era) => (
-              <button key={era.label} className="chip era" onClick={() => runEra(era)}>
-                {era.label}
-              </button>
-            ))}
-          </div>
-        </>
-      )}
-
       {searched ? (
         <>
           <p className="status">
@@ -756,32 +734,6 @@ export default function HomeClient() {
             </div>
           </section>
 
-          {artShelves.map((shelf) => (
-            <section className="home-section" key={shelf.title}>
-              <h2 className="feed-heading">{shelf.title}</h2>
-              <p className="shelf-blurb">{shelf.blurb}</p>
-              <div className="art-shelf-row">
-                {shelf.items.map((c) => (
-                  <button
-                    key={cardKey(c)}
-                    className="art-shelf-card"
-                    onClick={() => setPlacardCard(c)}
-                    title={c.title}
-                  >
-                    {c.thumbnailUrl && (
-                      /* eslint-disable-next-line @next/next/no-img-element */
-                      <img src={c.thumbnailUrl} alt={c.title} loading="lazy" />
-                    )}
-                    <span className="art-shelf-cap">
-                      <span className="art-shelf-title">{c.title}</span>
-                      {c.artist && <span className="art-shelf-artist">{c.artist}</span>}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            </section>
-          ))}
-
           {signedIn && (
             <section className="home-section welcome-back">
               <h2 className="feed-heading">
@@ -839,6 +791,32 @@ export default function HomeClient() {
               </div>
             </section>
           )}
+
+          {artShelves.map((shelf) => (
+            <section className="home-section" key={shelf.title}>
+              <h2 className="feed-heading">{shelf.title}</h2>
+              <p className="shelf-blurb">{shelf.blurb}</p>
+              <div className="art-shelf-row">
+                {shelf.items.map((c) => (
+                  <button
+                    key={cardKey(c)}
+                    className="art-shelf-card"
+                    onClick={() => setPlacardCard(c)}
+                    title={c.title}
+                  >
+                    {c.thumbnailUrl && (
+                      /* eslint-disable-next-line @next/next/no-img-element */
+                      <img src={c.thumbnailUrl} alt={c.title} loading="lazy" />
+                    )}
+                    <span className="art-shelf-cap">
+                      <span className="art-shelf-title">{c.title}</span>
+                      {c.artist && <span className="art-shelf-artist">{c.artist}</span>}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </section>
+          ))}
 
           {museums3d.length > 0 && (
             <section className="home-section">

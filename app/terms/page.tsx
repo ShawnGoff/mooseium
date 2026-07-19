@@ -2,7 +2,10 @@
 // launch — have it reviewed by a professional before relying on it.
 
 export const metadata = {
-  title: "Terms of Service · Mooseium",
+  title: "Terms of Service",
+  description:
+    "The terms of service for Mooseium — accounts, acceptable use, and how shared galleries and open-access art work.",
+  alternates: { canonical: "/terms" },
 };
 
 export default function TermsPage() {

@@ -1,59 +1,16 @@
-"use client";
+// /galleries — index of public galleries. The grid itself is client-rendered
+// (GalleriesClient); this server wrapper owns the page metadata.
 
-// A full index of public galleries to explore, linked from the home page.
+import type { Metadata } from "next";
+import GalleriesClient from "./GalleriesClient";
 
-import { useEffect, useState } from "react";
-import Link from "next/link";
-
-type PublicGallery = {
-  slug: string;
-  name: string;
-  cover?: string;
-  count: number;
-  curator: string;
-  handle?: string;
+export const metadata: Metadata = {
+  title: "Galleries",
+  description:
+    "Browse public art galleries curated by the Mooseium community — collections of open-access masterpieces from the world's great museums.",
+  alternates: { canonical: "/galleries" },
 };
 
 export default function GalleriesPage() {
-  const [galleries, setGalleries] = useState<PublicGallery[] | null>(null);
-
-  useEffect(() => {
-    fetch("/api/public-galleries")
-      .then((r) => r.json())
-      .then((d) => setGalleries(d.galleries ?? []))
-      .catch(() => setGalleries([]));
-  }, []);
-
-  return (
-    <main className="container">
-      <div className="brand">
-        <h1>Galleries to explore</h1>
-        <span className="tag">public galleries curated by the community</span>
-      </div>
-
-      {galleries === null ? (
-        <p className="status">Loading galleries…</p>
-      ) : galleries.length === 0 ? (
-        <p className="status">No public galleries yet.</p>
-      ) : (
-        <div className="pubgal-grid">
-          {galleries.map((g) => (
-            <Link key={g.slug} href={`/g/${g.slug}`} className="pubgal-card">
-              <div
-                className="pubgal-img"
-                style={g.cover ? { backgroundImage: `url(${g.cover})` } : undefined}
-              />
-              <div className="pubgal-meta">
-                <span className="pubgal-name">{g.name}</span>
-                <span className="pubgal-curator">
-                  {g.curator}
-                  {g.handle ? ` · @${g.handle}` : ""}
-                </span>
-              </div>
-            </Link>
-          ))}
-        </div>
-      )}
-    </main>
-  );
+  return <GalleriesClient />;
 }

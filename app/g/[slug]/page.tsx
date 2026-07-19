@@ -40,11 +40,14 @@ export async function generateMetadata({
     }>();
 
   if (!gallery) {
-    return { title: "Gallery not available · Mooseium" };
+    // Missing/private galleries shouldn't be indexed under this URL.
+    return { title: "Gallery not available", robots: { index: false } };
   }
 
   const curator = gallery.profiles?.display_name;
-  const title = `${gallery.name} · Mooseium`;
+  // The root layout's title template appends "· Mooseium".
+  const title = gallery.name;
+  const ogTitle = `${gallery.name} · Mooseium`;
   const description = curator
     ? `A gallery curated by ${curator} on Mooseium — art from the world's great museums.`
     : "A gallery on Mooseium — art from the world's great museums.";
@@ -55,8 +58,9 @@ export async function generateMetadata({
   return {
     title,
     description,
-    openGraph: { title, description, type: "website" },
-    twitter: { card: "summary_large_image", title, description },
+    alternates: { canonical: `/g/${slug}` },
+    openGraph: { title: ogTitle, description, type: "website" },
+    twitter: { card: "summary_large_image", title: ogTitle, description },
   };
 }
 

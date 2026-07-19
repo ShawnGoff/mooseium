@@ -49,6 +49,11 @@ export async function generateMetadata({
     description,
     alternates: { canonical: `/museums/${slug}` },
     openGraph: { title: `${museum.displayName} · Mooseium`, description },
+    twitter: {
+      card: "summary_large_image",
+      title: `${museum.displayName} · Mooseium`,
+      description,
+    },
   };
 }
 

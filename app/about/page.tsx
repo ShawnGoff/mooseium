@@ -1,7 +1,8 @@
 export const metadata = {
-  title: "About · Mooseium",
+  title: "About",
   description:
     "What Mooseium is — a place to curate the world's open-access art and read the public-domain classics, in a walkable 3D museum and library.",
+  alternates: { canonical: "/about" },
 };
 
 export default function AboutPage() {

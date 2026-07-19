@@ -1,9 +1,10 @@
 import Link from "next/link";
 
 export const metadata = {
-  title: "Tutorial · Mooseium",
+  title: "Tutorial",
   description:
     "How to use Mooseium — search the world's art, build collections, curate your galleries and 3D museum, and read in your Library.",
+  alternates: { canonical: "/tutorial" },
 };
 
 export default function TutorialPage() {

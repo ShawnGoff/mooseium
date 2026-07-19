@@ -1,9 +1,16 @@
 // /account — set your public display name.
 
+import type { Metadata } from "next";
 import Link from "next/link";
 import { isSupabaseConfigured } from "@/lib/supabase/client";
 import { createClient } from "@/lib/supabase/server";
 import AccountForm from "./AccountForm";
+
+// Private, per-user page — keep it out of search indexes.
+export const metadata: Metadata = {
+  title: "Account",
+  robots: { index: false, follow: false },
+};
 
 export default async function AccountPage({
   searchParams,

@@ -1,11 +1,18 @@
 // /den/doc/[id] — the writing desk: edit one document.
 
+import type { Metadata } from "next";
 import Link from "next/link";
 import { isSupabaseConfigured } from "@/lib/supabase/client";
 import { createClient } from "@/lib/supabase/server";
 import DocEditor from "./DocEditor";
 
 export const dynamic = "force-dynamic";
+
+// Private, per-user page — keep it out of search indexes.
+export const metadata: Metadata = {
+  title: "Writing",
+  robots: { index: false, follow: false },
+};
 
 export default async function DocPage({
   params,

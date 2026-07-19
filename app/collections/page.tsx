@@ -1,9 +1,16 @@
 // /collections — a visual grid of the user's collections, each with a preview
 // mosaic of up to 4 pieces.
 
+import type { Metadata } from "next";
 import Link from "next/link";
 import { isSupabaseConfigured } from "@/lib/supabase/client";
 import { createClient } from "@/lib/supabase/server";
+
+// Private, per-user page — keep it out of search indexes.
+export const metadata: Metadata = {
+  title: "Your collections",
+  robots: { index: false, follow: false },
+};
 
 type GalleryRow = {
   id: string;

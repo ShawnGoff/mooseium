@@ -1,10 +1,17 @@
 // /collections/[id] — view + manage one collection (rename, delete, remove pieces).
 
+import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { isSupabaseConfigured } from "@/lib/supabase/client";
 import { createClient } from "@/lib/supabase/server";
 import CollectionView, { type Piece } from "./CollectionView";
+
+// Private, per-user page — keep it out of search indexes.
+export const metadata: Metadata = {
+  title: "Collection",
+  robots: { index: false, follow: false },
+};
 
 type PlacedRow = {
   sort_order: number;

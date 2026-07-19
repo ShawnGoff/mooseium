@@ -36,20 +36,6 @@ type SearchResult = {
 
 type SaveState = "idle" | "saved";
 
-// Curated one-tap searches for the discovery row.
-const CHIPS = [
-  "Italy",
-  "Portraits",
-  "Flowers",
-  "Gold",
-  "Cats",
-  "Landscapes",
-  "Mythology",
-  "Ancient Egypt",
-  "Impressionism",
-  "Armor",
-];
-
 // Rotating hero pool: grand, in-catalog landscapes & cityscapes across the
 // always-on museums. One is picked at random each load, so the hero changes on
 // refresh (and naturally day to day). Each is resolved live through search, so
@@ -98,17 +84,6 @@ const THEMES: { label: string; term: string }[] = [
   { label: "Mythology", term: "mythology" },
   { label: "Flowers", term: "flowers" },
   { label: "Arms & Armor", term: "armor" },
-];
-
-// Era chips carry a real date range (years) applied to each museum's date filter.
-const ERAS: { label: string; begin: number; end: number }[] = [
-  { label: "Ancient", begin: -3000, end: 500 },
-  { label: "Medieval", begin: 500, end: 1400 },
-  { label: "1500s", begin: 1500, end: 1599 },
-  { label: "1600s", begin: 1600, end: 1699 },
-  { label: "1700s", begin: 1700, end: 1799 },
-  { label: "1800s", begin: 1800, end: 1899 },
-  { label: "1900s", begin: 1900, end: 1999 },
 ];
 
 function cardKey(c: { sourceMuseum: string; museumObjectId: string }) {
@@ -454,11 +429,6 @@ export default function HomeClient() {
     doSearch(term, undefined, 1, false);
   }
 
-  function runEra(era: { label: string; begin: number; end: number }) {
-    setQuery("");
-    doSearch("", { dateRange: `${era.begin},${era.end}` }, 1, false);
-  }
-
   // Click a piece's type label to filter the current museum by that type.
   function filterByType(objectType: string) {
     doSearch(query, { objectType }, 1, false);
@@ -721,14 +691,6 @@ export default function HomeClient() {
                   }
                 >
                   <span className="theme-label">{t.label}</span>
-                </button>
-              ))}
-            </div>
-            <div className="chips era-row">
-              <span className="chips-label">By era:</span>
-              {ERAS.map((era) => (
-                <button key={era.label} className="chip era" onClick={() => runEra(era)}>
-                  {era.label}
                 </button>
               ))}
             </div>

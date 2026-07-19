@@ -7,6 +7,7 @@ export const metadata: Metadata = {
   title: "Credits & Thanks",
   description:
     "The museums, libraries, creators, and open-source projects that make Mooseium possible.",
+  alternates: { canonical: "/credits" },
 };
 
 const MUSEUMS: { name: string; href: string }[] = [

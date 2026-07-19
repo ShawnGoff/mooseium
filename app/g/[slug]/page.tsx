@@ -8,6 +8,9 @@ import { safeJsonLd } from "@/lib/jsonld";
 import GalleryView, { type GalleryPiece } from "./GalleryView";
 import { type GuestEntry } from "./GuestBook";
 
+const SITE_URL =
+  process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "") || "http://localhost:3000";
+
 // Open Graph / Twitter preview so a pasted gallery link shows the cover art,
 // title, and curator instead of a bare URL.
 export async function generateMetadata({
@@ -40,11 +43,14 @@ export async function generateMetadata({
     }>();
 
   if (!gallery) {
-    return { title: "Gallery not available · Mooseium" };
+    // Missing/private galleries shouldn't be indexed under this URL.
+    return { title: "Gallery not available", robots: { index: false } };
   }
 
   const curator = gallery.profiles?.display_name;
-  const title = `${gallery.name} · Mooseium`;
+  // The root layout's title template appends "· Mooseium".
+  const title = gallery.name;
+  const ogTitle = `${gallery.name} · Mooseium`;
   const description = curator
     ? `A gallery curated by ${curator} on Mooseium — art from the world's great museums.`
     : "A gallery on Mooseium — art from the world's great museums.";
@@ -55,8 +61,9 @@ export async function generateMetadata({
   return {
     title,
     description,
-    openGraph: { title, description, type: "website" },
-    twitter: { card: "summary_large_image", title, description },
+    alternates: { canonical: `/g/${slug}` },
+    openGraph: { title: ogTitle, description, type: "website" },
+    twitter: { card: "summary_large_image", title: ogTitle, description },
   };
 }
 
@@ -212,8 +219,26 @@ export default async function SharedGalleryPage({
     "@context": "https://schema.org",
     "@type": "CollectionPage",
     name: gallery.name,
+    url: `${SITE_URL}/g/${slug}`,
+    isPartOf: { "@id": `${SITE_URL}/#website` },
+    breadcrumb: {
+      "@type": "BreadcrumbList",
+      itemListElement: [
+        { "@type": "ListItem", position: 1, name: "Home", item: `${SITE_URL}/` },
+        { "@type": "ListItem", position: 2, name: "Galleries", item: `${SITE_URL}/galleries` },
+        { "@type": "ListItem", position: 3, name: gallery.name },
+      ],
+    },
     ...(gallery.profiles?.display_name
-      ? { author: { "@type": "Person", name: gallery.profiles.display_name } }
+      ? {
+          author: {
+            "@type": "Person",
+            name: gallery.profiles.display_name,
+            ...(gallery.profiles.username
+              ? { url: `${SITE_URL}/@${gallery.profiles.username}` }
+              : {}),
+          },
+        }
       : {}),
     mainEntity: {
       "@type": "ItemList",

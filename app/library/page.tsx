@@ -10,9 +10,10 @@ import PublicLibrary from "./PublicLibrary";
 export const dynamic = "force-dynamic";
 
 export const metadata = {
-  title: "Library · Mooseium",
+  title: "Library",
   description:
     "Read and discover public-domain books free — search by title or author, browse by subject, and read classics in a calm, distraction-free reader.",
+  alternates: { canonical: "/library" },
 };
 
 export default async function LibraryPage() {

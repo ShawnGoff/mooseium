@@ -1,11 +1,18 @@
 // /den/book/[id] — read a saved book in a clean overlay-style page.
 
+import type { Metadata } from "next";
 import Link from "next/link";
 import { isSupabaseConfigured } from "@/lib/supabase/client";
 import { createClient } from "@/lib/supabase/server";
 import BookReader from "./BookReader";
 
 export const dynamic = "force-dynamic";
+
+// Private, per-user page — keep it out of search indexes.
+export const metadata: Metadata = {
+  title: "Reading",
+  robots: { index: false, follow: false },
+};
 
 export default async function BookPage({
   params,

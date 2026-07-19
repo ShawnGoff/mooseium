@@ -6,7 +6,11 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getAdapter, listMuseums } from "@/lib/museums";
 import { decodeEntities } from "@/lib/util/text";
+import { safeJsonLd } from "@/lib/jsonld";
 import MuseumFeed, { type FeedCard, type FeedRow } from "./MuseumFeed";
+
+const SITE_URL =
+  process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "") || "http://localhost:3000";
 
 // Regenerate at most hourly; museum content is effectively static.
 export const revalidate = 3600;
@@ -49,6 +53,11 @@ export async function generateMetadata({
     description,
     alternates: { canonical: `/museums/${slug}` },
     openGraph: { title: `${museum.displayName} · Mooseium`, description },
+    twitter: {
+      card: "summary_large_image",
+      title: `${museum.displayName} · Mooseium`,
+      description,
+    },
   };
 }
 
@@ -117,7 +126,37 @@ export default async function MuseumPage({
     .filter((r): r is FeedRow => r !== null)
     .sort((a, b) => rowOrder(a.key) - rowOrder(b.key));
 
-  return <MuseumFeed displayName={museum.displayName} rows={rows} />;
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "CollectionPage",
+        name: `${museum.displayName} on Mooseium`,
+        url: `${SITE_URL}/museums/${slug}`,
+        description: `Open-access artworks from ${museum.displayName}, browsable by theme and saveable into your own galleries.`,
+        about: { "@type": "Museum", name: museum.displayName },
+        isPartOf: { "@id": `${SITE_URL}/#website` },
+      },
+      {
+        "@type": "BreadcrumbList",
+        itemListElement: [
+          { "@type": "ListItem", position: 1, name: "Home", item: `${SITE_URL}/` },
+          { "@type": "ListItem", position: 2, name: "Museums", item: `${SITE_URL}/museums` },
+          { "@type": "ListItem", position: 3, name: museum.displayName },
+        ],
+      },
+    ],
+  };
+
+  return (
+    <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: safeJsonLd(jsonLd) }}
+      />
+      <MuseumFeed displayName={museum.displayName} rows={rows} />
+    </>
+  );
 }
 
 function rowOrder(key: string): number {

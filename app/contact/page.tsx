@@ -1,6 +1,8 @@
 export const metadata = {
-  title: "Contact · Mooseium",
-  description: "How to reach the Mooseium team.",
+  title: "Contact",
+  description:
+    "Get in touch with the Mooseium team — support, bug reports, feedback, and ideas for the virtual art museum and library.",
+  alternates: { canonical: "/contact" },
 };
 
 export default function ContactPage() {

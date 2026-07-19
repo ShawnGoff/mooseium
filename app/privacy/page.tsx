@@ -2,7 +2,10 @@
 // have it reviewed by a professional before relying on it.
 
 export const metadata = {
-  title: "Privacy Policy · Mooseium",
+  title: "Privacy Policy",
+  description:
+    "How Mooseium handles your information — what we collect, how it's used, and the choices you have. No ads, no selling data.",
+  alternates: { canonical: "/privacy" },
 };
 
 export default function PrivacyPage() {

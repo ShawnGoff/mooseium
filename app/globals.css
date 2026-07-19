@@ -316,6 +316,26 @@ a {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* Slim "Explore our museums" strip (replaced the big monogram tiles). */
+.museum-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.museum-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 7px 14px;
+  border: 1px solid var(--border, #2a2622);
+  border-radius: 999px;
+  font-size: 13px;
+  color: var(--text, #ece6da);
+  text-decoration: none;
+  background: rgba(255, 255, 255, 0.02);
+}
+.museum-chip:hover {
+  border-color: var(--accent, #e6d3a3);
+}
 
 .topbar-auth {
   display: flex;

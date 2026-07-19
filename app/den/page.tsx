@@ -1,11 +1,18 @@
 // /den — your private study. Folder tree holding saved books and your writing.
 
+import type { Metadata } from "next";
 import Link from "next/link";
 import { isSupabaseConfigured } from "@/lib/supabase/client";
 import { createClient } from "@/lib/supabase/server";
 import DenView, { type DenBook, type DenDoc, type DenFolder } from "./DenView";
 
 export const dynamic = "force-dynamic";
+
+// Private, per-user page — keep it out of search indexes.
+export const metadata: Metadata = {
+  title: "My Library",
+  robots: { index: false, follow: false },
+};
 
 export default async function DenPage() {
   if (!isSupabaseConfigured()) {

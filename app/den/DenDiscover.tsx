@@ -23,6 +23,7 @@ type Shelf = { artist: string; books: Result[] };
 // (switching to the Discover tab remounts this component).
 let popularCache: Result[] | null = null;
 let shelvesCache: Shelf[] | null = null;
+let themedCache: ThemedShelfDef[] | null = null;
 
 // Each subject shows a fixed representative cover straight from gutenberg.org's
 // image CDN — no Gutendex calls, so the page loads instantly. (id = a well-known
@@ -176,6 +177,11 @@ export default function DenDiscover({
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [detailBook, setDetailBook] = useState<Result | null>(null);
+  // Themed shelves: start with the hardcoded defaults so something shows
+  // immediately, then upgrade to the cached/generated set from the API.
+  const [themed, setThemed] = useState<ThemedShelfDef[]>(
+    themedCache ?? THEMED_SHELVES
+  );
 
   const supabase = useMemo(() => createClient(), []);
   const router = useRouter();
@@ -216,6 +222,20 @@ export default function DenDiscover({
           setPopular(results);
         })
         .catch(() => setPopular([]));
+    }
+    // Themed shelves come from the cache table (global + this user's own).
+    // Empty until the generation job runs, so we keep the hardcoded fallback.
+    if (themedCache === null) {
+      fetch("/api/den/shelves?surface=library")
+        .then((r) => r.json())
+        .then((d) => {
+          const s: ThemedShelfDef[] = d.shelves ?? [];
+          if (s.length) {
+            themedCache = s;
+            setThemed(s);
+          }
+        })
+        .catch(() => {});
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId]);
@@ -480,7 +500,7 @@ export default function DenDiscover({
             </section>
           )}
 
-          {THEMED_SHELVES.map((sh) => (
+          {themed.map((sh) => (
             <ThemedShelf
               key={sh.title}
               shelf={sh}

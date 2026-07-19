@@ -8,6 +8,9 @@ import { safeJsonLd } from "@/lib/jsonld";
 import GalleryView, { type GalleryPiece } from "./GalleryView";
 import { type GuestEntry } from "./GuestBook";
 
+const SITE_URL =
+  process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "") || "http://localhost:3000";
+
 // Open Graph / Twitter preview so a pasted gallery link shows the cover art,
 // title, and curator instead of a bare URL.
 export async function generateMetadata({
@@ -216,8 +219,26 @@ export default async function SharedGalleryPage({
     "@context": "https://schema.org",
     "@type": "CollectionPage",
     name: gallery.name,
+    url: `${SITE_URL}/g/${slug}`,
+    isPartOf: { "@id": `${SITE_URL}/#website` },
+    breadcrumb: {
+      "@type": "BreadcrumbList",
+      itemListElement: [
+        { "@type": "ListItem", position: 1, name: "Home", item: `${SITE_URL}/` },
+        { "@type": "ListItem", position: 2, name: "Galleries", item: `${SITE_URL}/galleries` },
+        { "@type": "ListItem", position: 3, name: gallery.name },
+      ],
+    },
     ...(gallery.profiles?.display_name
-      ? { author: { "@type": "Person", name: gallery.profiles.display_name } }
+      ? {
+          author: {
+            "@type": "Person",
+            name: gallery.profiles.display_name,
+            ...(gallery.profiles.username
+              ? { url: `${SITE_URL}/@${gallery.profiles.username}` }
+              : {}),
+          },
+        }
       : {}),
     mainEntity: {
       "@type": "ItemList",

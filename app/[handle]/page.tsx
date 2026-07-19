@@ -9,6 +9,9 @@ import { isSupabaseConfigured } from "@/lib/supabase/client";
 import { createClient } from "@/lib/supabase/server";
 import { safeJsonLd } from "@/lib/jsonld";
 
+const SITE_URL =
+  process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "") || "http://localhost:3000";
+
 type ProfileRow = {
   id: string;
   display_name: string | null;
@@ -130,10 +133,17 @@ export default async function ProfilePage({
   const jsonLd = {
     "@context": "https://schema.org",
     "@type": "ProfilePage",
+    ...(profile.username ? { url: `${SITE_URL}/@${profile.username}` } : {}),
+    isPartOf: { "@id": `${SITE_URL}/#website` },
     mainEntity: {
       "@type": "Person",
       name,
-      ...(profile.username ? { alternateName: `@${profile.username}` } : {}),
+      ...(profile.username
+        ? {
+            alternateName: `@${profile.username}`,
+            url: `${SITE_URL}/@${profile.username}`,
+          }
+        : {}),
       ...(profile.bio ? { description: profile.bio } : {}),
     },
   };

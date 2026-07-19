@@ -4,9 +4,45 @@ import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import Header from "./components/Header";
 import Footer from "./components/Footer";
+import { safeJsonLd } from "@/lib/jsonld";
 
 const SITE_URL =
   process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "") || "http://localhost:3000";
+
+// Site-wide structured data: the Organization behind the site and the WebSite
+// itself, with a SearchAction so search engines can offer a sitelinks search
+// box that deep-links into Mooseium's cross-museum art search.
+const SITE_JSON_LD = {
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "Organization",
+      "@id": `${SITE_URL}/#organization`,
+      name: "Mooseium",
+      url: SITE_URL,
+      logo: `${SITE_URL}/icon.svg`,
+      description:
+        "An independent virtual art museum and library — curate open-access masterpieces from world-renowned museums and read public-domain classics.",
+    },
+    {
+      "@type": "WebSite",
+      "@id": `${SITE_URL}/#website`,
+      name: "Mooseium",
+      url: SITE_URL,
+      description:
+        "Curate your own art gallery from open-access museum collections.",
+      publisher: { "@id": `${SITE_URL}/#organization` },
+      potentialAction: {
+        "@type": "SearchAction",
+        target: {
+          "@type": "EntryPoint",
+          urlTemplate: `${SITE_URL}/?museum=all&q={search_term_string}`,
+        },
+        "query-input": "required name=search_term_string",
+      },
+    },
+  ],
+};
 
 export const viewport: Viewport = {
   width: "device-width",
@@ -52,16 +88,7 @@ export default function RootLayout({
       <body>
         <script
           type="application/ld+json"
-          dangerouslySetInnerHTML={{
-            __html: JSON.stringify({
-              "@context": "https://schema.org",
-              "@type": "WebSite",
-              name: "Mooseium",
-              url: SITE_URL,
-              description:
-                "Curate your own art gallery from open-access museum collections.",
-            }),
-          }}
+          dangerouslySetInnerHTML={{ __html: safeJsonLd(SITE_JSON_LD) }}
         />
         <a href="#main-content" className="skip-link">
           Skip to content

@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/den/shelves/generate",
+      "schedule": "0 8 * * *"
+    }
+  ]
+}

@@ -125,8 +125,28 @@ function ThemedShelf({
   const [books, setBooks] = useState<Result[] | null>(null);
   useEffect(() => {
     let alive = true;
-    gxFetch(shelf.query)
-      .then(({ results }) => alive && setBooks(results.slice(0, 12)))
+    // Blend the theme's most-downloaded titles (page 1) with a random deeper
+    // page so each shelf surfaces lesser-known works, not just the usual hits.
+    const deepPage = 2 + Math.floor(Math.random() * 6); // 2–7
+    Promise.all([
+      gxFetch(shelf.query),
+      gxFetch(`${shelf.query}&page=${deepPage}`).catch(() => ({ results: [] as Result[] })),
+    ])
+      .then(([top, deep]) => {
+        if (!alive) return;
+        const seen = new Set<string>();
+        const mixed: Result[] = [];
+        const max = Math.max(top.results.length, deep.results.length);
+        for (let i = 0; i < max; i++) {
+          for (const r of [top.results[i], deep.results[i]]) {
+            if (r && !seen.has(r.externalId)) {
+              seen.add(r.externalId);
+              mixed.push(r);
+            }
+          }
+        }
+        setBooks(mixed.slice(0, 12));
+      })
       .catch(() => alive && setBooks([]));
     return () => {
       alive = false;

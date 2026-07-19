@@ -34,7 +34,7 @@ Example element: {"title":"Shadows & Séances","blurb":"Ghost stories and gothic
 
 const MUSEUM_PROMPT = `You are curating "discovery shelves" for an online art museum that searches the Met, Art Institute of Chicago, Cleveland, Rijksmuseum, Harvard, and the Smithsonian.
 
-Produce exactly 6 themed shelves. Each shelf is an object with:
+Produce exactly 3 themed shelves. Each shelf is an object with:
 - "title": a short, evocative shelf name (2-5 words), e.g. "Storms & Seascapes" or "The Color Blue".
 - "blurb": one inviting sentence, max ~12 words.
 - "query": a short, concrete search phrase that matches lots of artworks — a subject, motif, place, or thing (e.g. "seascape", "portrait of a woman", "flowers", "horses", "moonlight", "still life"). Plain keywords only — NO field prefixes.
@@ -42,7 +42,7 @@ Produce exactly 6 themed shelves. Each shelf is an object with:
 Rules:
 - Favor visual, well-represented subjects so each shelf has plenty of images.
 - Vary moods, eras, and cultures; make them feel freshly curated.
-- Respond with ONLY a JSON array of 6 objects. No preamble, no markdown fences.
+- Respond with ONLY a JSON array of 3 objects. No preamble, no markdown fences.
 
 Example element: {"title":"Storms & Seascapes","blurb":"The sea in all its moods.","query":"seascape"}`;
 
@@ -163,8 +163,9 @@ async function handle(req: NextRequest) {
   // browser); museum shelves are resolved to real artworks here and cached.
   let shelves: unknown[];
   if (surface === "museum") {
+    // Keep the homepage uncluttered: at most 3 art shelves.
     const built = await Promise.all(
-      themes.map(async (t) => {
+      themes.slice(0, 3).map(async (t) => {
         const items = await resolveArt(t.query);
         return { title: t.title, blurb: t.blurb, items };
       })

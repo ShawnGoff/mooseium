@@ -46,6 +46,18 @@ const SUBJECTS: { name: string; coverId: number }[] = [
   { name: "Travel", coverId: 103 }, // Around the World in Eighty Days
   { name: "Nature", coverId: 205 }, // Walden
   { name: "Humor", coverId: 308 }, // Three Men in a Boat
+  { name: "Myths & Legends", coverId: 1727 }, // The Odyssey
+  { name: "Gothic", coverId: 84 }, // Frankenstein
+  { name: "Detective", coverId: 244 }, // A Study in Scarlet
+  { name: "War", coverId: 2600 }, // War and Peace
+  { name: "Sea Stories", coverId: 164 }, // Twenty Thousand Leagues Under the Sea
+  { name: "Ancient World", coverId: 6130 }, // The Iliad
+  { name: "Ghost Stories", coverId: 43 }, // Dr. Jekyll and Mr. Hyde
+  { name: "Satire", coverId: 829 }, // Gulliver's Travels
+  { name: "Essays", coverId: 3600 }, // Essays of Montaigne
+  { name: "Economics", coverId: 3300 }, // The Wealth of Nations
+  { name: "Classics", coverId: 1400 }, // Great Expectations
+  { name: "Westerns", coverId: 978 }, // The Virginian
 ];
 const subjectCover = (id: number) =>
   `https://www.gutenberg.org/cache/epub/${id}/pg${id}.cover.medium.jpg`;

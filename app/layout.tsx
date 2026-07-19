@@ -4,6 +4,7 @@ import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import Header from "./components/Header";
 import Footer from "./components/Footer";
+import AuthRefresh from "./components/AuthRefresh";
 import { safeJsonLd } from "@/lib/jsonld";
 
 const SITE_URL =
@@ -93,6 +94,7 @@ export default function RootLayout({
         <a href="#main-content" className="skip-link">
           Skip to content
         </a>
+        <AuthRefresh />
         <Header />
         <div id="main-content">{children}</div>
         <Footer />

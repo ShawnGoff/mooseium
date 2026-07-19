@@ -6,7 +6,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
-import Placard, { type PlacardArtwork } from "@/app/components/Placard";
+import Placard from "@/app/components/Placard";
 
 type FilterField = {
   key: string;
@@ -53,28 +53,6 @@ const HERO_POOL: { museum: string; label: string; q: string }[] = [
   { museum: "artic", label: "the Art Institute of Chicago", q: "Paris Street Rainy Day Caillebotte" },
 ];
 
-// Short lettermarks for the museum tiles (no official logos — trademark-safe).
-const MUSEUM_MONOGRAMS: Record<string, string> = {
-  met: "MET",
-  artic: "AIC",
-  cleveland: "CMA",
-  rijks: "RIJKS",
-  harvard: "HAM",
-  smithsonian: "SI",
-  vam: "V&A",
-};
-
-function monogramFor(slug: string, name: string): string {
-  if (MUSEUM_MONOGRAMS[slug]) return MUSEUM_MONOGRAMS[slug];
-  return name
-    .replace(/^The\s+/i, "")
-    .split(/\s+/)
-    .map((w) => w[0])
-    .join("")
-    .slice(0, 4)
-    .toUpperCase();
-}
-
 // Explore-by-Theme cards. Each is a real search; the card image is pulled live
 // from that theme's own results (no owned/stock imagery).
 const THEMES: { label: string; term: string }[] = [
@@ -111,7 +89,6 @@ export default function HomeClient() {
   const [loading, setLoading] = useState<boolean>(false);
   const [searched, setSearched] = useState<boolean>(false);
 
-  const [popular, setPopular] = useState<ArtworkCard[]>([]);
   const [publicGalleries, setPublicGalleries] = useState<
     { slug: string; name: string; cover?: string; count: number; curator: string; handle?: string }[]
   >([]);
@@ -171,10 +148,6 @@ export default function HomeClient() {
 
   // Discovery feed (works signed out too).
   useEffect(() => {
-    fetch("/api/discover")
-      .then((r) => r.json())
-      .then((d) => setPopular(d.cards ?? []))
-      .catch(() => {});
     fetch("/api/public-galleries")
       .then((r) => r.json())
       .then((d) => setPublicGalleries(d.galleries ?? []))

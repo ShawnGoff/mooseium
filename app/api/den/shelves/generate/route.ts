@@ -13,6 +13,8 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getAdapter, listMuseums } from "@/lib/museums";
+import type { ArtworkCard } from "@/lib/museums/types";
 
 type ShelfDef = { title: string; blurb: string; query: string };
 
@@ -29,6 +31,20 @@ Rules:
 - Respond with ONLY a JSON array of 6 objects. No preamble, no markdown fences.
 
 Example element: {"title":"Shadows & Séances","blurb":"Ghost stories and gothic dread.","query":"topic=horror"}`;
+
+const MUSEUM_PROMPT = `You are curating "discovery shelves" for an online art museum that searches the Met, Art Institute of Chicago, Cleveland, Rijksmuseum, Harvard, and the Smithsonian.
+
+Produce exactly 6 themed shelves. Each shelf is an object with:
+- "title": a short, evocative shelf name (2-5 words), e.g. "Storms & Seascapes" or "The Color Blue".
+- "blurb": one inviting sentence, max ~12 words.
+- "query": a short, concrete search phrase that matches lots of artworks — a subject, motif, place, or thing (e.g. "seascape", "portrait of a woman", "flowers", "horses", "moonlight", "still life"). Plain keywords only — NO field prefixes.
+
+Rules:
+- Favor visual, well-represented subjects so each shelf has plenty of images.
+- Vary moods, eras, and cultures; make them feel freshly curated.
+- Respond with ONLY a JSON array of 6 objects. No preamble, no markdown fences.
+
+Example element: {"title":"Storms & Seascapes","blurb":"The sea in all its moods.","query":"seascape"}`;
 
 function authorized(req: NextRequest): boolean {
   const secret = process.env.CRON_SECRET;
@@ -53,17 +69,17 @@ function parseShelves(text: string): ShelfDef[] {
     const o = item as Record<string, unknown>;
     const title = typeof o.title === "string" ? o.title.trim() : "";
     const blurb = typeof o.blurb === "string" ? o.blurb.trim() : "";
-    let query = typeof o.query === "string" ? o.query.trim() : "";
+    const query = typeof o.query === "string" ? o.query.trim() : "";
     if (!title || !query) continue;
-    // Coerce anything that isn't a topic/search query into a keyword search.
-    if (!/^(topic|search)=/.test(query)) query = `search=${encodeURIComponent(query)}`;
     out.push({ title: title.slice(0, 80), blurb: blurb.slice(0, 160), query });
     if (out.length >= 6) break;
   }
   return out;
 }
 
-async function generateShelves(): Promise<ShelfDef[]> {
+// Ask the LLM for themed shelves for a surface. Returns raw { title, blurb,
+// query } themes; the caller resolves the query into books or artworks.
+async function generateThemes(prompt: string): Promise<ShelfDef[]> {
   const key = process.env.LLM_API_KEY;
   if (!key) throw new Error("LLM_API_KEY not set");
   const url =
@@ -81,7 +97,7 @@ async function generateShelves(): Promise<ShelfDef[]> {
       temperature: 0.9,
       messages: [
         { role: "system", content: "You output only valid JSON — no prose." },
-        { role: "user", content: LIBRARY_PROMPT },
+        { role: "user", content: prompt },
       ],
     }),
   });
@@ -92,30 +108,91 @@ async function generateShelves(): Promise<ShelfDef[]> {
   return parseShelves(data.choices?.[0]?.message?.content ?? "");
 }
 
+// Resolve one art theme to real open-access artworks by fanning out across all
+// museums (server-side — these APIs aren't IP-blocked like Gutendex).
+async function resolveArt(query: string): Promise<ArtworkCard[]> {
+  const slugs = listMuseums().map((m) => m.slug);
+  const settled = await Promise.allSettled(
+    slugs.map((slug) => {
+      const a = getAdapter(slug);
+      if (!a) return Promise.resolve(null);
+      return a.search({
+        query,
+        filters: {},
+        page: 1,
+        pageSize: 4,
+        hasImage: true,
+        openAccessOnly: true,
+      });
+    })
+  );
+  const lists: ArtworkCard[][] = [];
+  for (const r of settled) {
+    if (r.status === "fulfilled" && r.value) {
+      lists.push(r.value.cards.filter((c) => c.thumbnailUrl));
+    }
+  }
+  // Round-robin merge so a shelf mixes museums rather than grouping them.
+  const merged: ArtworkCard[] = [];
+  const maxLen = lists.reduce((m, l) => Math.max(m, l.length), 0);
+  for (let i = 0; i < maxLen; i++) {
+    for (const l of lists) if (l[i]) merged.push(l[i]);
+  }
+  return merged.slice(0, 12);
+}
+
 async function handle(req: NextRequest) {
   if (!authorized(req)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const surface =
+    req.nextUrl.searchParams.get("surface") === "museum" ? "museum" : "library";
 
-  let shelves: ShelfDef[];
+  // Ask the LLM for themes.
+  let themes: ShelfDef[];
   try {
-    shelves = await generateShelves();
+    themes = await generateThemes(surface === "museum" ? MUSEUM_PROMPT : LIBRARY_PROMPT);
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 502 });
   }
-  if (shelves.length === 0) {
+  if (themes.length === 0) {
     return NextResponse.json({ error: "No usable shelves generated" }, { status: 502 });
   }
 
+  // Build the shelves. Library shelves keep a Gutendex query (resolved in the
+  // browser); museum shelves are resolved to real artworks here and cached.
+  let shelves: unknown[];
+  if (surface === "museum") {
+    const built = await Promise.all(
+      themes.map(async (t) => {
+        const items = await resolveArt(t.query);
+        return { title: t.title, blurb: t.blurb, items };
+      })
+    );
+    shelves = built.filter((s) => s.items.length > 0);
+  } else {
+    shelves = themes.map((t) => ({
+      title: t.title,
+      blurb: t.blurb,
+      // Library queries must be a Gutendex topic=/search= form.
+      query: /^(topic|search)=/.test(t.query)
+        ? t.query
+        : `search=${encodeURIComponent(t.query)}`,
+    }));
+  }
+  if (shelves.length === 0) {
+    return NextResponse.json({ error: "No shelves resolved to results" }, { status: 502 });
+  }
+
   const admin = createAdminClient();
-  // Replace the current global Library shelves.
+  // Replace the current global shelves for this surface.
   await admin
     .from("discover_shelves")
     .delete()
-    .eq("surface", "library")
+    .eq("surface", surface)
     .is("user_id", null);
   const { error } = await admin.from("discover_shelves").insert({
-    surface: "library",
+    surface,
     user_id: null,
     shelves,
     generated_at: new Date().toISOString(),
@@ -123,7 +200,7 @@ async function handle(req: NextRequest) {
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
-  return NextResponse.json({ ok: true, count: shelves.length, shelves });
+  return NextResponse.json({ ok: true, surface, count: shelves.length });
 }
 
 export const POST = handle;

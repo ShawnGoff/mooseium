@@ -148,6 +148,10 @@ export default function Home() {
     }[]
   >([]);
   const [recentSaves, setRecentSaves] = useState<ArtworkCard[]>([]);
+  // AI-curated, daily-rotating art shelves (pre-resolved server-side).
+  const [artShelves, setArtShelves] = useState<
+    { title: string; blurb: string; items: ArtworkCard[] }[]
+  >([]);
   const [themePreviews, setThemePreviews] = useState<Record<string, string>>({});
   const [displayName, setDisplayName] = useState<string>("");
   const [hero, setHero] = useState<
@@ -200,6 +204,10 @@ export default function Home() {
     fetch("/api/discover-museums")
       .then((r) => r.json())
       .then((d) => setMuseums3d(d.museums ?? []))
+      .catch(() => {});
+    fetch("/api/den/shelves?surface=museum")
+      .then((r) => r.json())
+      .then((d) => setArtShelves(d.shelves ?? []))
       .catch(() => {});
   }, []);
 
@@ -773,6 +781,32 @@ export default function Home() {
               </button>
             </section>
           )}
+
+          {artShelves.map((shelf) => (
+            <section className="home-section" key={shelf.title}>
+              <h2 className="feed-heading">{shelf.title}</h2>
+              <p className="shelf-blurb">{shelf.blurb}</p>
+              <div className="art-shelf-row">
+                {shelf.items.map((c) => (
+                  <button
+                    key={cardKey(c)}
+                    className="art-shelf-card"
+                    onClick={() => setPlacardCard(c)}
+                    title={c.title}
+                  >
+                    {c.thumbnailUrl && (
+                      /* eslint-disable-next-line @next/next/no-img-element */
+                      <img src={c.thumbnailUrl} alt={c.title} loading="lazy" />
+                    )}
+                    <span className="art-shelf-cap">
+                      <span className="art-shelf-title">{c.title}</span>
+                      {c.artist && <span className="art-shelf-artist">{c.artist}</span>}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </section>
+          ))}
 
           {signedIn && (
             <section className="home-section welcome-back">

@@ -3,6 +3,10 @@
     {
       "path": "/api/den/shelves/generate",
       "schedule": "0 8 * * *"
+    },
+    {
+      "path": "/api/den/shelves/generate?surface=museum",
+      "schedule": "15 8 * * *"
     }
   ]
 }

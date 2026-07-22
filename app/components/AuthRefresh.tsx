@@ -1,23 +1,16 @@
 "use client";
 
-// Keeps the server-rendered UI (Header, etc.) in sync with the browser's auth
-// session. Two cases:
-//   1. Desync on load — the browser has a session the server render didn't see
-//      (e.g. right after an OAuth callback): the header shows "Sign in" or the
-//      wrong account. We compare the browser's user id to what the server
-//      rendered (`serverUid`) and refresh once if they disagree.
-//   2. Live transitions — signing in/out or switching accounts in-tab.
-// The one-shot guard on the desync path avoids any refresh loop if the server
-// genuinely can't read the cookie.
+// Keeps the server-rendered UI (Header) in sync with the browser's auth
+// session. Right after an OAuth/magic-link login the server render can lag the
+// browser session, leaving the header stuck on "Sign in" until a manual
+// refresh. A *soft* router.refresh() wasn't enough, so on a genuine desync we
+// do a real reload (what the user would do by hand) — guarded so it happens at
+// most once, no loop if the server truly can't read the cookie.
 
-import { useEffect, useRef } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect } from "react";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
 
 export default function AuthRefresh({ serverUid }: { serverUid: string | null }) {
-  const router = useRouter();
-  const desyncFixed = useRef(false);
-
   useEffect(() => {
     if (!isSupabaseConfigured()) return;
     const supabase = createClient();
@@ -29,22 +22,27 @@ export default function AuthRefresh({ serverUid }: { serverUid: string | null })
       const uid = session?.user?.id ?? null;
 
       if (event === "INITIAL_SESSION") {
-        // Browser session vs. what the server rendered.
-        if (uid !== serverUid && !desyncFixed.current) {
-          desyncFixed.current = true;
-          router.refresh();
+        if (uid !== serverUid) {
+          // Browser has a session the server render didn't reflect.
+          if (sessionStorage.getItem("auth-resync") !== "1") {
+            sessionStorage.setItem("auth-resync", "1");
+            window.location.reload();
+          }
+        } else {
+          sessionStorage.removeItem("auth-resync");
         }
         prev = uid;
       } else if (event === "SIGNED_IN" || event === "SIGNED_OUT") {
         if (uid !== prev) {
           prev = uid;
-          router.refresh();
+          sessionStorage.removeItem("auth-resync");
+          window.location.reload();
         }
       }
     });
 
     return () => subscription.unsubscribe();
-  }, [serverUid, router]);
+  }, [serverUid]);
 
   return null;
 }

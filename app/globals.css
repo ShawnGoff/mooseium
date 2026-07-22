@@ -316,6 +316,53 @@ a {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* "Add this to your museum" control on an artwork page. */
+.art-save-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.art-save-picker {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--border, #2a2622);
+  border-radius: 10px;
+}
+.art-save-label {
+  margin: 0;
+  width: 100%;
+  font-size: 13px;
+  color: var(--muted, #8a8580);
+}
+.art-save-option {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border, #2a2622);
+  color: var(--text, #ece6da);
+  border-radius: 999px;
+  padding: 7px 14px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.art-save-option:hover:not(:disabled) {
+  border-color: var(--accent, #e6d3a3);
+}
+.art-save-new {
+  display: flex;
+  gap: 6px;
+  width: 100%;
+}
+.art-save-new input {
+  flex: 1;
+  min-width: 0;
+}
+.art-save-done {
+  color: var(--accent, #e6d3a3);
+  font-weight: 600;
+}
+
 /* Single-artwork page (/art/[museum]/[objectId]). */
 .art-page {
   display: grid;

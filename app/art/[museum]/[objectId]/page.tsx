@@ -14,6 +14,7 @@ import type { NormalizedArtwork } from "@/lib/museums/types";
 import { cleanProse, decodeEntities } from "@/lib/util/text";
 import { galleriesContaining } from "@/lib/artwork-galleries";
 import { safeJsonLd } from "@/lib/jsonld";
+import AddToMuseum from "./AddToMuseum";
 
 // Museum records barely change; cache hard and refresh weekly.
 export const revalidate = 604800;
@@ -183,9 +184,7 @@ export default async function ArtworkPage({
           )}
 
           <div className="art-page-actions">
-            <Link href="/login" className="placard-save placard-signin">
-              Add this to your museum
-            </Link>
+            <AddToMuseum museum={museum} objectId={objectId} />
             {art.sourceUrl && (
               <a
                 href={art.sourceUrl}

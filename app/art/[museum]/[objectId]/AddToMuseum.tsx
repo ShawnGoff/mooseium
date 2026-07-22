@@ -90,10 +90,12 @@ export default function AddToMuseum({
         body: JSON.stringify({ name }),
       });
       const d = await res.json().catch(() => ({}));
-      if (!res.ok || !d.collection?.id) {
+      // The route returns the new collection as { id, name }.
+      const id: string | undefined = d.id ?? d.collection?.id;
+      if (!res.ok || !id) {
         throw new Error(d.error || "Could not create that collection.");
       }
-      await save(d.collection.id, name);
+      await save(id, name);
     } catch (e) {
       setError((e as Error).message);
       setBusy(false);

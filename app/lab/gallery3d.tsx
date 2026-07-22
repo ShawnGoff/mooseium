@@ -331,6 +331,7 @@ export function ProxyArtwork({
   useEffect(() => {
     let cancelled = false;
     let triedThumb = false;
+    let triedDirect = false;
     let created: THREE.Texture | null = null;
     const img = new Image();
     img.crossOrigin = "anonymous";
@@ -373,6 +374,14 @@ export function ProxyArtwork({
       if (!triedThumb && piece.imageThumb && piece.imageThumb !== piece.image) {
         triedThumb = true;
         img.src = `/api/img?url=${encodeURIComponent(piece.imageThumb)}`;
+        return;
+      }
+      // Last resort: load straight from the museum. Some CDNs (Harvard's)
+      // block our server's IP but serve visitors fine. Needs CORS to work as
+      // a WebGL texture; if the museum doesn't send it, we keep the title card.
+      if (!triedDirect) {
+        triedDirect = true;
+        img.src = piece.image;
       }
     };
     img.src = `/api/img?url=${encodeURIComponent(piece.image)}`;

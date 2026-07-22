@@ -2197,6 +2197,15 @@ export default function Museum3D({
             <img
               src={`/api/img?url=${encodeURIComponent(selected.image)}`}
               alt={selected.title}
+              onError={(e) => {
+                // Some museum CDNs block our server but serve visitors fine —
+                // fall back to loading straight from the museum.
+                const el = e.currentTarget;
+                if (!el.dataset.direct && selected.image) {
+                  el.dataset.direct = "1";
+                  el.src = selected.image;
+                }
+              }}
               style={{
                 width: "100%",
                 maxHeight: isTouch ? "34vh" : "48vh",

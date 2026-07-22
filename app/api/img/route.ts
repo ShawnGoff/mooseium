@@ -33,9 +33,8 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Bad url." }, { status: 400 });
   }
 
-  let upstream: Response;
-  try {
-    upstream = await fetch(target, {
+  const load = (u: string) =>
+    fetch(u, {
       headers: {
         "User-Agent":
           "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
@@ -44,6 +43,17 @@ export async function GET(req: NextRequest) {
       },
       next: { revalidate: 86400 },
     });
+
+  let upstream: Response;
+  try {
+    upstream = await load(target);
+    // IIIF refuses to upscale, so a stored URL asking for a width larger than
+    // the source (common with Harvard scans) fails. Retry once for the full
+    // image so already-saved pieces still render.
+    if (!upstream.ok) {
+      const fallback = target.replace(/\/full\/[^/]+\//, "/full/full/");
+      if (fallback !== target) upstream = await load(fallback);
+    }
   } catch {
     return NextResponse.json({ error: "Could not fetch image." }, { status: 502 });
   }

@@ -129,6 +129,12 @@ function firstImage(r: HamRecord): HamImage | undefined {
 function imageUrl(r: HamRecord, width: number): string {
   const img = firstImage(r);
   if (img?.iiifbaseuri) {
+    // IIIF 2.x refuses to upscale: asking for a width larger than the source
+    // errors out and the image never renders. Plenty of Harvard scans are
+    // smaller than our display width, so for large requests ask for the full
+    // image and let /api/img bound it. Small (thumbnail) widths are a safe
+    // downscale and stay exact.
+    if (width >= 800) return `${img.iiifbaseuri}/full/full/0/default.jpg`;
     return `${img.iiifbaseuri}/full/${Math.round(width)},/0/default.jpg`;
   }
   if (r.primaryimageurl) {
@@ -181,7 +187,7 @@ function normalize(r: HamRecord): NormalizedArtwork {
       .slice(1)
       .map((im) =>
         im.iiifbaseuri
-          ? `${im.iiifbaseuri}/full/843,/0/default.jpg`
+          ? `${im.iiifbaseuri}/full/full/0/default.jpg`
           : im.baseimageurl
       )
       .filter((u): u is string => Boolean(u)),

@@ -2862,9 +2862,16 @@ a {
   box-shadow: 0 6px 18px rgba(0,0,0,0.4);
 }
 .den-cover img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.den-cover-fallback, .den-doc-page {
+.den-cover-fallback {
   display: flex; align-items: center; justify-content: center; font-size: 2.4rem;
   width: 100%; height: 100%; background: #2b2620;
+}
+/* NB: .den-doc-page is the box itself (not a child like .den-cover-fallback),
+   so it must NOT take height:100% — that fights its aspect-ratio and makes the
+   card overflow onto the next one. */
+.den-doc-page {
+  display: flex; align-items: center; justify-content: center; font-size: 2.4rem;
+  width: 100%; background: #2b2620;
 }
 .den-doc-page { background: linear-gradient(160deg, #efe9dd, #d9d0bf); color: #4a4132; }
 .den-card-title { font-size: 0.9rem; font-weight: 600; line-height: 1.25; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }

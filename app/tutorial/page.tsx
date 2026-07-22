@@ -32,7 +32,9 @@ export default function TutorialPage() {
       <p>
         From the <Link href="/">home page</Link>, use the search bar to look up
         anything — an artist (&ldquo;Vermeer&rdquo;), a subject
-        (&ldquo;sunflowers&rdquo;), or a mood (&ldquo;storm&rdquo;). A few ways to
+        (&ldquo;sunflowers&rdquo;), or a mood (&ldquo;storm&rdquo;). It searches
+        six world museums at once: the Met, the Art Institute of Chicago,
+        Cleveland, the Rijksmuseum, Harvard, and the Smithsonian. A few ways to
         explore:
       </p>
       <ul className="legal-list">
@@ -42,23 +44,33 @@ export default function TutorialPage() {
           them at once.
         </li>
         <li>
-          <strong>Browse by theme &amp; era:</strong> the theme cards and era
-          chips on the home page run curated searches — a fast way to wander.
+          <strong>Browse by theme:</strong> the theme cards on the home page run
+          curated searches — a fast way to wander.
         </li>
         <li>
-          <strong>Open a piece:</strong> tap any artwork to open its placard with
-          the full details, the artist, and a zoomable image.
+          <strong>Today&apos;s collections:</strong> a fresh set of themed shelves,
+          curated automatically every day — a new reason to come back.
+        </li>
+        <li>
+          <strong>Open a piece:</strong> tap any artwork for its placard — full
+          details, a zoomable image, and its own shareable page.
         </li>
       </ul>
+      <p className="tutorial-mobile-note">
+        <strong>On your phone:</strong> the menu, sign-in, and &ldquo;How to
+        use&rdquo; live behind the <strong>☰</strong> button in the top-right.
+      </p>
 
       <h2>3. Saving to collections</h2>
       <p>
-        When you find something you love, hit <strong>Save</strong>. You&apos;ll
-        pick a <strong>collection</strong> to put it in — or create a new one on
-        the spot (&ldquo;Dogs in Art,&rdquo; &ldquo;Moody Landscapes,&rdquo;
-        whatever you like). Collections are your building blocks: everything you
-        save lives in one, and you can make as many as you want. Find them all on
-        your <Link href="/collections">Collections page</Link>.
+        When you find something you love, hit <strong>Save</strong> — on a search
+        card or on a piece&apos;s own page. You&apos;ll pick a{" "}
+        <strong>collection</strong> to put it in, or create a new one on the spot
+        (&ldquo;Dogs in Art,&rdquo; &ldquo;Moody Landscapes,&rdquo; whatever you
+        like). Collections are your building blocks: everything you save lives in
+        one, and you can make as many as you want. Find them all on your{" "}
+        <Link href="/collections">Collections page</Link>. Pieces you&apos;ve
+        already saved show <strong>Saved&nbsp;✓</strong> wherever they appear.
       </p>
 
       <h2>4. Curating your galleries &amp; museum</h2>
@@ -99,8 +111,12 @@ export default function TutorialPage() {
           right) teleports you straight to any gallery.
         </li>
         <li>
-          <strong>Set the mood:</strong> toggle day, night, or rain, flip the
-          lights, and pick background music from the controls in the corner.
+          <strong>Set the mood:</strong> toggle day, night, rain, or snow, flip
+          the lights, and pick background music from the controls in the corner.
+        </li>
+        <li>
+          <strong>Sit down:</strong> walk up to the desk, armchair, or bookshelf
+          in your Library and the reading or writing tools open right there.
         </li>
       </ul>
 
@@ -128,8 +144,9 @@ export default function TutorialPage() {
         </li>
       </ul>
       <p>
-        Inside the 3D museum you can walk up to the desk to write, the armchair to
-        read, or the shelves to browse — sit down and the tool opens right there.
+        Anyone can read the public-domain books for free at{" "}
+        <Link href="/library">the public Library</Link> — no account needed. Sign
+        in to save books, keep your place, and write.
       </p>
 
       <h2>7. What&apos;s public, what&apos;s private</h2>
@@ -140,6 +157,23 @@ export default function TutorialPage() {
         your writing — is <strong>private to you</strong>. Nothing from your
         Library is shared unless a future feature explicitly lets you choose to.
       </p>
+
+      <h2>8. On mobile</h2>
+      <ul className="legal-list">
+        <li>
+          The <strong>☰</strong> menu (top-right) holds sign-in, navigation, and
+          this guide.
+        </li>
+        <li>
+          In the 3D museum, use the <strong>on-screen joystick</strong> to walk
+          and <strong>drag anywhere</strong> to look around; the weather, lights,
+          and music controls sit in the bottom corners.
+        </li>
+        <li>
+          Everything works on a phone — search, saving, galleries, reading, and
+          the 3D museum.
+        </li>
+      </ul>
 
       <h2>A few tips</h2>
       <ul className="legal-list">

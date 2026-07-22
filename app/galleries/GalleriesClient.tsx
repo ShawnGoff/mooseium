@@ -14,15 +14,24 @@ type PublicGallery = {
   handle?: string;
 };
 
-export default function GalleriesClient() {
-  const [galleries, setGalleries] = useState<PublicGallery[] | null>(null);
+export default function GalleriesClient({
+  initialGalleries,
+}: {
+  // Server-rendered so the links are in the HTML for crawlers.
+  initialGalleries?: PublicGallery[];
+}) {
+  const [galleries, setGalleries] = useState<PublicGallery[] | null>(
+    initialGalleries ?? null
+  );
 
   useEffect(() => {
+    // Already server-rendered — no need to refetch.
+    if (initialGalleries) return;
     fetch("/api/public-galleries")
       .then((r) => r.json())
       .then((d) => setGalleries(d.galleries ?? []))
       .catch(() => setGalleries([]));
-  }, []);
+  }, [initialGalleries]);
 
   return (
     <main className="container">

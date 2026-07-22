@@ -35,31 +35,47 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   try {
     const supabase = await createClient();
 
+    // Public galleries, and the curators behind them. We join the owner's
+    // username so we can list ONLY profiles that actually have public work —
+    // empty profiles are thin pages that dilute the sitemap.
     const { data: galleries } = await supabase
       .from("galleries")
-      .select("share_slug, updated_at")
+      .select(
+        "share_slug, updated_at, profiles!galleries_user_id_fkey(username)"
+      )
       .eq("is_public", true)
       .not("share_slug", "is", null)
       .limit(5000);
 
-    for (const g of (galleries as { share_slug: string; updated_at: string | null }[] | null) ?? []) {
+    type GalleryRow = {
+      share_slug: string;
+      updated_at: string | null;
+      profiles: { username: string | null } | null;
+    };
+
+    const curators = new Set<string>();
+    for (const g of (galleries as unknown as GalleryRow[] | null) ?? []) {
       routes.push({
         url: `${SITE_URL}/g/${g.share_slug}`,
         lastModified: g.updated_at ? new Date(g.updated_at) : undefined,
         changeFrequency: "weekly",
         priority: 0.8,
       });
+      const handle = g.profiles?.username;
+      if (handle) curators.add(handle);
     }
 
-    const { data: profiles } = await supabase
-      .from("profiles")
-      .select("username")
-      .not("username", "is", null)
-      .limit(5000);
-
-    for (const p of (profiles as { username: string }[] | null) ?? []) {
+    for (const handle of curators) {
+      // The profile itself…
       routes.push({
-        url: `${SITE_URL}/@${p.username}`,
+        url: `${SITE_URL}/@${handle}`,
+        changeFrequency: "weekly",
+        priority: 0.5,
+      });
+      // …and their walkable 3D museum, which is otherwise only reachable via
+      // an in-page link.
+      routes.push({
+        url: `${SITE_URL}/@${handle}/museum`,
         changeFrequency: "weekly",
         priority: 0.5,
       });

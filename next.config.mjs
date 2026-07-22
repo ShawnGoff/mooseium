@@ -1,3 +1,5 @@
+import { withSentryConfig } from "@sentry/nextjs";
+
 // Security response headers. These are safe defaults that don't break the app.
 // The Content-Security-Policy here is the "safe subset": it hardens against
 // clickjacking, <base>-tag injection, plugins, and form hijacking WITHOUT
@@ -39,4 +41,15 @@ const nextConfig = {
   },
 };
 
-export default nextConfig;
+// Sentry wraps the config to instrument the build and (optionally) upload source
+// maps so stack traces are readable. Everything here degrades safely: with no
+// SENTRY_AUTH_TOKEN it simply skips the upload, and with no DSN the SDK never
+// initialises at all.
+export default withSentryConfig(nextConfig, {
+  org: process.env.SENTRY_ORG,
+  project: process.env.SENTRY_PROJECT,
+  authToken: process.env.SENTRY_AUTH_TOKEN,
+  sourcemaps: { disable: !process.env.SENTRY_AUTH_TOKEN },
+  silent: true,
+  webpack: { treeshake: { removeDebugLogging: true } },
+});

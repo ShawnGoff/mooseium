@@ -316,6 +316,17 @@ a {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* Each themed shelf inside the "Today's collections" group. */
+.daily-shelf {
+  margin-top: 22px;
+}
+.daily-shelf-title {
+  margin: 0 0 2px;
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--text, #ece6da);
+}
+
 /* Slim "Explore our museums" strip (replaced the big monogram tiles). */
 .museum-strip {
   display: flex;

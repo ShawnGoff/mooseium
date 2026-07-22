@@ -727,31 +727,41 @@ export default function HomeClient() {
             </section>
           )}
 
-          {artShelves.map((shelf) => (
-            <section className="home-section" key={shelf.title}>
-              <h2 className="feed-heading">{shelf.title}</h2>
-              <p className="shelf-blurb">{shelf.blurb}</p>
-              <div className="art-shelf-row">
-                {shelf.items.map((c) => (
-                  <button
-                    key={cardKey(c)}
-                    className="art-shelf-card"
-                    onClick={() => setPlacardCard(c)}
-                    title={c.title}
-                  >
-                    {c.thumbnailUrl && (
-                      /* eslint-disable-next-line @next/next/no-img-element */
-                      <img src={c.thumbnailUrl} alt={c.title} loading="lazy" />
-                    )}
-                    <span className="art-shelf-cap">
-                      <span className="art-shelf-title">{c.title}</span>
-                      {c.artist && <span className="art-shelf-artist">{c.artist}</span>}
-                    </span>
-                  </button>
-                ))}
-              </div>
+          {artShelves.length > 0 && (
+            <section className="home-section">
+              <h2 className="feed-heading">Today&apos;s collections</h2>
+              <p className="shelf-blurb">
+                Freshly curated themes — a new set every day.
+              </p>
+              {artShelves.map((shelf) => (
+                <div className="daily-shelf" key={shelf.title}>
+                  <h3 className="daily-shelf-title">{shelf.title}</h3>
+                  <p className="shelf-blurb">{shelf.blurb}</p>
+                  <div className="art-shelf-row">
+                    {shelf.items.map((c) => (
+                      <button
+                        key={cardKey(c)}
+                        className="art-shelf-card"
+                        onClick={() => setPlacardCard(c)}
+                        title={c.title}
+                      >
+                        {c.thumbnailUrl && (
+                          /* eslint-disable-next-line @next/next/no-img-element */
+                          <img src={c.thumbnailUrl} alt={c.title} loading="lazy" />
+                        )}
+                        <span className="art-shelf-cap">
+                          <span className="art-shelf-title">{c.title}</span>
+                          {c.artist && (
+                            <span className="art-shelf-artist">{c.artist}</span>
+                          )}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
             </section>
-          ))}
+          )}
 
           {museums3d.length > 0 && (
             <section className="home-section">

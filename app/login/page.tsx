@@ -31,12 +31,12 @@ export default function LoginPage() {
     }
   }
 
-  async function signInWithGoogle() {
+  async function signInWithProvider(provider: "google" | "facebook") {
     setError(null);
     try {
       const supabase = createClient();
       const { error } = await supabase.auth.signInWithOAuth({
-        provider: "google",
+        provider,
         options: { redirectTo: `${location.origin}/auth/callback` },
       });
       if (error) throw error;
@@ -74,8 +74,19 @@ export default function LoginPage() {
             if you don&apos;t have one, then you&apos;ll pick your <strong>@handle</strong>.
           </p>
 
-          <button className="google-btn" onClick={signInWithGoogle} type="button">
+          <button
+            className="google-btn"
+            onClick={() => signInWithProvider("google")}
+            type="button"
+          >
             Continue with Google
+          </button>
+          <button
+            className="facebook-btn"
+            onClick={() => signInWithProvider("facebook")}
+            type="button"
+          >
+            Continue with Facebook
           </button>
 
           <div className="divider">

@@ -30,7 +30,9 @@ const SI_BASE = "https://api.si.edu/openaccess/api/v1.0";
 //   CHNDM = Cooper Hewitt, Smithsonian Design Museum
 //   HMSG  = Hirshhorn Museum and Sculpture Garden
 //   NMAfA = National Museum of African Art
-const ART_UNITS = "unit_code:(SAAM OR FSG OR NPG OR CHNDM OR HMSG OR NMAfA)";
+//   NMAAHC = National Museum of African American History and Culture
+const ART_UNITS =
+  "unit_code:(SAAM OR FSG OR NPG OR CHNDM OR HMSG OR NMAfA OR NMAAHC)";
 
 interface EdanMedia {
   type?: string;

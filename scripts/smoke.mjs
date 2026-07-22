@@ -81,7 +81,17 @@ const checks = [
   { name: "api/discover-museums", path: "/api/discover-museums", check: jsonOk },
 
   // --- negative checks ---
-  { name: "404 page", path: "/definitely-not-a-real-page-xyz", status: 404 },
+  {
+    // Next streams the shell (loading.tsx) before notFound() runs, so the HTTP
+    // status can commit as 200 — a "soft 404". What actually matters is that
+    // the page isn't indexable and shows the not-found UI, so assert that.
+    name: "404 page (not indexable)",
+    path: "/definitely-not-a-real-page-xyz",
+    statusIn: [404, 200],
+    check: (b) =>
+      (b.includes('name="robots"') && b.includes("noindex")) ||
+      "unknown URL is missing noindex — it could get indexed",
+  },
   {
     name: "img proxy rejects non-museum host",
     path: "/api/img?url=https%3A%2F%2Fexample.com%2Fx.jpg",
@@ -108,9 +118,14 @@ async function run(check) {
     const res = await fetch(url, { signal: ctrl.signal, redirect: "follow" });
     const body = await res.text();
     const ms = Date.now() - started;
-    const wantStatus = check.status ?? 200;
-    if (res.status !== wantStatus) {
-      return { ...check, ok: false, ms, reason: `expected ${wantStatus}, got ${res.status}` };
+    const allowed = check.statusIn ?? [check.status ?? 200];
+    if (!allowed.includes(res.status)) {
+      return {
+        ...check,
+        ok: false,
+        ms,
+        reason: `expected ${allowed.join(" or ")}, got ${res.status}`,
+      };
     }
     if (check.check) {
       let verdict;

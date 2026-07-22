@@ -298,6 +298,13 @@ export default function Placard({
             </div>
 
             <div className="placard-footer">
+              {source && (
+                <p className="placard-source">
+                  <Link href={`/art/${source.museum}/${encodeURIComponent(source.objectId)}`}>
+                    Open full page ↗
+                  </Link>
+                </p>
+              )}
               {(museum || full.sourceUrl) && (
                 <p className="placard-source">
                   {museum}

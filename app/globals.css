@@ -316,6 +316,58 @@ a {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* Single-artwork page (/art/[museum]/[objectId]). */
+.art-page {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+  gap: 32px;
+  align-items: start;
+}
+.art-page-image img {
+  width: 100%;
+  height: auto;
+  border-radius: 10px;
+  background: #14110f;
+}
+.art-page-info h1 {
+  margin: 0 0 4px;
+  line-height: 1.15;
+}
+.art-page-credit {
+  margin: 0 0 16px;
+  color: var(--accent, #e6d3a3);
+  font-size: 15px;
+}
+.art-page-desc {
+  margin: 0 0 18px;
+  line-height: 1.6;
+}
+.art-page-block {
+  margin-top: 20px;
+}
+.art-page-block h2 {
+  font-size: 15px;
+  margin: 0 0 6px;
+}
+.art-page-actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-top: 22px;
+}
+.art-page-note {
+  margin-top: 22px;
+  font-size: 12px;
+  color: var(--muted, #8a8580);
+}
+@media (max-width: 760px) {
+  .art-page {
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+}
+
 /* Each themed shelf inside the "Today's collections" group. */
 .daily-shelf {
   margin-top: 22px;

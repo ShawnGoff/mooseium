@@ -1,6 +1,7 @@
 import type { MetadataRoute } from "next";
 import { isSupabaseConfigured } from "@/lib/supabase/client";
 import { createClient } from "@/lib/supabase/server";
+import { indexableArtworks } from "@/lib/artwork-galleries";
 
 const SITE_URL =
   process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "") || "http://localhost:3000";
@@ -63,6 +64,17 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       });
       const handle = g.profiles?.username;
       if (handle) curators.add(handle);
+    }
+
+    // Artwork pages that have "earned" indexing by appearing in a public
+    // gallery. (Un-curated pieces still render, but stay noindex — see
+    // app/art/[museum]/[objectId]/page.tsx.)
+    for (const a of await indexableArtworks()) {
+      routes.push({
+        url: `${SITE_URL}/art/${a.museum}/${encodeURIComponent(a.objectId)}`,
+        changeFrequency: "monthly",
+        priority: 0.4,
+      });
     }
 
     for (const handle of curators) {

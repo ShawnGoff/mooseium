@@ -868,6 +868,7 @@ export default function HomeClient() {
                 }
               : undefined
           }
+          signedOut={!signedIn}
           onClose={() => setPlacardCard(null)}
         />
       )}

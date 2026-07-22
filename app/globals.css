@@ -891,6 +891,13 @@ a {
   filter: brightness(1.06);
 }
 
+/* Sign-up prompt shown to signed-out viewers where Save would be. */
+.placard-signin {
+  display: inline-block;
+  text-decoration: none;
+  text-align: center;
+}
+
 .placard-main-img {
   flex: 1;
   display: flex;

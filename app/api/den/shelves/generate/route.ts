@@ -141,52 +141,41 @@ async function resolveArt(query: string): Promise<ArtworkCard[]> {
   return merged.slice(0, 12);
 }
 
-async function handle(req: NextRequest) {
-  if (!authorized(req)) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-  const surface =
-    req.nextUrl.searchParams.get("surface") === "museum" ? "museum" : "library";
+type Surface = "library" | "museum";
 
-  // Ask the LLM for themes.
-  let themes: ShelfDef[];
-  try {
-    themes = await generateThemes(surface === "museum" ? MUSEUM_PROMPT : LIBRARY_PROMPT);
-  } catch (e) {
-    return NextResponse.json({ error: (e as Error).message }, { status: 502 });
-  }
-  if (themes.length === 0) {
-    return NextResponse.json({ error: "No usable shelves generated" }, { status: 502 });
-  }
+// Generate and cache one surface's shelves. Throws with a readable message so
+// the caller can report per-surface results.
+async function generateFor(surface: Surface): Promise<number> {
+  const themes = await generateThemes(
+    surface === "museum" ? MUSEUM_PROMPT : LIBRARY_PROMPT
+  );
+  if (themes.length === 0) throw new Error("no usable shelves generated");
 
-  // Build the shelves. Library shelves keep a Gutendex query (resolved in the
-  // browser); museum shelves are resolved to real artworks here and cached.
+  // Library shelves keep a Gutendex query (resolved in the browser); museum
+  // shelves are resolved to real artworks here and cached whole.
   let shelves: unknown[];
   if (surface === "museum") {
     // Keep the homepage uncluttered: at most 3 art shelves.
     const built = await Promise.all(
-      themes.slice(0, 3).map(async (t) => {
-        const items = await resolveArt(t.query);
-        return { title: t.title, blurb: t.blurb, items };
-      })
+      themes.slice(0, 3).map(async (t) => ({
+        title: t.title,
+        blurb: t.blurb,
+        items: await resolveArt(t.query),
+      }))
     );
     shelves = built.filter((s) => s.items.length > 0);
   } else {
     shelves = themes.map((t) => ({
       title: t.title,
       blurb: t.blurb,
-      // Library queries must be a Gutendex topic=/search= form.
       query: /^(topic|search)=/.test(t.query)
         ? t.query
         : `search=${encodeURIComponent(t.query)}`,
     }));
   }
-  if (shelves.length === 0) {
-    return NextResponse.json({ error: "No shelves resolved to results" }, { status: 502 });
-  }
+  if (shelves.length === 0) throw new Error("no shelves resolved to results");
 
   const admin = createAdminClient();
-  // Replace the current global shelves for this surface.
   await admin
     .from("discover_shelves")
     .delete()
@@ -198,10 +187,31 @@ async function handle(req: NextRequest) {
     shelves,
     generated_at: new Date().toISOString(),
   });
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) throw new Error(error.message);
+  return shelves.length;
+}
+
+async function handle(req: NextRequest) {
+  if (!authorized(req)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  return NextResponse.json({ ok: true, surface, count: shelves.length });
+  // No ?surface= (i.e. the daily cron) regenerates BOTH surfaces. Vercel cron
+  // paths can't be relied on to carry a query string, so the schedule hits this
+  // route bare and we do the whole job here.
+  const param = req.nextUrl.searchParams.get("surface");
+  const surfaces: Surface[] =
+    param === "museum" ? ["museum"] : param === "library" ? ["library"] : ["library", "museum"];
+
+  const results: Record<string, number | string> = {};
+  for (const surface of surfaces) {
+    try {
+      results[surface] = await generateFor(surface);
+    } catch (e) {
+      results[surface] = `error: ${(e as Error).message}`;
+    }
+  }
+  const anyOk = Object.values(results).some((v) => typeof v === "number");
+  return NextResponse.json({ ok: anyOk, results }, { status: anyOk ? 200 : 502 });
 }
 
 export const POST = handle;

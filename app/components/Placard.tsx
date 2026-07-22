@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 
 export type PlacardArtwork = {
@@ -48,6 +49,7 @@ export default function Placard({
   note,
   onNoteSaved,
   onSave,
+  signedOut,
   onClose,
 }: {
   artwork: PlacardArtwork;
@@ -57,6 +59,8 @@ export default function Placard({
   note?: string;
   onNoteSaved?: (note: string | undefined) => void;
   onSave?: () => void;
+  /** Signed-out viewer: show a sign-up prompt where Save would be. */
+  signedOut?: boolean;
   onClose: () => void;
 }) {
   const [full, setFull] = useState<PlacardArtwork>(artwork);
@@ -311,6 +315,11 @@ export default function Placard({
                 <button className="placard-save" onClick={onSave}>
                   ＋ Save
                 </button>
+              )}
+              {!onSave && signedOut && (
+                <Link className="placard-save placard-signin" href="/login">
+                  Sign up / Sign in to save
+                </Link>
               )}
             </div>
           </div>

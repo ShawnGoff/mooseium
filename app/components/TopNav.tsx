@@ -31,6 +31,9 @@ export default function TopNav({
         <Link href="/library" className="topbar-link">
           📖 Library
         </Link>
+        <Link href="/tutorial" className="topbar-link topbar-howto">
+          How to use
+        </Link>
       </nav>
     );
   }
@@ -69,6 +72,9 @@ export default function TopNav({
           )}
         </>
       )}
+      <Link href="/tutorial" className="topbar-link topbar-howto">
+        How to use
+      </Link>
     </nav>
   );
 }

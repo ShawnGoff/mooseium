@@ -46,6 +46,7 @@ export default function MobileMenu({
             ) : (
               <Link href="/library">📖 Library</Link>
             )}
+            <Link href="/tutorial">❓ How to use Mooseium</Link>
             <Link href="/museums">Museums</Link>
             {!signedIn && <Link href="/galleries">Galleries</Link>}
             {signedIn && <Link href="/collections">Collections</Link>}

@@ -81,13 +81,6 @@ export default function LoginPage() {
           >
             Continue with Google
           </button>
-          <button
-            className="facebook-btn"
-            onClick={() => signInWithProvider("facebook")}
-            type="button"
-          >
-            Continue with Facebook
-          </button>
 
           <div className="divider">
             <span>or</span>

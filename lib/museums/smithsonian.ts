@@ -31,8 +31,12 @@ const SI_BASE = "https://api.si.edu/openaccess/api/v1.0";
 //   HMSG  = Hirshhorn Museum and Sculpture Garden
 //   NMAfA = National Museum of African Art
 //   NMAAHC = National Museum of African American History and Culture
+//   NMAI  = National Museum of the American Indian
+//   ACM   = Anacostia Community Museum
+// (Deliberately excluded: NMNH/NASM and the archives units, whose specimens and
+// documents would swamp the art with non-visual records.)
 const ART_UNITS =
-  "unit_code:(SAAM OR FSG OR NPG OR CHNDM OR HMSG OR NMAfA OR NMAAHC)";
+  "unit_code:(SAAM OR FSG OR NPG OR CHNDM OR HMSG OR NMAfA OR NMAAHC OR NMAI OR ACM)";
 
 interface EdanMedia {
   type?: string;

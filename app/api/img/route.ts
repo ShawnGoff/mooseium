@@ -33,31 +33,53 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Bad url." }, { status: 400 });
   }
 
-  const load = (u: string) =>
+  const load = (u: string, withReferer: boolean) =>
     fetch(u, {
       headers: {
         "User-Agent":
           "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
         Accept: "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
-        Referer: `${origin}/`,
+        ...(withReferer ? { Referer: `${origin}/` } : {}),
       },
+      redirect: "follow",
       next: { revalidate: 86400 },
     });
 
-  let upstream: Response;
+  // Museum image URLs fail in a few predictable ways, so try progressively
+  // looser variants rather than giving up on the first error:
+  //   1. as stored
+  //   2. IIIF without an explicit size (IIIF refuses to upscale, and plenty of
+  //      Harvard scans are smaller than the width we asked for)
+  //   3. without width/height params (Harvard's NRS/IDS "dynmc" URLs)
+  //   4. without a Referer, in case hotlink protection rejects it
+  const attempts: { url: string; referer: boolean }[] = [{ url: target, referer: true }];
+  const iiifFull = target.replace(/\/full\/[^/]+\//, "/full/full/");
+  if (iiifFull !== target) attempts.push({ url: iiifFull, referer: true });
   try {
-    upstream = await load(target);
-    // IIIF refuses to upscale, so a stored URL asking for a width larger than
-    // the source (common with Harvard scans) fails. Retry once for the full
-    // image so already-saved pieces still render.
-    if (!upstream.ok) {
-      const fallback = target.replace(/\/full\/[^/]+\//, "/full/full/");
-      if (fallback !== target) upstream = await load(fallback);
+    const u = new URL(target);
+    if (u.searchParams.has("width") || u.searchParams.has("height")) {
+      u.searchParams.delete("width");
+      u.searchParams.delete("height");
+      attempts.push({ url: u.toString(), referer: true });
     }
   } catch {
-    return NextResponse.json({ error: "Could not fetch image." }, { status: 502 });
+    /* target already validated above */
   }
-  if (!upstream.ok) {
+  attempts.push({ url: target, referer: false });
+
+  let upstream: Response | null = null;
+  for (const a of attempts) {
+    try {
+      const res = await load(a.url, a.referer);
+      if (res.ok && (res.headers.get("content-type") || "").startsWith("image/")) {
+        upstream = res;
+        break;
+      }
+    } catch {
+      /* try the next variant */
+    }
+  }
+  if (!upstream) {
     return NextResponse.json({ error: "Image unavailable." }, { status: 502 });
   }
 

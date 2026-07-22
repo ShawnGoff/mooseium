@@ -259,6 +259,27 @@ export default function HomeClient() {
       if (isIn) {
         loadCollections();
         loadRecentSaves();
+
+        // Mark pieces already in the user's collections as saved, so search
+        // results reflect it across sessions (not just saves made right now).
+        supabase
+          .from("saved_artworks")
+          .select("artworks(source_museum, museum_object_id)")
+          .eq("user_id", data.user!.id)
+          .limit(2000)
+          .then(({ data: rows }) => {
+            type Row = {
+              artworks: { source_museum: string; museum_object_id: string } | null;
+            };
+            const already: Record<string, SaveState> = {};
+            for (const r of (rows as unknown as Row[] | null) ?? []) {
+              const a = r.artworks;
+              if (a) already[`${a.source_museum}-${a.museum_object_id}`] = "saved";
+            }
+            // Existing state wins — don't clobber a save made this session.
+            setSaveStates((s) => ({ ...already, ...s }));
+          });
+
         const { data: profile } = await supabase
           .from("profiles")
           .select("display_name")

@@ -7,6 +7,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
 import Placard from "@/app/components/Placard";
+import Tour, { type TourStep } from "@/app/components/Tour";
 
 type FilterField = {
   key: string;
@@ -418,6 +419,50 @@ export default function HomeClient() {
     setFilterValues((v) => ({ ...v, [key]: value }));
   }
 
+  // Replay: /tutorial links to /?tour=1 to re-run the tour on demand.
+  const [tourSignal, setTourSignal] = useState(0);
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("tour") === "1") {
+      setTourSignal((n) => n + 1);
+      window.history.replaceState({}, "", "/");
+    }
+  }, []);
+
+  const homeTourSteps: TourStep[] = [
+    {
+      target: '[data-tour="search"]',
+      title: "Search the world's art",
+      body: "Type an artist, a subject, or a mood — we search six great museums at once.",
+    },
+    {
+      target: '[data-tour="museum-select"]',
+      title: "All six, or just one",
+      body: "Search every museum together, or narrow to a single collection.",
+    },
+    {
+      target: '[data-tour="themes"]',
+      title: "Not sure where to start?",
+      body: "These theme cards run curated searches — a fun way to wander.",
+    },
+    {
+      target: '[data-tour="daily"]',
+      title: "Today's collections",
+      body: "A fresh, hand-curated set every day. Come back for new discoveries.",
+    },
+    {
+      // Run a demo search so a real Save button exists to point at.
+      action: () => runChip("sunflowers"),
+      target: '[data-tour="save"]',
+      title: "Save what you love",
+      body: "Tap any piece for details, or hit Save to add it to a collection and build your own museum.",
+    },
+    {
+      target: '[data-tour="howto"]',
+      title: "Anytime you need a hand",
+      body: "The full guide lives up here under “How to use.” Enjoy exploring! 🫎",
+    },
+  ];
+
   function runChip(term: string) {
     setQuery(term);
     doSearch(term, undefined, 1, false);
@@ -480,7 +525,7 @@ export default function HomeClient() {
               {c.objectType}
             </button>
           )}
-          <div className="card-actions">
+          <div className="card-actions" data-tour="save">
             {!signedIn ? (
               <Link href="/login" className="save-btn ghost">
                 Sign in to save
@@ -534,8 +579,9 @@ export default function HomeClient() {
         )}
       </section>
 
-      <form className="searchbar" onSubmit={onSubmit}>
+      <form className="searchbar" onSubmit={onSubmit} data-tour="search">
         <select
+          data-tour="museum-select"
           aria-label="Museum to search"
           value={museum}
           onChange={(e) => changeMuseum(e.target.value)}
@@ -670,7 +716,7 @@ export default function HomeClient() {
         </>
       ) : (
         <>
-          <section className="home-section">
+          <section className="home-section" data-tour="themes">
             <h2 className="feed-heading">Explore by theme</h2>
             <div className="theme-grid">
               {THEMES.map((t) => (
@@ -749,7 +795,7 @@ export default function HomeClient() {
           )}
 
           {artShelves.length > 0 && (
-            <section className="home-section">
+            <section className="home-section" data-tour="daily">
               <h2 className="feed-heading">Today&apos;s collections</h2>
               <p className="shelf-blurb">
                 Freshly curated themes — a new set every day.
@@ -903,6 +949,13 @@ export default function HomeClient() {
           onClose={() => setPlacardCard(null)}
         />
       )}
+
+      <Tour
+        storageKey="mooseium-tour-home"
+        autoStart
+        startSignal={tourSignal}
+        steps={homeTourSteps}
+      />
     </main>
   );
 }

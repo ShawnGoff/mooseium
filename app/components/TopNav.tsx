@@ -31,7 +31,7 @@ export default function TopNav({
         <Link href="/library" className="topbar-link">
           📖 Library
         </Link>
-        <Link href="/tutorial" className="topbar-link topbar-howto">
+        <Link href="/tutorial" className="topbar-link topbar-howto" data-tour="howto">
           How to use
         </Link>
       </nav>

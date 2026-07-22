@@ -316,6 +316,91 @@ a {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* Guided tour (coach marks). */
+.tour-root {
+  position: fixed;
+  inset: 0;
+  z-index: 9000;
+}
+.tour-scrim {
+  position: fixed;
+  inset: 0;
+  background: rgba(8, 7, 6, 0.55);
+}
+.tour-ring {
+  position: fixed;
+  border-radius: 12px;
+  box-shadow: 0 0 0 3px var(--accent, #e6d3a3), 0 0 0 9999px rgba(8, 7, 6, 0.55);
+  pointer-events: none;
+  transition: all 0.2s ease;
+}
+.tour-tip {
+  position: fixed;
+  background: #17140f;
+  color: #f3efe9;
+  border: 1px solid #4a423b;
+  border-radius: 12px;
+  padding: 14px 16px 12px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+  max-width: calc(100vw - 24px);
+}
+.tour-tip-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+.tour-count {
+  font-size: 12px;
+  color: var(--muted, #8a8580);
+}
+.tour-skip {
+  background: none;
+  border: none;
+  color: var(--muted, #8a8580);
+  font-size: 12px;
+  cursor: pointer;
+  text-decoration: underline;
+}
+.tour-tip h3 {
+  margin: 0 0 4px;
+  font-size: 16px;
+}
+.tour-tip p {
+  margin: 0 0 12px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: #d8d2c8;
+}
+.tour-actions {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+.tour-back {
+  background: none;
+  border: 1px solid #4a423b;
+  color: #f3efe9;
+  border-radius: 8px;
+  padding: 6px 14px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.tour-back:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.tour-next {
+  background: var(--accent, #e6d3a3);
+  color: #1c160c;
+  border: none;
+  border-radius: 8px;
+  padding: 6px 18px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
 /* "Add this to your museum" control on an artwork page. */
 .art-save-wrap {
   display: flex;

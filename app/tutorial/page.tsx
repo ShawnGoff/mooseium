@@ -189,8 +189,13 @@ export default function TutorialPage() {
       </ul>
 
       <p className="credits-outro">
-        That&apos;s it — go build something beautiful. Questions? Our{" "}
-        <Link href="/contact">Contact</Link> page is always open. 🫎
+        That&apos;s it — go build something beautiful. Want the quick walkthrough
+        again?{" "}
+        <Link href="/?tour=1" className="text-link">
+          Replay the tour
+        </Link>
+        . Questions? Our <Link href="/contact">Contact</Link> page is always open.
+        🫎
       </p>
     </main>
   );

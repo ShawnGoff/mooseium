@@ -26,6 +26,33 @@ import {
   type GalleryPiece,
   type Constrain,
 } from "../gallery3d";
+import Tour, { type TourStep } from "@/app/components/Tour";
+
+const MUSEUM_TOUR_STEPS: TourStep[] = [
+  {
+    title: "Walk around",
+    body: "Use WASD or the on-screen joystick to move, and drag anywhere to look around.",
+  },
+  {
+    target: '[data-tour="directory"]',
+    title: "Jump anywhere",
+    body: "The Directory teleports you straight to any gallery or wing.",
+  },
+  {
+    target: '[data-tour="weather"]',
+    title: "Set the mood",
+    body: "Toggle day, night, rain, or snow, and flip the lights.",
+  },
+  {
+    target: '[data-tour="music"]',
+    title: "Add a soundtrack",
+    body: "Pick background music to score your visit.",
+  },
+  {
+    title: "Look closer",
+    body: "Walk up to any artwork and click it for the full details. Enjoy your museum! 🫎",
+  },
+];
 
 type Collection = { name: string; slug: string; count: number };
 type Wing = { name: string; collections: Collection[]; isDefault?: boolean };
@@ -1652,7 +1679,11 @@ function Directory({ nav, onPick, onHome }: { nav: Nav[]; onPick: (i: number) =>
   const [open, setOpen] = useState(false);
   return (
     <div style={{ position: "absolute", top: 14, right: 14, textAlign: "right" }}>
-      <button onClick={() => setOpen((o) => !o)} style={dirBtnStyle}>
+      <button
+        onClick={() => setOpen((o) => !o)}
+        style={dirBtnStyle}
+        data-tour="directory"
+      >
         Directory {open ? "▴" : "▾"}
       </button>
       {open && (
@@ -2070,6 +2101,10 @@ export default function Museum3D({
 
       {isTouch && view === "ready" && <JoystickPad joyRef={joyRef} />}
 
+      {view === "ready" && (
+        <Tour storageKey="mooseium-tour-3d" autoStart steps={MUSEUM_TOUR_STEPS} />
+      )}
+
       {view === "ready" && station && (
         <button onClick={enterStation} style={stationPromptStyle}>
           {station.label}
@@ -2085,6 +2120,7 @@ export default function Museum3D({
 
       {view === "ready" && (
         <div
+          data-tour="music"
           style={{
             ...musicRowStyle,
             bottom: isTouch ? "calc(env(safe-area-inset-bottom, 0px) + 20px)" : 14,
@@ -2123,14 +2159,21 @@ export default function Museum3D({
             {musicOn ? "🔊 Music on" : "🔈 Music off"}
           </button>
           {/* Phones: weather sits in this right-side column, below the music. */}
-          {isOwner && isTouch && <div style={skyToggleStyle}>{weatherButtons}</div>}
+          {isOwner && isTouch && (
+            <div data-tour="weather" style={skyToggleStyle}>
+              {weatherButtons}
+            </div>
+          )}
         </div>
       )}
 
       {/* Desktop: weather bottom-left, lifted to align with the middle of the
           music control stack on the right. */}
       {view === "ready" && isOwner && !isTouch && (
-        <div style={{ ...skyToggleStyle, position: "absolute", bottom: 44, left: 14 }}>
+        <div
+          data-tour="weather"
+          style={{ ...skyToggleStyle, position: "absolute", bottom: 44, left: 14 }}
+        >
           {weatherButtons}
         </div>
       )}

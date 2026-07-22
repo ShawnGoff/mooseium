@@ -5,7 +5,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAdapter } from "@/lib/museums";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { decodeEntities } from "@/lib/util/text";
+import { cleanProse, decodeEntities } from "@/lib/util/text";
 
 export async function GET(req: NextRequest) {
   const limited = await checkRateLimit(req, "artwork", 90, 60_000);
@@ -36,17 +36,17 @@ export async function GET(req: NextRequest) {
         culture: decodeEntities(art.culture),
         dimensions: decodeEntities(art.dimensions),
         objectType: decodeEntities(art.objectType),
-        description: decodeEntities(art.description),
+        description: cleanProse(art.description),
         creditLine: decodeEntities(art.creditLine),
         license: art.rights.license,
         details: (art.details ?? []).map((d) => ({
           label: decodeEntities(d.label),
-          value: decodeEntities(d.value),
+          value: cleanProse(d.value),
         })),
-        provenance: decodeEntities(art.provenance),
-        funFact: decodeEntities(art.funFact),
-        artistBio: decodeEntities(art.artistBio),
-        exhibitions: (art.exhibitions ?? []).map((e) => decodeEntities(e)),
+        provenance: cleanProse(art.provenance),
+        funFact: cleanProse(art.funFact),
+        artistBio: cleanProse(art.artistBio),
+        exhibitions: (art.exhibitions ?? []).map((e) => cleanProse(e)),
         onView: decodeEntities(art.onView),
         additionalImages: art.additionalImages ?? [],
         tags: art.tags,

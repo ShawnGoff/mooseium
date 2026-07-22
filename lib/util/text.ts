@@ -25,3 +25,21 @@ export function decodeEntities<T extends string | null | undefined>(value: T): T
   if (typeof value !== "string") return value;
   return decodeOnce(decodeOnce(value)) as T;
 }
+
+/**
+ * Strip HTML tags some museum feeds leave in prose fields, so descriptions
+ * don't render as literal "<em>Two Poplars</em>". Collapses the double spaces
+ * a removed tag can leave behind, but preserves line breaks.
+ */
+export function stripHtml<T extends string | null | undefined>(value: T): T {
+  if (typeof value !== "string") return value;
+  return value
+    .replace(/<\/?[^>]+>/g, "")
+    .replace(/[ \t]{2,}/g, " ")
+    .trim() as T;
+}
+
+/** For prose fields: decode entities first (so "&lt;em&gt;" becomes a real tag), then strip. */
+export function cleanProse<T extends string | null | undefined>(value: T): T {
+  return stripHtml(decodeEntities(value));
+}

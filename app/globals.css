@@ -484,6 +484,44 @@ a {
   font-weight: 600;
 }
 
+/* Share row (artwork + gallery pages). */
+.share-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 22px;
+}
+.share-label {
+  font-size: 13px;
+  color: var(--muted, #8a8580);
+  margin-right: 2px;
+}
+.share-btn {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 14px;
+  border: 1px solid var(--border, #2a2622);
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text, #ece6da);
+  background: rgba(255, 255, 255, 0.03);
+  text-decoration: none;
+  cursor: pointer;
+}
+.share-btn:hover {
+  border-color: var(--accent, #e6d3a3);
+}
+.share-pin:hover {
+  border-color: #e60023;
+  color: #ff5a6e;
+}
+.share-fb:hover {
+  border-color: #1877f2;
+  color: #4a9bff;
+}
+
 /* Single-artwork page (/art/[museum]/[objectId]). */
 .art-page {
   display: grid;

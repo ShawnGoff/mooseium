@@ -15,6 +15,10 @@ import { cleanProse, decodeEntities } from "@/lib/util/text";
 import { galleriesContaining } from "@/lib/artwork-galleries";
 import { safeJsonLd } from "@/lib/jsonld";
 import AddToMuseum from "./AddToMuseum";
+import ShareButtons from "@/app/components/ShareButtons";
+
+const SITE_URL =
+  process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "") || "http://localhost:3000";
 
 // Museum records barely change; cache hard and refresh weekly.
 export const revalidate = 604800;
@@ -196,6 +200,12 @@ export default async function ArtworkPage({
               </a>
             )}
           </div>
+
+          <ShareButtons
+            url={`${SITE_URL}/art/${museum}/${objectId}`}
+            title={artist ? `${title} by ${artist} · Mooseium` : `${title} · Mooseium`}
+            image={image || undefined}
+          />
 
           <p className="art-page-note">
             Open-access artwork courtesy of {museumName}. Mooseium is not

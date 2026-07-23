@@ -103,8 +103,9 @@ export default function TutorialPage() {
       </p>
       <ul className="legal-list">
         <li>
-          <strong>Move:</strong> WASD keys (or the on-screen joystick on a phone)
-          to walk; drag to look around.
+          <strong>Move:</strong> <strong>WASD keys</strong> on desktop or the{" "}
+          <strong>on-screen joystick</strong> on mobile to walk; drag to look
+          around.
         </li>
         <li>
           <strong>Jump anywhere:</strong> the <strong>Directory</strong> (top
@@ -165,9 +166,10 @@ export default function TutorialPage() {
           this guide.
         </li>
         <li>
-          In the 3D museum, use the <strong>on-screen joystick</strong> to walk
-          and <strong>drag anywhere</strong> to look around; the weather, lights,
-          and music controls sit in the bottom corners.
+          In the 3D museum, walk with <strong>WASD keys</strong> on desktop or
+          the <strong>on-screen joystick</strong> on mobile, and{" "}
+          <strong>drag anywhere</strong> to look around; the weather, lights, and
+          music controls sit in the bottom corners.
         </li>
         <li>
           Everything works on a phone — search, saving, galleries, reading, and

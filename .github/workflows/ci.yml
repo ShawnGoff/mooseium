@@ -1,0 +1,42 @@
+name: CI
+
+# Two safety nets:
+#   • type-check every push and PR (the gate that was manual until now)
+#   • smoke-test the LIVE site daily and on-demand (read-only; never writes data)
+#
+# Lint is intentionally omitted: ESLint isn't configured in this repo and
+# `next lint` is deprecated. Add a `lint` job here once ESLint is set up.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch: # lets you run the smoke test manually after a deploy
+  schedule:
+    - cron: "0 13 * * *" # daily production smoke test, 13:00 UTC
+
+jobs:
+  typecheck:
+    name: Type-check
+    if: github.event_name == 'push' || github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+
+  smoke:
+    name: Smoke test (production)
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Hit every key page and API on mooseium.com
+        run: node scripts/smoke.mjs https://www.mooseium.com

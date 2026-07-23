@@ -32,7 +32,7 @@ const SUBJECTS: { name: string; coverId: number }[] = [
   { name: "Fiction", coverId: 2701 }, // Moby Dick
   { name: "Poetry", coverId: 1322 }, // Leaves of Grass
   { name: "Philosophy", coverId: 2680 }, // Meditations
-  { name: "History", coverId: 1404 }, // The Federalist Papers
+  { name: "History", coverId: 98 }, // A Tale of Two Cities
   { name: "Adventure", coverId: 120 }, // Treasure Island
   { name: "Science Fiction", coverId: 36 }, // The War of the Worlds
   { name: "Drama", coverId: 1513 }, // Romeo and Juliet
@@ -43,22 +43,22 @@ const SUBJECTS: { name: string; coverId: number }[] = [
   { name: "Romance", coverId: 1342 }, // Pride and Prejudice
   { name: "Fantasy", coverId: 16 }, // Peter Pan
   { name: "Horror", coverId: 345 }, // Dracula
-  { name: "Fairy Tales", coverId: 2591 }, // Grimms' Fairy Tales
+  { name: "Fairy Tales", coverId: 55 }, // The Wonderful Wizard of Oz
   { name: "Travel", coverId: 103 }, // Around the World in Eighty Days
   { name: "Nature", coverId: 205 }, // Walden
   { name: "Humor", coverId: 308 }, // Three Men in a Boat
   { name: "Myths & Legends", coverId: 1727 }, // The Odyssey
   { name: "Gothic", coverId: 84 }, // Frankenstein
-  { name: "Detective", coverId: 244 }, // A Study in Scarlet
+  { name: "Detective", coverId: 2852 }, // The Hound of the Baskervilles
   { name: "War", coverId: 2600 }, // War and Peace
-  { name: "Sea Stories", coverId: 164 }, // Twenty Thousand Leagues Under the Sea
-  { name: "Ancient World", coverId: 6130 }, // The Iliad
+  { name: "Sea Stories", coverId: 521 }, // Robinson Crusoe
+  { name: "Ancient World", coverId: 2145 }, // Ben-Hur: A Tale of the Christ
   { name: "Ghost Stories", coverId: 43 }, // Dr. Jekyll and Mr. Hyde
   { name: "Satire", coverId: 829 }, // Gulliver's Travels
   { name: "Essays", coverId: 3600 }, // Essays of Montaigne
   { name: "Economics", coverId: 3300 }, // The Wealth of Nations
   { name: "Classics", coverId: 1400 }, // Great Expectations
-  { name: "Westerns", coverId: 978 }, // The Virginian
+  { name: "Westerns", coverId: 940 }, // The Last of the Mohicans
 ];
 const subjectCover = (id: number) =>
   `https://www.gutenberg.org/cache/epub/${id}/pg${id}.cover.medium.jpg`;

@@ -104,7 +104,13 @@ const SHORT_MUSEUM: Record<string, string> = {
   vam: "Victoria & Albert",
 };
 
-export default function HomeClient() {
+type HeroCard = ArtworkCard & { heroImage: string; museumLabel: string };
+
+export default function HomeClient({
+  initialHero,
+}: {
+  initialHero?: HeroCard | null;
+}) {
   const [museums, setMuseums] = useState<Museum[]>([]);
   const [museum, setMuseum] = useState<string>("all");
   const [query, setQuery] = useState<string>("");
@@ -133,9 +139,7 @@ export default function HomeClient() {
   >([]);
   const [themePreviews, setThemePreviews] = useState<Record<string, string>>({});
   const [displayName, setDisplayName] = useState<string>("");
-  const [hero, setHero] = useState<
-    (ArtworkCard & { heroImage: string; museumLabel: string }) | null
-  >(null);
+  const [hero, setHero] = useState<HeroCard | null>(initialHero ?? null);
 
   const [signedIn, setSignedIn] = useState<boolean>(false);
   const [collections, setCollections] = useState<Collection[]>([]);
@@ -191,6 +195,7 @@ export default function HomeClient() {
   // is always valid, then loaded at hero resolution and made clickable. Tries
   // the whole pool from a random offset until one resolves.
   useEffect(() => {
+    if (initialHero) return; // already resolved on the server
     let cancelled = false;
     const start = Math.floor(Math.random() * HERO_POOL.length);
     (async () => {
@@ -224,7 +229,8 @@ export default function HomeClient() {
     return () => {
       cancelled = true;
     };
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialHero]);
 
   // Theme-card images: one representative thumbnail per theme, fetched live so
   // we never ship stock/owned imagery. Fills in progressively.
@@ -596,7 +602,12 @@ export default function HomeClient() {
             title="View details"
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={hero.heroImage} alt={hero.title} loading="eager" />
+            <img
+              src={hero.heroImage}
+              alt={hero.title}
+              loading="eager"
+              fetchPriority="high"
+            />
             <figcaption className="hero-caption">
               {hero.artist ? `${hero.artist}, ` : ""}
               <em>{hero.title}</em>

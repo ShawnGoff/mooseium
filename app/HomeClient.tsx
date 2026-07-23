@@ -579,7 +579,7 @@ export default function HomeClient() {
             collection.
           </p>
         </div>
-        {hero && (
+        {hero ? (
           <figure
             className="hero-media"
             data-tour="piece"
@@ -603,6 +603,9 @@ export default function HomeClient() {
               {hero.dateText ? ` · ${hero.dateText}` : ""} · {hero.museumLabel}
             </figcaption>
           </figure>
+        ) : (
+          // Reserve the hero's space before it loads so nothing shifts (CLS).
+          <div className="hero-media hero-media-ph" aria-hidden />
         )}
       </section>
 

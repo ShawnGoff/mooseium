@@ -2061,6 +2061,14 @@ a {
   border: 1px solid var(--border);
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
   cursor: pointer;
+  /* Reserve a stable size before the image resolves so it can't push the page
+     down when it appears (fixes CLS). */
+  aspect-ratio: 3 / 2;
+  max-height: 360px;
+}
+.hero-media-ph {
+  cursor: default;
+  background: linear-gradient(135deg, var(--surface, #1a1712), var(--surface-2, #221d17));
 }
 .hero-media:hover {
   border-color: var(--accent);

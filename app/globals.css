@@ -1100,8 +1100,21 @@ a {
   padding-top: 16px;
   border-top: 1px solid var(--border);
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 12px;
+  gap: 10px 14px;
+}
+/* Museum credit takes its own full-width line so the two buttons sit cleanly
+   side by side beneath it (no cramped three-in-a-row wrapping). */
+.placard-footer .placard-source {
+  flex-basis: 100%;
+  order: -1;
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+.placard-footer .placard-save {
+  margin-left: auto;
 }
 
 .placard-save {

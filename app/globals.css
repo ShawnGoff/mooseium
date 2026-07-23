@@ -354,13 +354,31 @@ a {
 }
 .tour-tip {
   position: fixed;
-  background: #17140f;
+  background:
+    linear-gradient(#17140f, #17140f) padding-box,
+    linear-gradient(135deg, var(--accent, #e6d3a3), #6a5a3a 55%, var(--accent, #e6d3a3)) border-box;
   color: #f3efe9;
-  border: 1px solid #4a423b;
-  border-radius: 12px;
-  padding: 14px 16px 12px;
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+  border: 2px solid transparent;
+  border-radius: 14px;
+  padding: 16px 18px 14px;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.55), 0 0 0 4px rgba(230, 211, 163, 0.08);
   max-width: calc(100vw - 24px);
+}
+/* The opt-in welcome card reads as a proper dialog — a touch bigger + centered. */
+.tour-welcome {
+  padding: 22px 24px 18px;
+  text-align: center;
+}
+.tour-welcome h3 {
+  font-size: 20px;
+}
+.tour-welcome p {
+  font-size: 15px;
+}
+.tour-welcome .tour-actions {
+  justify-content: center;
+  gap: 14px;
+  margin-top: 6px;
 }
 .tour-tip-head {
   display: flex;

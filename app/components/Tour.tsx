@@ -205,7 +205,7 @@ export default function Tour({
             top: "50%",
             left: "50%",
             transform: "translate(-50%, -50%)",
-            width: Math.min(380, window.innerWidth - 24),
+            width: Math.min(440, window.innerWidth - 24),
           }}
         >
           <h3>{welcome.title}</h3>
@@ -233,7 +233,7 @@ export default function Tour({
   // when there's no target.
   const vw = window.innerWidth;
   const vh = window.innerHeight;
-  const width = Math.min(340, vw - 24);
+  const width = Math.min(vw >= 640 ? 400 : 340, vw - 24);
   const maxHeight = vh - 24;
   let tipStyle: React.CSSProperties;
   if (rect) {

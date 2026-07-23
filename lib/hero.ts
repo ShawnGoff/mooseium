@@ -50,8 +50,10 @@ async function resolveHero(): Promise<Hero | null> {
       const card = res.cards.find((c) => c.thumbnailUrl) ?? res.cards[0];
       if (!card) continue;
       const art = await adapter.getObject(card.museumObjectId);
+      // ~800px is plenty for the capped hero display and downloads far faster
+      // than the full-res original (helps LCP, especially on mobile).
       const img =
-        adapter.getImageUrl(art, 1200) || art.sourceImageUrl || card.thumbnailUrl;
+        adapter.getImageUrl(art, 800) || art.sourceImageUrl || card.thumbnailUrl;
       if (!img) continue;
       return {
         sourceMuseum: entry.museum,

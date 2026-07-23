@@ -92,6 +92,14 @@ type GalleryBuild = {
 };
 type Nav = { wing: string; name: string; spawn: [number, number, number]; yaw: number };
 type Hint = { pos: [number, number, number]; rot: [number, number, number] };
+// A stable spot a curator can hang a free-standing painting (in-museum editor):
+// atrium walls + every wing's walls. Generated from room geometry so the DB only
+// ever stores an opaque slotKey, never coordinates.
+type WallAnchor = {
+  slotKey: string;
+  position: [number, number, number];
+  rotation: [number, number, number];
+};
 type Layout = {
   rooms: Room[];
   walk: AABB[];
@@ -100,6 +108,7 @@ type Layout = {
   lights: [number, number][];
   nav: Nav[];
   hints: Hint[];
+  wallAnchors: WallAnchor[];
 };
 
 // Roman inscriptional serif for the signage — the lettering carved over real
@@ -203,49 +212,20 @@ type WallPlacement = {
   piece: GalleryPiece;
 };
 
-// Turn an opaque slot_key into a world anchor, so the DB never stores
-// coordinates and the scheme can grow without a migration. First set: atrium
-// walls, two slots each ("atrium:<side>:<0|1>"), flanking the central doorway.
-const ATRIUM_ART_OFFSETS = [-3.2, 3.2];
-function placementAnchor(
-  slotKey: string
-): { position: [number, number, number]; rotation: [number, number, number] } | null {
-  const [zone, sideStr, idxStr] = slotKey.split(":");
-  if (zone === "atrium") {
-    const side = sideStr as Side;
-    if (!["N", "S", "E", "W"].includes(side)) return null;
-    const c = ATRIUM_ART_OFFSETS[Number(idxStr)];
-    if (c === undefined) return null;
-    const y = ART_Y;
-    const position: [number, number, number] =
-      side === "N"
-        ? [c, y, -A + 0.12]
-        : side === "S"
-        ? [c, y, A - 0.12]
-        : side === "W"
-        ? [-A + 0.12, y, c]
-        : [A - 0.12, y, c];
-    return { position, rotation: faceRot(side) };
-  }
-  return null;
-}
-
-// Every atrium wall slot (empty ones become clickable hotspots in edit mode).
-const ATRIUM_SLOT_KEYS: string[] = (["N", "E", "S", "W"] as Side[]).flatMap((s) =>
-  ATRIUM_ART_OFFSETS.map((_, i) => `atrium:${s}:${i}`)
-);
+// Two flanking painting spots per wall (they clear the centred doorway). Anchor
+// positions are computed from room geometry in buildLayout and carried on the
+// layout; the DB only ever stores the opaque slotKey.
+const WALL_ART_OFFSETS = [-3.2, 3.2];
 
 // A clickable "+" marker at an empty wall anchor. Owner-only (only rendered
 // while editing). Clicking opens the art picker for that slot.
-function Hotspot({ slotKey, onPick }: { slotKey: string; onPick: (k: string) => void }) {
-  const a = placementAnchor(slotKey);
-  if (!a) return null;
+function Hotspot({ anchor, onPick }: { anchor: WallAnchor; onPick: (k: string) => void }) {
   return (
-    <group position={a.position} rotation={a.rotation}>
+    <group position={anchor.position} rotation={anchor.rotation}>
       <mesh
         onClick={(e) => {
           e.stopPropagation();
-          onPick(slotKey);
+          onPick(anchor.slotKey);
         }}
       >
         <planeGeometry args={[1.7, 1.3]} />
@@ -460,9 +440,37 @@ function buildMuseum(m: Museum): Layout {
     else hints.push({ pos: [A - 0.06, y, 0], rot: [0, -Math.PI / 2, 0] });
   });
 
+  // Editor wall anchors: two flanking spots on each wall of the atrium and of
+  // every wing. Keyed by a stable prefix so placements survive across sessions.
+  const wallAnchors: WallAnchor[] = [];
+  const addWallAnchors = (prefix: string, rect: AABB, s: Side) => {
+    const cx = ctrX(rect);
+    const cz = ctrZ(rect);
+    WALL_ART_OFFSETS.forEach((off, i) => {
+      const position: [number, number, number] =
+        s === "N"
+          ? [cx + off, ART_Y, rect.z0 + 0.12]
+          : s === "S"
+          ? [cx + off, ART_Y, rect.z1 - 0.12]
+          : s === "W"
+          ? [rect.x0 + 0.12, ART_Y, cz + off]
+          : [rect.x1 - 0.12, ART_Y, cz + off];
+      wallAnchors.push({ slotKey: `${prefix}:${s}:${i}`, position, rotation: faceRot(s) });
+    });
+  };
+  (["N", "S", "E", "W"] as Side[]).forEach((s) => addWallAnchors("atrium", atrium.rect, s));
+
   placements.forEach(({ wing, side }) => {
     const wingRoom = connect(rooms, walk, atrium, side, ATR_WING_CORR, WING_HALF);
     lights.push([ctrX(wingRoom.rect), ctrZ(wingRoom.rect)]);
+
+    // Wing walls get anchors too, keyed by a stable slug of the wing name.
+    const wingKey = wing.isDefault
+      ? "main"
+      : wing.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") || "wing";
+    (["N", "S", "E", "W"] as Side[]).forEach((s) =>
+      addWallAnchors(`wing:${wingKey}`, wingRoom.rect, s)
+    );
 
     // wing name above its atrium door, facing the atrium interior
     const wl =
@@ -534,7 +542,7 @@ function buildMuseum(m: Museum): Layout {
     });
   });
 
-  return { rooms, walk, labels, galleries, lights, nav, hints };
+  return { rooms, walk, labels, galleries, lights, nav, hints, wallAnchors };
 }
 
 // Distribute a collection's pieces across the three non-doorway walls of a
@@ -1773,6 +1781,10 @@ function Scene({
   denName: string;
   onSelect: (p: Piece) => void;
 }) {
+  const anchorMap = useMemo(
+    () => new Map(layout.wallAnchors.map((a) => [a.slotKey, a] as const)),
+    [layout.wallAnchors]
+  );
   return (
     <>
       {/* Sky-vs-floor gradient (cool top, warm bounce) replaces flat ambient */}
@@ -1898,7 +1910,7 @@ function Scene({
       )}
 
       {placements.map((pl) => {
-        const a = placementAnchor(pl.slotKey);
+        const a = anchorMap.get(pl.slotKey);
         if (!a || !pl.piece.image) return null;
         return (
           <ProxyArtwork
@@ -1912,9 +1924,9 @@ function Scene({
       })}
 
       {editing &&
-        ATRIUM_SLOT_KEYS.filter(
-          (k) => !placements.some((p) => p.slotKey === k)
-        ).map((k) => <Hotspot key={k} slotKey={k} onPick={onPick} />)}
+        layout.wallAnchors
+          .filter((a) => !placements.some((p) => p.slotKey === a.slotKey))
+          .map((a) => <Hotspot key={a.slotKey} anchor={a} onPick={onPick} />)}
     </>
   );
 }

@@ -415,7 +415,8 @@ export default function DenDiscover({
         >
           {r.title}
         </div>
-        {r.author && <div className="den-card-sub">{r.author}</div>}
+        {/* Always rendered (even empty) so cards keep a uniform height. */}
+        <div className="den-card-sub">{r.author ?? ""}</div>
         <button
           className={`den-save-btn${saved ? " saved" : ""}`}
           onClick={() => save(r)}

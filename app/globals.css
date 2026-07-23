@@ -3073,7 +3073,14 @@ a {
 }
 .den-doc-page { background: linear-gradient(160deg, #efe9dd, #d9d0bf); color: #4a4132; }
 .den-card-title { font-size: 0.9rem; font-weight: 600; line-height: 1.25; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
-.den-card-sub { font-size: 0.78rem; opacity: 0.6; margin-top: 2px; }
+/* Reserve 2 lines for the title and 1 for the author so every card's text block
+   is the same height — keeps the Save buttons on a single line across a row. */
+.den-discover .den-card-title { min-height: 2.5em; }
+.den-card-sub {
+  font-size: 0.78rem; opacity: 0.6; margin-top: 2px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.den-discover .den-card-sub { min-height: 1.15em; }
 @media (max-width: 640px) {
   .den2 { flex-direction: column; }
   .den-sidebar { flex-basis: auto; width: 100%; }

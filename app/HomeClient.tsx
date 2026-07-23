@@ -459,7 +459,11 @@ export default function HomeClient() {
     {
       target: '[data-tour="howto"]',
       title: "Anytime you need a hand",
-      body: "The full guide lives up here under “How to use.” Enjoy exploring! 🫎",
+      body: "The full guide lives under “How to use” — in the top nav, or the ☰ menu on your phone.",
+    },
+    {
+      title: "That's the tour!",
+      body: "Go find something you love and start building your museum. Enjoy exploring! 🫎",
     },
   ];
 
@@ -716,8 +720,8 @@ export default function HomeClient() {
         </>
       ) : (
         <>
-          <section className="home-section" data-tour="themes">
-            <h2 className="feed-heading">Explore by theme</h2>
+          <section className="home-section">
+            <h2 className="feed-heading" data-tour="themes">Explore by theme</h2>
             <div className="theme-grid">
               {THEMES.map((t) => (
                 <button

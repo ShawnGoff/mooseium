@@ -215,22 +215,34 @@ export default function Tour({
 
   // Tooltip placement: below the target if there's room, else above; centered
   // when there's no target.
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  const width = Math.min(340, vw - 24);
+  const maxHeight = vh - 24;
   let tipStyle: React.CSSProperties;
   if (rect) {
-    const below = rect.top + rect.height + 12;
-    const room = window.innerHeight - below > 200;
-    const width = Math.min(340, window.innerWidth - 24);
     let left = rect.left + rect.width / 2 - width / 2;
-    left = Math.max(12, Math.min(left, window.innerWidth - width - 12));
-    tipStyle = room
-      ? { top: below, left, width }
-      : { bottom: window.innerHeight - rect.top + 12, left, width };
+    left = Math.max(12, Math.min(left, vw - width - 12));
+    // Prefer below the target; if the target sits in the lower half (or is very
+    // tall), anchor above its top instead. Both are clamped so the card can't
+    // run off the top or bottom of the screen.
+    const below = rect.top + rect.height + 12;
+    const spaceBelow = vh - below;
+    if (spaceBelow > 180 || rect.top > vh * 0.55) {
+      const top = Math.min(Math.max(12, below), vh - 120);
+      tipStyle = { top, left, width, maxHeight, overflowY: "auto" };
+    } else {
+      const bottom = Math.min(Math.max(12, vh - rect.top + 12), vh - 120);
+      tipStyle = { bottom, left, width, maxHeight, overflowY: "auto" };
+    }
   } else {
     tipStyle = {
       top: "50%",
       left: "50%",
       transform: "translate(-50%, -50%)",
-      width: Math.min(340, window.innerWidth - 24),
+      width,
+      maxHeight,
+      overflowY: "auto",
     };
   }
 

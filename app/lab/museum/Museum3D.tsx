@@ -256,9 +256,11 @@ type PickCard = {
 function ArtPicker({
   onClose,
   onPlace,
+  title = "Place art on this wall",
 }: {
   onClose: () => void;
   onPlace: (art: { source: string; externalId: string; title: string; image: string }) => void;
+  title?: string;
 }) {
   const [q, setQ] = useState("");
   const [cards, setCards] = useState<PickCard[] | null>(null);
@@ -311,7 +313,7 @@ function ArtPicker({
       }}
     >
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <strong>Place art on this wall</strong>
+        <strong>{title}</strong>
         <button
           onClick={onClose}
           style={{ background: "transparent", border: "none", color: "#ece0c8", cursor: "pointer", fontSize: 16 }}
@@ -1978,6 +1980,11 @@ export default function Museum3D({
   // and art picker are added in the next (supervised) pass.
   const [editing, setEditing] = useState(false);
   const [editTarget, setEditTarget] = useState<string | null>(null);
+  // When set, the picker adds the chosen piece to this gallery's COLLECTION
+  // (which syncs to the 2D gallery and auto-hangs in 3D) rather than free-placing.
+  const [collectionTarget, setCollectionTarget] = useState<{ id: string; name: string } | null>(
+    null
+  );
 
   // Optimistically clear a slot, then tell the server (RLS enforces ownership).
   async function removePlacement(slotKey: string) {
@@ -1988,6 +1995,74 @@ export default function Museum3D({
       });
     } catch {
       /* best-effort; a reload reconciles */
+    }
+  }
+
+  function resolveHandle(): string | null {
+    return (
+      handle ??
+      (typeof window !== "undefined"
+        ? new URLSearchParams(window.location.search).get("u")
+        : null)
+    );
+  }
+
+  // Refetch the museum so a newly created/curated gallery appears + auto-hangs.
+  async function reloadMuseum() {
+    const h = resolveHandle();
+    if (!h) return;
+    try {
+      const d = await fetch(`/api/museum?u=${encodeURIComponent(h)}`).then((r) => r.json());
+      const m = d.museum as Museum | null;
+      if (m && Array.isArray(m.wings)) setMuseum(m);
+    } catch {
+      /* keep current */
+    }
+  }
+
+  // Create + publish a gallery from inside the museum, then open the picker to
+  // add its first piece (an empty gallery wouldn't render until it has art).
+  async function createGallery() {
+    const name = window.prompt("Name your new gallery")?.trim();
+    if (!name) return;
+    try {
+      const c = await fetch("/api/collections", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name }),
+      }).then((r) => r.json());
+      if (!c?.id) return;
+      await fetch(`/api/collections/${c.id}/share`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ public: true }),
+      });
+      setCollectionTarget({ id: c.id, name });
+    } catch {
+      /* ignore; nothing created client-side to roll back */
+    }
+  }
+
+  // Add the chosen piece to a gallery's collection, then rebuild the museum.
+  async function addToCollection(
+    collectionId: string,
+    art: { source: string; externalId: string }
+  ) {
+    setCollectionTarget(null);
+    try {
+      await fetch("/api/save", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          museum: art.source,
+          objectId: art.externalId,
+          collectionId,
+        }),
+      });
+      pieceCache.clear();
+      await reloadMuseum();
+    } catch {
+      /* best-effort */
     }
   }
 
@@ -2429,14 +2504,22 @@ export default function Museum3D({
 
       {isTouch && view === "ready" && <JoystickPad joyRef={joyRef} />}
 
-      {isOwner && editing && editTarget && view === "ready" && (
+      {isOwner && editing && (editTarget || collectionTarget) && view === "ready" && (
         <ArtPicker
-          onClose={() => setEditTarget(null)}
-          onPlace={(art) => savePlacement(editTarget, art)}
+          title={collectionTarget ? `Add to ${collectionTarget.name}` : undefined}
+          onClose={() => {
+            setEditTarget(null);
+            setCollectionTarget(null);
+          }}
+          onPlace={(art) =>
+            collectionTarget
+              ? addToCollection(collectionTarget.id, art)
+              : savePlacement(editTarget as string, art)
+          }
         />
       )}
 
-      {isOwner && editing && !editTarget && view === "ready" && (
+      {isOwner && editing && !editTarget && !collectionTarget && view === "ready" && (
         <div
           style={{
             position: "absolute",
@@ -2458,6 +2541,22 @@ export default function Museum3D({
             Walk up to a wall and click a ＋ to hang art. Remove pieces you&rsquo;ve
             hung below.
           </div>
+          <button
+            onClick={createGallery}
+            style={{
+              width: "100%",
+              marginBottom: 10,
+              padding: "7px 0",
+              borderRadius: 6,
+              border: "1px solid #c8a15a",
+              background: "rgba(200,161,90,0.12)",
+              color: "#e6d3a3",
+              cursor: "pointer",
+              fontSize: 13,
+            }}
+          >
+            ＋ New gallery
+          </button>
           {placements.length === 0 ? (
             <div style={{ fontSize: 12, opacity: 0.6 }}>No wall pieces placed yet.</div>
           ) : (

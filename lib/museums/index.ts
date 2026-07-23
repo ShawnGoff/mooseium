@@ -4,6 +4,7 @@
 // registering it here.
 
 import type { MuseumAdapter, MuseumRegistry } from "./types";
+import { cleanProse } from "@/lib/util/text";
 import { metAdapter } from "./met";
 import { articAdapter } from "./artic";
 import { clevelandAdapter } from "./cleveland";
@@ -36,8 +37,35 @@ if (process.env.SMITHSONIAN_API_KEY) {
   registry[smithsonianAdapter.slug] = smithsonianAdapter;
 }
 
+// Some feeds (notably the Met) leave HTML markup in titles — e.g.
+// "<em>Sib</em> sphinx for a barque". Sanitize every title on the way out of an
+// adapter so ONE fix covers the placard, /art pages, cards, OG tags and JSON-LD.
+// Methods are delegated to the real adapter (never spread) so their internal
+// `this` stays intact.
+function sanitizeAdapter(a: MuseumAdapter): MuseumAdapter {
+  return {
+    slug: a.slug,
+    displayName: a.displayName,
+    requiresApiKey: a.requiresApiKey,
+    getSearchFilters: () => a.getSearchFilters(),
+    async search(params) {
+      const r = await a.search(params);
+      return {
+        ...r,
+        cards: r.cards.map((c) => ({ ...c, title: cleanProse(c.title) })),
+      };
+    },
+    async getObject(id) {
+      const o = await a.getObject(id);
+      return { ...o, title: cleanProse(o.title) };
+    },
+    getImageUrl: (art, w) => a.getImageUrl(art, w),
+  };
+}
+
 export function getAdapter(slug: string): MuseumAdapter | undefined {
-  return registry[slug];
+  const a = registry[slug];
+  return a ? sanitizeAdapter(a) : undefined;
 }
 
 /** Lightweight museum list for the search dropdown. */

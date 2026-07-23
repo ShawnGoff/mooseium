@@ -54,6 +54,29 @@ const HERO_POOL: { museum: string; label: string; q: string }[] = [
   { museum: "artic", label: "the Art Institute of Chicago", q: "Paris Street Rainy Day Caillebotte" },
 ];
 
+// Short lettermarks for the museum tiles (no official logos — trademark-safe).
+const MUSEUM_MONOGRAMS: Record<string, string> = {
+  met: "MET",
+  artic: "AIC",
+  cleveland: "CMA",
+  rijks: "RIJKS",
+  harvard: "HAM",
+  smithsonian: "SI",
+  vam: "V&A",
+};
+function monogramFor(slug: string, name: string): string {
+  return (
+    MUSEUM_MONOGRAMS[slug] ??
+    name
+      .replace(/^The\s+/i, "")
+      .split(/\s+/)
+      .map((w) => w[0])
+      .join("")
+      .slice(0, 4)
+      .toUpperCase()
+  );
+}
+
 // Explore-by-Theme cards. Each is a real search; the card image is pulled live
 // from that theme's own results (no owned/stock imagery).
 const THEMES: { label: string; term: string }[] = [
@@ -895,14 +918,17 @@ export default function HomeClient() {
           {museums.length > 0 && (
             <section className="home-section">
               <h2 className="feed-heading">Explore our museums</h2>
-              <div className="museum-strip">
+              <div className="museum-tiles">
                 {museums.map((m) => (
                   <Link
                     key={m.slug}
                     href={`/museums/${m.slug}`}
-                    className="museum-chip"
+                    className="museum-tile"
                   >
-                    {m.displayName}
+                    <span className={`museum-mono mono-${m.slug}`}>
+                      {monogramFor(m.slug, m.displayName)}
+                    </span>
+                    <span className="museum-name">{m.displayName}</span>
                   </Link>
                 ))}
               </div>

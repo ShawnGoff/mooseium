@@ -191,6 +191,45 @@ const faceRot = (side: Side): [number, number, number] =>
 const outwardYaw = (side: Side) =>
   side === "N" ? 0 : side === "S" ? Math.PI : side === "W" ? Math.PI / 2 : -Math.PI / 2;
 
+// A free-standing painting the curator hung directly on a wall (in-museum
+// editor), outside the gallery collections. Denormalized so the 3D can hang it.
+type WallPlacement = {
+  slotKind: string;
+  slotKey: string;
+  source: string;
+  externalId: string;
+  rotationY: number;
+  mount: string;
+  piece: GalleryPiece;
+};
+
+// Turn an opaque slot_key into a world anchor, so the DB never stores
+// coordinates and the scheme can grow without a migration. First set: atrium
+// walls, two slots each ("atrium:<side>:<0|1>"), flanking the central doorway.
+const ATRIUM_ART_OFFSETS = [-3.2, 3.2];
+function placementAnchor(
+  slotKey: string
+): { position: [number, number, number]; rotation: [number, number, number] } | null {
+  const [zone, sideStr, idxStr] = slotKey.split(":");
+  if (zone === "atrium") {
+    const side = sideStr as Side;
+    if (!["N", "S", "E", "W"].includes(side)) return null;
+    const c = ATRIUM_ART_OFFSETS[Number(idxStr)];
+    if (c === undefined) return null;
+    const y = ART_Y;
+    const position: [number, number, number] =
+      side === "N"
+        ? [c, y, -A + 0.12]
+        : side === "S"
+        ? [c, y, A - 0.12]
+        : side === "W"
+        ? [-A + 0.12, y, c]
+        : [A - 0.12, y, c];
+    return { position, rotation: faceRot(side) };
+  }
+  return null;
+}
+
 function buildMuseum(m: Museum): Layout {
   const rooms: Room[] = [];
   const walk: AABB[] = [];
@@ -1528,6 +1567,7 @@ function StationWatcher({
 function Scene({
   layout,
   previews,
+  placements,
   hot,
   reflect,
   lowPower,
@@ -1539,6 +1579,7 @@ function Scene({
 }: {
   layout: Layout;
   previews: Record<string, GalleryPiece | null>;
+  placements: WallPlacement[];
   hot: string[];
   reflect: boolean;
   lowPower: boolean;
@@ -1671,6 +1712,20 @@ function Scene({
           <GalleryFull key={g.slug} gallery={g} onSelect={onSelect} />
         ) : null
       )}
+
+      {placements.map((pl) => {
+        const a = placementAnchor(pl.slotKey);
+        if (!a || !pl.piece.image) return null;
+        return (
+          <ProxyArtwork
+            key={pl.slotKey}
+            piece={pl.piece}
+            position={a.position}
+            rotation={a.rotation}
+            onSelect={onSelect}
+          />
+        );
+      })}
     </>
   );
 }
@@ -1713,6 +1768,7 @@ export default function Museum3D({
   isOwner?: boolean;
 } = {}) {
   const [museum, setMuseum] = useState<Museum | null>(null);
+  const [placements, setPlacements] = useState<WallPlacement[]>([]);
   const [view, setView] = useState<"loading" | "ready" | "empty">("loading");
   const [previews, setPreviews] = useState<Record<string, GalleryPiece | null>>({});
   const [selected, setSelected] = useState<Piece | null>(null);
@@ -1922,6 +1978,12 @@ export default function Museum3D({
         }
       })
       .catch(() => setView("empty"));
+
+    // Free-standing wall placements (paintings hung outside the galleries).
+    fetch(`/api/museum-placements?u=${encodeURIComponent(h)}`)
+      .then((r) => r.json())
+      .then((d) => setPlacements((d.placements as WallPlacement[]) ?? []))
+      .catch(() => {});
   }, [handle]);
 
   // Load one preview piece per gallery room.
@@ -2051,6 +2113,7 @@ export default function Museum3D({
           <Scene
             layout={layout}
             previews={previews}
+            placements={placements}
             hot={hot}
             reflect={!isTouch}
             lowPower={isTouch}

@@ -3136,8 +3136,11 @@ button.reader-back, button.reader-notes-link {
   scroll-snap-type: x proximity;
 }
 .den-shelf-row .den-book-card { flex: 0 0 132px; scroll-snap-align: start; }
+/* Make each card a full-height column so Save pins to the bottom and lines up
+   across cards with different title/author lengths. */
+.den-discover .den-book-card { display: flex; flex-direction: column; height: 100%; }
 .den-save-btn {
-  margin-top: 6px; width: 100%; font-size: 0.8rem; padding: 5px 0; border-radius: 6px;
+  margin-top: auto; width: 100%; font-size: 0.8rem; padding: 5px 0; border-radius: 6px;
   border: 1px solid rgba(230,211,163,0.5); background: transparent; color: inherit; cursor: pointer;
 }
 .den-save-btn:hover:not(:disabled) { background: rgba(230,211,163,0.16); }

@@ -41,6 +41,9 @@ export default function Tour({
   const [asking, setAsking] = useState(false);
   const [i, setI] = useState(0);
   const [rect, setRect] = useState<Rect | null>(null);
+  // True while we're locating (or skipping) a target — we hide the card so a
+  // missing target doesn't flash a centered tooltip before auto-advancing.
+  const [resolving, setResolving] = useState(false);
   const cancelled = useRef(false);
 
   const done = useCallback(() => {
@@ -123,11 +126,13 @@ export default function Tour({
       // target never leaves a stale ring on the wrong element.
       setRect(null);
 
-      if (!step.target) return; // centered message step
+      if (!step.target) {
+        setResolving(false); // centered message step — show immediately
+        return;
+      }
 
-      // Action-driven targets (e.g. a demo search) may take a moment to appear;
-      // a plain target should already be in the DOM, so skip it fast if absent.
-      const timeout = step.action ? 4000 : 700;
+      setResolving(true); // hide the card until the target is found or skipped
+      const timeout = step.action ? 4000 : 600;
       const start = Date.now();
       const poll = () => {
         if (cancelled.current) return;
@@ -135,16 +140,19 @@ export default function Tour({
         const r = el?.getBoundingClientRect();
         if (el && r && r.width > 0 && r.height > 0) {
           el.scrollIntoView({ block: "center", behavior: "smooth" });
-          requestAnimationFrame(() => {
+          // Let the scroll settle before measuring so the ring lands right.
+          setTimeout(() => {
+            if (cancelled.current) return;
             const rr = el.getBoundingClientRect();
             setRect({ top: rr.top, left: rr.left, width: rr.width, height: rr.height });
-          });
+            setResolving(false);
+          }, 280);
           return;
         }
         // Target isn't there (e.g. owner-only control for a visitor) — skip it.
         if (Date.now() - start > timeout) {
           if (i >= steps.length - 1) done();
-          else setI(i + 1);
+          else setI((p) => p + 1);
           return;
         }
         raf = requestAnimationFrame(poll);
@@ -244,6 +252,16 @@ export default function Tour({
       maxHeight,
       overflowY: "auto",
     };
+  }
+
+  // While locating/skipping a target, show only the dim scrim (no card) so a
+  // missing step doesn't flash before auto-advancing.
+  if (resolving) {
+    return (
+      <div className="tour-root" role="dialog" aria-modal="true">
+        <div className="tour-scrim" />
+      </div>
+    );
   }
 
   return (

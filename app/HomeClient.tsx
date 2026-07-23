@@ -450,11 +450,9 @@ export default function HomeClient() {
       body: "A fresh, hand-curated set every day. Come back for new discoveries.",
     },
     {
-      // Run a demo search so a real Save button exists to point at.
-      action: () => runChip("sunflowers"),
-      target: '[data-tour="save"]',
+      target: '[data-tour="piece"]',
       title: "Save what you love",
-      body: "Tap any piece for details, or hit Save to add it to a collection and build your own museum.",
+      body: "Tap any artwork to open it — then hit Save to add it to a collection and build your own museum.",
     },
     {
       target: '[data-tour="howto"]',
@@ -560,6 +558,7 @@ export default function HomeClient() {
         {hero && (
           <figure
             className="hero-media"
+            data-tour="piece"
             onClick={() => setPlacardCard(hero)}
             role="button"
             tabIndex={0}

@@ -529,6 +529,10 @@ function buildMuseum(m: Museum): Layout {
         previewRot: faceRot(cs),
       });
 
+      // Free-placement anchors on the gallery's entry wall — the one the
+      // collection's auto-layout leaves empty (hangRoom skips entrySide).
+      addWallAnchors(`gallery:${coll.slug}`, r, opp(cs));
+
       // teleport target: just inside the doorway, facing the far wall
       const spawn: [number, number, number] =
         cs === "N"

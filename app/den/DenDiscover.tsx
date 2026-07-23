@@ -74,11 +74,21 @@ type GBook = {
   authors: { name: string }[];
   formats: Record<string, string>;
 };
+// Some catalog records carry raw MARC subfield codes in the title, e.g.
+// "The Copper House : $b A detective story" ($b marks a subtitle). Turn the
+// " : $b " into a plain ": " and strip any other stray "$x" codes.
+function cleanBookTitle(t: string): string {
+  return t
+    .replace(/\s*:\s*\$[a-z]\b\s*/gi, ": ")
+    .replace(/\s*\$[a-z]\b\s*/gi, " ")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
 function normalize(b: GBook): Result {
   return {
     source: "gutenberg",
     externalId: String(b.id),
-    title: b.title,
+    title: cleanBookTitle(b.title),
     author: b.authors?.[0]?.name ?? null,
     coverUrl: b.formats?.["image/jpeg"] ?? null,
   };

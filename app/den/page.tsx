@@ -43,7 +43,7 @@ export default async function DenPage() {
   const [foldersRes, booksRes, docsRes, profileRes] = await Promise.all([
     supabase
       .from("den_folders")
-      .select("id, parent_folder_id, name, sort")
+      .select("id, parent_folder_id, name, sort, surface")
       .order("sort"),
     supabase
       .from("den_books")

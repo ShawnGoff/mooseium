@@ -56,7 +56,7 @@ export default function DenPanel({
       }
       setUserId(user.id);
       const [f, b, d] = await Promise.all([
-        supabase.from("den_folders").select("id, parent_folder_id, name, sort").order("sort"),
+        supabase.from("den_folders").select("id, parent_folder_id, name, sort, surface").order("sort"),
         supabase
           .from("den_books")
           .select("id, folder_id, title, author, cover_url, external_id, progress")

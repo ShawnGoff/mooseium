@@ -10,11 +10,13 @@ import { createClient } from "@/lib/supabase/client";
 import BookSearch from "./BookSearch";
 import DenDiscover from "./DenDiscover";
 
+export type FolderSurface = "books" | "writing";
 export type DenFolder = {
   id: string;
   parent_folder_id: string | null;
   name: string;
   sort: number;
+  surface: FolderSurface;
 };
 export type DenBook = {
   id: string;
@@ -66,18 +68,25 @@ export default function DenView({
   const supabase = useMemo(() => createClient(), []);
   const router = useRouter();
 
+  // Reading and writing each have their own folder tree. The sidebar shows only
+  // the folders for the tab you're on (Books -> 'books', Writing -> 'writing').
+  const surface: FolderSurface = tab === "writing" ? "writing" : "books";
+
   const childMap = useMemo(() => {
     const m = new Map<string | null, DenFolder[]>();
     for (const f of folders) {
+      if (f.surface !== surface) continue;
       const k = f.parent_folder_id;
       (m.get(k) ?? m.set(k, []).get(k)!).push(f);
     }
     return m;
-  }, [folders]);
+  }, [folders, surface]);
 
+  // Count the item type that belongs to this folder's surface.
   const countIn = (fid: string) =>
-    books.filter((b) => b.folder_id === fid).length +
-    docs.filter((d) => d.folder_id === fid).length;
+    surface === "writing"
+      ? docs.filter((d) => d.folder_id === fid).length
+      : books.filter((b) => b.folder_id === fid).length;
 
   const shownBooks =
     activeFolder === null ? books : books.filter((b) => b.folder_id === activeFolder);
@@ -96,12 +105,17 @@ export default function DenView({
   async function createFolder(parentId: string | null) {
     const name = window.prompt("New folder name")?.trim();
     if (!name) return;
+    // A subfolder inherits its parent's surface; a top-level folder belongs to
+    // the tab you're on, so it only ever shows under Books or under Writing.
+    const folderSurface: FolderSurface = parentId
+      ? folders.find((f) => f.id === parentId)?.surface ?? surface
+      : surface;
     setBusy(true);
     setError(null);
     const { data, error } = await supabase
       .from("den_folders")
-      .insert({ user_id: userId, parent_folder_id: parentId, name })
-      .select("id, parent_folder_id, name, sort")
+      .insert({ user_id: userId, parent_folder_id: parentId, name, surface: folderSurface })
+      .select("id, parent_folder_id, name, sort, surface")
       .single();
     setBusy(false);
     if (error || !data) return setError("Could not create the folder.");
@@ -154,6 +168,13 @@ export default function DenView({
       ...d,
     ]);
     openDoc(data.id);
+  }
+
+  // Switching tabs clears the selected folder: folders are surface-specific, so
+  // a books folder shouldn't stay active when you move to Writing.
+  function switchTab(next: "discover" | "library" | "writing") {
+    setTab(next);
+    setActiveFolder(null);
   }
 
   const openBook = (id: string) =>
@@ -253,19 +274,19 @@ export default function DenView({
       <div className="den-tabs den-toptabs">
         <button
           className={tab === "discover" ? "active" : ""}
-          onClick={() => setTab("discover")}
+          onClick={() => switchTab("discover")}
         >
           🔦 Discover
         </button>
         <button
           className={tab === "library" ? "active" : ""}
-          onClick={() => setTab("library")}
+          onClick={() => switchTab("library")}
         >
           📚 Books
         </button>
         <button
           className={tab === "writing" ? "active" : ""}
-          onClick={() => setTab("writing")}
+          onClick={() => switchTab("writing")}
         >
           ✍️ Writing
         </button>
@@ -449,7 +470,7 @@ export default function DenView({
       {findBooks && (
         <BookSearch
           userId={userId}
-          folders={folders}
+          folders={folders.filter((f) => f.surface === "books")}
           onSaved={(b) => setBooks((prev) => [...prev, b])}
           onClose={() => setFindBooks(false)}
         />

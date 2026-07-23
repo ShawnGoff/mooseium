@@ -455,13 +455,8 @@ export default function HomeClient() {
       body: "Tap any artwork to open it — then hit Save to add it to a collection and build your own museum.",
     },
     {
-      target: '[data-tour="howto"]',
-      title: "Anytime you need a hand",
-      body: "The full guide lives under “How to use” — in the top nav, or the ☰ menu on your phone.",
-    },
-    {
       title: "That's the tour!",
-      body: "Go find something you love and start building your museum. Enjoy exploring! 🫎",
+      body: "Need a hand later? The full guide is under “How to use” — in the top nav, or the ☰ menu on your phone. Enjoy exploring! 🫎",
     },
   ];
 

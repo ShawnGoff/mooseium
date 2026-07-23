@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import ShareButtons from "./ShareButtons";
 
 export type PlacardArtwork = {
   artworkId?: string;
@@ -39,7 +40,7 @@ const MUSEUM_NAMES: Record<string, string> = {
   vam: "Victoria and Albert Museum",
 };
 
-type Tab = "overview" | "about" | "provenance" | "note";
+type Tab = "overview" | "about" | "provenance" | "note" | "share";
 
 export default function Placard({
   artwork,
@@ -153,6 +154,18 @@ export default function Placard({
   ];
   const hasProvenance = provenanceRows.some(([, v]) => v);
 
+  // Sharing needs a public URL, so it's only offered when we know the source
+  // museum + object id. Pinterest/Facebook need an ABSOLUTE image, so we hand
+  // over the museum's direct CDN url (never the /api/img proxy path).
+  const canShare = Boolean(source);
+  const origin =
+    typeof window !== "undefined" ? window.location.origin : "https://mooseium.com";
+  const shareUrl = source
+    ? `${origin}/art/${source.museum}/${encodeURIComponent(source.objectId)}`
+    : undefined;
+  const shareTitle =
+    (full.artist ? `${full.title} by ${full.artist}` : full.title) + " · Mooseium";
+
   function Rows({ rows }: { rows: [string, string | undefined][] }) {
     return (
       <dl className="placard-fields">
@@ -233,6 +246,11 @@ export default function Placard({
               <button className={tab === "note" ? "on" : ""} onClick={() => setTab("note")}>
                 Curator&rsquo;s Note
               </button>
+              {canShare && (
+                <button className={tab === "share" ? "on" : ""} onClick={() => setTab("share")}>
+                  Share
+                </button>
+              )}
             </nav>
 
             <div className="placard-content">
@@ -298,6 +316,19 @@ export default function Placard({
                     Save this piece to a collection to add your own note.
                   </p>
                 ))}
+
+              {tab === "share" && shareUrl && (
+                <div className="placard-share">
+                  <p className="placard-share-lead">
+                    Share this piece — links open the artwork&rsquo;s own page.
+                  </p>
+                  <ShareButtons
+                    url={shareUrl}
+                    title={shareTitle}
+                    image={full.imageFull || full.image}
+                  />
+                </div>
+              )}
             </div>
 
             <div className="placard-footer">

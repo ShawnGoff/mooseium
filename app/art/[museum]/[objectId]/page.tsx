@@ -1,10 +1,11 @@
 // /art/[museum]/[objectId] — a permanent page for a single artwork.
 //
-// Indexing policy: only pieces someone has placed in a PUBLIC gallery are
-// indexable. Everything else renders normally for visitors but is noindex, so
-// we never flood the index with thin copies of museum metadata. Each page also
-// canonical-links back to the museum's own record and adds what they can't:
-// which Mooseium galleries feature the piece, plus a way to collect it.
+// Indexing policy: every artwork page is indexable and self-canonical so it can
+// be shared on Pinterest (Pinterest refuses to save Pins from noindex pages).
+// The sitemap still only PROMOTES curated pieces (those in a public gallery),
+// so un-curated pages are discovered slowly rather than flooding the index.
+// Each page adds what the museum's own record can't: which Mooseium galleries
+// feature the piece, plus a way to collect it.
 
 import type { Metadata } from "next";
 import Link from "next/link";
@@ -68,10 +69,6 @@ export async function generateMetadata({
   const museumName = MUSEUM_NAMES[museum] ?? museum;
   const heading = artist ? `${title} by ${artist}` : title;
 
-  // Only index pieces that have earned it by appearing in a public gallery.
-  const inGalleries = await galleriesContaining(museum, objectId);
-  const indexable = inGalleries.length > 0;
-
   const description =
     cleanProse(art.description)?.slice(0, 155) ||
     `${heading}${art.medium ? ` — ${decodeEntities(art.medium)}` : ""}. From ${museumName}, viewable in Mooseium.`;
@@ -80,7 +77,6 @@ export async function generateMetadata({
     title: heading,
     description,
     alternates: { canonical: `/art/${museum}/${objectId}` },
-    robots: indexable ? undefined : { index: false, follow: true },
     openGraph: {
       title: `${heading} · Mooseium`,
       description,

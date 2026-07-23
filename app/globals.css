@@ -522,6 +522,16 @@ a {
   color: #4a9bff;
 }
 
+/* Share tab inside the artwork placard. */
+.placard-share-lead {
+  font-size: 14px;
+  color: var(--muted, #8a8580);
+  margin: 0 0 4px;
+}
+.placard-share .share-row {
+  margin-top: 12px;
+}
+
 /* Single-artwork page (/art/[museum]/[objectId]). */
 .art-page {
   display: grid;

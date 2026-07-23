@@ -1,13 +1,13 @@
 // /library — the PUBLIC face of the Library. Anyone (signed in or not) can
 // search, browse, and read public-domain books here. Signed-in users get sent
 // to /den, their full personal study (saved shelf, folders, writing).
+//
+// This page is a cached STATIC page: the "signed-in → /den" redirect runs
+// client-side (see PublicLibrary). Doing the auth check on the server would
+// read cookies and force a fresh render on every visit — wasteful, since the
+// public shell is identical for everyone and most traffic is signed-out.
 
-import { redirect } from "next/navigation";
-import { isSupabaseConfigured } from "@/lib/supabase/client";
-import { createClient } from "@/lib/supabase/server";
 import PublicLibrary from "./PublicLibrary";
-
-export const dynamic = "force-dynamic";
 
 export const metadata = {
   title: "Library",
@@ -16,13 +16,6 @@ export const metadata = {
   alternates: { canonical: "/library" },
 };
 
-export default async function LibraryPage() {
-  if (isSupabaseConfigured()) {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (user) redirect("/den");
-  }
+export default function LibraryPage() {
   return <PublicLibrary />;
 }

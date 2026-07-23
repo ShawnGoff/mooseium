@@ -5,11 +5,34 @@
 // public reader at /library/read/[gutenbergId].
 
 import Link from "next/link";
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
 import DenDiscover from "../den/DenDiscover";
 
 const NONE = new Set<string>();
 
 export default function PublicLibrary() {
+  const router = useRouter();
+
+  // Signed-in visitors belong in their full study (/den). We check in the
+  // browser rather than on the server so /library stays a cached static page.
+  // Signed-out users (the majority, plus crawlers) render this immediately; a
+  // logged-in user briefly sees it, then gets replaced to /den.
+  useEffect(() => {
+    if (!isSupabaseConfigured()) return;
+    let cancelled = false;
+    createClient()
+      .auth.getUser()
+      .then(({ data }) => {
+        if (!cancelled && data.user) router.replace("/den");
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [router]);
+
   return (
     <main className="container">
       <div className="brand brand-row">

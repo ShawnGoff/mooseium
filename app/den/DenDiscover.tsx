@@ -29,7 +29,7 @@ let themedCache: ThemedShelfDef[] | null = null;
 // image CDN — no Gutendex calls, so the page loads instantly. (id = a well-known
 // public-domain book in that subject.)
 const SUBJECTS: { name: string; coverId: number }[] = [
-  { name: "Fiction", coverId: 2701 }, // Moby Dick
+  { name: "Fiction", coverId: 76 }, // Adventures of Huckleberry Finn
   { name: "Poetry", coverId: 1322 }, // Leaves of Grass
   { name: "Philosophy", coverId: 2680 }, // Meditations
   { name: "History", coverId: 98 }, // A Tale of Two Cities
@@ -51,7 +51,7 @@ const SUBJECTS: { name: string; coverId: number }[] = [
   { name: "Gothic", coverId: 84 }, // Frankenstein
   { name: "Detective", coverId: 2852 }, // The Hound of the Baskervilles
   { name: "War", coverId: 2600 }, // War and Peace
-  { name: "Sea Stories", coverId: 521 }, // Robinson Crusoe
+  { name: "Sea Stories", coverId: 2701 }, // Moby Dick
   { name: "Ancient World", coverId: 2145 }, // Ben-Hur: A Tale of the Christ
   { name: "Ghost Stories", coverId: 43 }, // Dr. Jekyll and Mr. Hyde
   { name: "Satire", coverId: 829 }, // Gulliver's Travels

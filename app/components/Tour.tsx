@@ -136,7 +136,15 @@ export default function Tour({
       const start = Date.now();
       const poll = () => {
         if (cancelled.current) return;
-        const el = document.querySelector(step.target!) as HTMLElement | null;
+        // A selector can match both a desktop and a mobile element (only one is
+        // visible), so pick the first with a real box.
+        const els = Array.from(
+          document.querySelectorAll(step.target!)
+        ) as HTMLElement[];
+        const el = els.find((e) => {
+          const b = e.getBoundingClientRect();
+          return b.width > 0 && b.height > 0;
+        });
         const r = el?.getBoundingClientRect();
         if (el && r && r.width > 0 && r.height > 0) {
           el.scrollIntoView({ block: "center", behavior: "smooth" });

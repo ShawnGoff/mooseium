@@ -454,6 +454,12 @@ export default function HomeClient() {
       title: "Save what you love",
       body: "Tap any artwork to open it — then hit Save to add it to a collection and build your own museum.",
     },
+    // Skipped automatically for signed-in users (the button isn't there).
+    {
+      target: '[data-tour="signin"]',
+      title: "Make it yours — it's free",
+      body: "Sign up to save art, build your own galleries, and walk your 3D museum. Your account button is right up here.",
+    },
     {
       title: "That's the tour!",
       body: "Need a hand later? The full guide is under “How to use” — in the top nav, or the ☰ menu on your phone. Enjoy exploring! 🫎",

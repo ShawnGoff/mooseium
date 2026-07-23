@@ -54,14 +54,14 @@ export default async function Header() {
             </form>
           </>
         ) : (
-          <Link href="/login" className="link-btn topbar-signin">
+          <Link href="/login" className="link-btn topbar-signin" data-tour="signin">
             Sign up / Sign in
           </Link>
         )}
       </nav>
 
       {!signedIn && (
-        <Link href="/login" className="mobile-signin">
+        <Link href="/login" className="mobile-signin" data-tour="signin">
           Sign up / Sign in
         </Link>
       )}

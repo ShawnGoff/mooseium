@@ -330,9 +330,27 @@ a {
 .tour-ring {
   position: fixed;
   border-radius: 12px;
-  box-shadow: 0 0 0 3px var(--accent, #e6d3a3), 0 0 0 9999px rgba(8, 7, 6, 0.55);
+  box-shadow: 0 0 0 3px var(--accent, #e6d3a3), 0 0 22px 4px rgba(230, 211, 163, 0.55),
+    0 0 0 9999px rgba(8, 7, 6, 0.55);
   pointer-events: none;
   transition: all 0.2s ease;
+  animation: tour-glow 1.8s ease-in-out infinite;
+}
+@keyframes tour-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 0 3px var(--accent, #e6d3a3), 0 0 18px 3px rgba(230, 211, 163, 0.4),
+      0 0 0 9999px rgba(8, 7, 6, 0.55);
+  }
+  50% {
+    box-shadow: 0 0 0 3px var(--accent, #e6d3a3), 0 0 30px 7px rgba(230, 211, 163, 0.7),
+      0 0 0 9999px rgba(8, 7, 6, 0.55);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tour-ring {
+    animation: none;
+  }
 }
 .tour-tip {
   position: fixed;

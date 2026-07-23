@@ -28,6 +28,8 @@ const securityHeaders = [
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  // Don't advertise the framework (Seobility/security nicety).
+  poweredByHeader: false,
   images: {
     // Museum image CDNs we load thumbnails from directly (before we cache our own).
     remotePatterns: [

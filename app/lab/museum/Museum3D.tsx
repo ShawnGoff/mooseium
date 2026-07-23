@@ -230,6 +230,186 @@ function placementAnchor(
   return null;
 }
 
+// Every atrium wall slot (empty ones become clickable hotspots in edit mode).
+const ATRIUM_SLOT_KEYS: string[] = (["N", "E", "S", "W"] as Side[]).flatMap((s) =>
+  ATRIUM_ART_OFFSETS.map((_, i) => `atrium:${s}:${i}`)
+);
+
+// A clickable "+" marker at an empty wall anchor. Owner-only (only rendered
+// while editing). Clicking opens the art picker for that slot.
+function Hotspot({ slotKey, onPick }: { slotKey: string; onPick: (k: string) => void }) {
+  const a = placementAnchor(slotKey);
+  if (!a) return null;
+  return (
+    <group position={a.position} rotation={a.rotation}>
+      <mesh
+        onClick={(e) => {
+          e.stopPropagation();
+          onPick(slotKey);
+        }}
+      >
+        <planeGeometry args={[1.7, 1.3]} />
+        <meshBasicMaterial
+          color="#c8a15a"
+          transparent
+          opacity={0.16}
+          side={THREE.DoubleSide}
+        />
+      </mesh>
+      <Text position={[0, 0, 0.03]} fontSize={0.55} color="#f0dfb0" anchorX="center" anchorY="middle">
+        +
+      </Text>
+    </group>
+  );
+}
+
+// Art picker for the in-museum editor: search every museum, tap a result to
+// hang it. Resolves the display image via /api/artwork so walls aren't fed
+// tiny thumbnails.
+type PickCard = {
+  sourceMuseum: string;
+  museumObjectId: string;
+  title: string;
+  artist?: string;
+  thumbnailUrl: string;
+};
+function ArtPicker({
+  onClose,
+  onPlace,
+}: {
+  onClose: () => void;
+  onPlace: (art: { source: string; externalId: string; title: string; image: string }) => void;
+}) {
+  const [q, setQ] = useState("");
+  const [cards, setCards] = useState<PickCard[] | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  async function run() {
+    if (!q.trim()) return;
+    setBusy(true);
+    setCards(null);
+    try {
+      const r = await fetch(`/api/search?museum=all&q=${encodeURIComponent(q)}&page=1`);
+      const d = await r.json();
+      setCards(((d.cards as PickCard[]) ?? []).filter((c) => c.thumbnailUrl).slice(0, 24));
+    } catch {
+      setCards([]);
+    }
+    setBusy(false);
+  }
+
+  async function pick(c: PickCard) {
+    let image = c.thumbnailUrl;
+    try {
+      const r = await fetch(
+        `/api/artwork?museum=${encodeURIComponent(c.sourceMuseum)}&objectId=${encodeURIComponent(c.museumObjectId)}`
+      );
+      const d = await r.json();
+      if (d.artwork?.image) image = d.artwork.image as string;
+    } catch {
+      /* keep the thumbnail */
+    }
+    onPlace({ source: c.sourceMuseum, externalId: c.museumObjectId, title: c.title, image });
+  }
+
+  return (
+    <div
+      style={{
+        position: "absolute",
+        top: 0,
+        right: 0,
+        bottom: 0,
+        width: 340,
+        background: "rgba(16,13,10,0.97)",
+        borderLeft: "1px solid #4a4030",
+        padding: 14,
+        color: "#ece0c8",
+        zIndex: 30,
+        display: "flex",
+        flexDirection: "column",
+        gap: 10,
+      }}
+    >
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <strong>Place art on this wall</strong>
+        <button
+          onClick={onClose}
+          style={{ background: "transparent", border: "none", color: "#ece0c8", cursor: "pointer", fontSize: 16 }}
+          aria-label="Close"
+        >
+          ✕
+        </button>
+      </div>
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          run();
+        }}
+        style={{ display: "flex", gap: 6 }}
+      >
+        <input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="Search all museums…"
+          style={{
+            flex: 1,
+            padding: "6px 8px",
+            borderRadius: 6,
+            border: "1px solid #4a4030",
+            background: "#0e0b08",
+            color: "#ece0c8",
+            fontSize: 13,
+          }}
+        />
+        <button
+          type="submit"
+          style={{
+            padding: "0 12px",
+            borderRadius: 6,
+            border: "1px solid #c8a15a",
+            background: "transparent",
+            color: "#e6d3a3",
+            cursor: "pointer",
+            fontSize: 13,
+          }}
+        >
+          Search
+        </button>
+      </form>
+      <div style={{ overflowY: "auto", flex: 1 }}>
+        {busy && <div style={{ fontSize: 13, opacity: 0.7 }}>Searching…</div>}
+        {cards && cards.length === 0 && !busy && (
+          <div style={{ fontSize: 13, opacity: 0.7 }}>No results.</div>
+        )}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+          {(cards ?? []).map((c) => (
+            <button
+              key={`${c.sourceMuseum}:${c.museumObjectId}`}
+              onClick={() => pick(c)}
+              title={c.title}
+              style={{
+                padding: 0,
+                border: "1px solid #332c22",
+                borderRadius: 6,
+                overflow: "hidden",
+                background: "transparent",
+                cursor: "pointer",
+              }}
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={c.thumbnailUrl}
+                alt=""
+                style={{ width: "100%", height: 90, objectFit: "cover", display: "block" }}
+              />
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function buildMuseum(m: Museum): Layout {
   const rooms: Room[] = [];
   const walk: AABB[] = [];
@@ -1568,6 +1748,8 @@ function Scene({
   layout,
   previews,
   placements,
+  editing,
+  onPick,
   hot,
   reflect,
   lowPower,
@@ -1580,6 +1762,8 @@ function Scene({
   layout: Layout;
   previews: Record<string, GalleryPiece | null>;
   placements: WallPlacement[];
+  editing: boolean;
+  onPick: (slotKey: string) => void;
   hot: string[];
   reflect: boolean;
   lowPower: boolean;
@@ -1726,6 +1910,11 @@ function Scene({
           />
         );
       })}
+
+      {editing &&
+        ATRIUM_SLOT_KEYS.filter(
+          (k) => !placements.some((p) => p.slotKey === k)
+        ).map((k) => <Hotspot key={k} slotKey={k} onPick={onPick} />)}
     </>
   );
 }
@@ -1772,6 +1961,7 @@ export default function Museum3D({
   // In-museum editor (owner only). editing toggles the edit HUD; the 3D hotspots
   // and art picker are added in the next (supervised) pass.
   const [editing, setEditing] = useState(false);
+  const [editTarget, setEditTarget] = useState<string | null>(null);
 
   // Optimistically clear a slot, then tell the server (RLS enforces ownership).
   async function removePlacement(slotKey: string) {
@@ -1779,6 +1969,41 @@ export default function Museum3D({
     try {
       await fetch(`/api/museum-placements?slotKey=${encodeURIComponent(slotKey)}`, {
         method: "DELETE",
+      });
+    } catch {
+      /* best-effort; a reload reconciles */
+    }
+  }
+
+  // Place (or replace) a piece at a slot: optimistic render, then POST.
+  async function savePlacement(
+    slotKey: string,
+    art: { source: string; externalId: string; title: string; image: string }
+  ) {
+    setPlacements((ps) => [
+      ...ps.filter((p) => p.slotKey !== slotKey),
+      {
+        slotKind: "wall",
+        slotKey,
+        source: art.source,
+        externalId: art.externalId,
+        rotationY: 0,
+        mount: "pedestal",
+        piece: { title: art.title, image: art.image, museum: art.source },
+      },
+    ]);
+    setEditTarget(null);
+    try {
+      await fetch("/api/museum-placements", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          slotKey,
+          source: art.source,
+          externalId: art.externalId,
+          title: art.title,
+          imageUrl: art.image,
+        }),
       });
     } catch {
       /* best-effort; a reload reconciles */
@@ -2136,6 +2361,8 @@ export default function Museum3D({
             layout={layout}
             previews={previews}
             placements={placements}
+            editing={editing}
+            onPick={setEditTarget}
             hot={hot}
             reflect={!isTouch && !lite}
             lowPower={isTouch}
@@ -2186,7 +2413,14 @@ export default function Museum3D({
 
       {isTouch && view === "ready" && <JoystickPad joyRef={joyRef} />}
 
-      {isOwner && editing && view === "ready" && (
+      {isOwner && editing && editTarget && view === "ready" && (
+        <ArtPicker
+          onClose={() => setEditTarget(null)}
+          onPlace={(art) => savePlacement(editTarget, art)}
+        />
+      )}
+
+      {isOwner && editing && !editTarget && view === "ready" && (
         <div
           style={{
             position: "absolute",
@@ -2205,8 +2439,8 @@ export default function Museum3D({
         >
           <div style={{ fontWeight: 600, marginBottom: 4 }}>Editing your museum</div>
           <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 10 }}>
-            Click-to-place art on walls is coming next. For now you can remove pieces
-            you&rsquo;ve hung.
+            Walk up to a wall and click a ＋ to hang art. Remove pieces you&rsquo;ve
+            hung below.
           </div>
           {placements.length === 0 ? (
             <div style={{ fontSize: 12, opacity: 0.6 }}>No wall pieces placed yet.</div>

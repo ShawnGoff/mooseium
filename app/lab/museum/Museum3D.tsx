@@ -1663,10 +1663,10 @@ function Scene({
         <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.012, 0]}>
           <planeGeometry args={[A * 2 - 0.4, A * 2 - 0.4]} />
           <MeshReflectorMaterial
-            resolution={512}
-            mixBlur={8}
+            resolution={256}
+            mixBlur={6}
             mixStrength={0.35}
-            blur={[300, 80]}
+            blur={[150, 60]}
             minDepthThreshold={0.9}
             maxDepthThreshold={1.1}
             depthScale={1}
@@ -1791,6 +1791,13 @@ export default function Museum3D({
     () =>
       typeof window !== "undefined" &&
       ("ontouchstart" in window || navigator.maxTouchPoints > 0)
+  );
+  // ?lite drops the heaviest GPU work (mirror floor + pixel ratio capped to 1)
+  // for weak GPUs / Retina displays that lose the WebGL context under full load.
+  const [lite] = useState(
+    () =>
+      typeof window !== "undefined" &&
+      new URLSearchParams(window.location.search).has("lite")
   );
   // Controls panel starts collapsed on phones (where it crowds the view).
   const [infoOpen, setInfoOpen] = useState(
@@ -2120,7 +2127,7 @@ export default function Museum3D({
       <Canvas
         camera={{ fov: 52, position: tp.spawn }}
         gl={{ toneMappingExposure: 1.08, powerPreference: "high-performance" }}
-        dpr={isTouch ? 1 : [1, 2]}
+        dpr={isTouch || lite ? 1 : [1, 2]}
       >
         <color attach="background" args={["#eceae4"]} />
         <fogExp2 attach="fog" args={["#e6e3dc", 0.014]} />
@@ -2130,7 +2137,7 @@ export default function Museum3D({
             previews={previews}
             placements={placements}
             hot={hot}
-            reflect={!isTouch}
+            reflect={!isTouch && !lite}
             lowPower={isTouch}
             showDen={isOwner}
             sky={sky}

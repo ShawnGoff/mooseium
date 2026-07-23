@@ -1827,8 +1827,8 @@ a {
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.6px;
-  background: rgba(0, 0, 0, 0.22);
-  color: #1c1815;
+  background: var(--accent, #e6d3a3);
+  color: #14110d;
   padding: 2px 7px;
   border-radius: 999px;
 }

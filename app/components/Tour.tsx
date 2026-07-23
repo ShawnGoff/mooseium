@@ -197,7 +197,7 @@ export default function Tour({
 
   if (asking && welcome) {
     return (
-      <div className="tour-root" role="dialog" aria-modal="true">
+      <div className="tour-root" role="dialog" aria-modal="true" aria-label="Mooseium guided tour">
         <div className="tour-scrim" onClick={declineWelcome} />
         <div
           className="tour-tip tour-welcome"
@@ -266,14 +266,14 @@ export default function Tour({
   // missing step doesn't flash before auto-advancing.
   if (resolving) {
     return (
-      <div className="tour-root" role="dialog" aria-modal="true">
+      <div className="tour-root" role="dialog" aria-modal="true" aria-label="Mooseium guided tour">
         <div className="tour-scrim" />
       </div>
     );
   }
 
   return (
-    <div className="tour-root" role="dialog" aria-modal="true">
+    <div className="tour-root" role="dialog" aria-modal="true" aria-label="Mooseium guided tour">
       <div className="tour-scrim" onClick={done} />
       {rect && (
         <div

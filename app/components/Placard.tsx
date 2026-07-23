@@ -172,6 +172,7 @@ export default function Placard({
         className="placard"
         role="dialog"
         aria-modal="true"
+        aria-label={full.title || "Artwork details"}
         onClick={(e) => e.stopPropagation()}
       >
         <button className="modal-close placard-close" onClick={onClose} aria-label="Close">

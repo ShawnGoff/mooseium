@@ -2168,8 +2168,9 @@ export default function Museum3D({
           <button onClick={toggleMusic} style={musicBtnStyle} aria-label="Toggle music">
             {musicOn ? "🔊 Music on" : "🔈 Music off"}
           </button>
-          {/* Phones: weather sits in this right-side column, below the music. */}
-          {isOwner && isTouch && (
+          {/* Phones: weather sits in this right-side column, below the music.
+              Shown to everyone (not just the owner) so visitors get the mood too. */}
+          {isTouch && (
             <div data-tour="weather" style={skyToggleStyle}>
               {weatherButtons}
             </div>
@@ -2179,7 +2180,7 @@ export default function Museum3D({
 
       {/* Desktop: weather bottom-left, lifted to align with the middle of the
           music control stack on the right. */}
-      {view === "ready" && isOwner && !isTouch && (
+      {view === "ready" && !isTouch && (
         <div
           data-tour="weather"
           style={{ ...skyToggleStyle, position: "absolute", bottom: 44, left: 14 }}

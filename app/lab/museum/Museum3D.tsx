@@ -45,8 +45,8 @@ const MUSEUM_TOUR_STEPS: TourStep[] = [
   },
   {
     target: '[data-tour="music"]',
-    title: "Add a soundtrack",
-    body: "Pick background music to score your visit.",
+    title: "Background music",
+    body: "Pick a track to play while you explore.",
   },
   {
     title: "Look closer",

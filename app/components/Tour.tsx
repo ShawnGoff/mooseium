@@ -115,11 +115,15 @@ export default function Tour({
       }
       if (cancelled.current) return;
 
-      if (!step.target) {
-        setRect(null); // centered message step
-        return;
-      }
+      // Clear any previous highlight while we resolve this step, so a missing
+      // target never leaves a stale ring on the wrong element.
+      setRect(null);
 
+      if (!step.target) return; // centered message step
+
+      // Action-driven targets (e.g. a demo search) may take a moment to appear;
+      // a plain target should already be in the DOM, so skip it fast if absent.
+      const timeout = step.action ? 4000 : 700;
       const start = Date.now();
       const poll = () => {
         if (cancelled.current) return;
@@ -133,10 +137,10 @@ export default function Tour({
           });
           return;
         }
-        // Give an action-driven target a few seconds to appear, else skip.
-        if (Date.now() - start > 4000) {
-          setI((prev) => (prev + 1 <= steps.length - 1 ? prev + 1 : prev));
+        // Target isn't there (e.g. owner-only control for a visitor) — skip it.
+        if (Date.now() - start > timeout) {
           if (i >= steps.length - 1) done();
+          else setI(i + 1);
           return;
         }
         raf = requestAnimationFrame(poll);

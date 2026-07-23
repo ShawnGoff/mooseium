@@ -138,8 +138,10 @@ export default function Placard({
     u ? `/api/img?url=${encodeURIComponent(u)}` : undefined;
   const onImgError = (e: React.SyntheticEvent<HTMLImageElement>, direct?: string) => {
     const img = e.currentTarget;
-    if (direct && !img.dataset.fallback) {
-      img.dataset.fallback = "1";
+    // Fall back to the museum's direct URL whenever a PROXY url fails — keyed on
+    // the current src, not a one-shot flag, so it still works after the src
+    // changes (e.g. the higher-res image arrives once full details load).
+    if (direct && img.src.includes("/api/img")) {
       img.src = direct;
     }
   };

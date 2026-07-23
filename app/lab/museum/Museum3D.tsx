@@ -2102,7 +2102,17 @@ export default function Museum3D({
       {isTouch && view === "ready" && <JoystickPad joyRef={joyRef} />}
 
       {view === "ready" && (
-        <Tour storageKey="mooseium-tour-3d" autoStart steps={MUSEUM_TOUR_STEPS} />
+        <Tour
+          storageKey="mooseium-tour-3d"
+          autoStart
+          steps={MUSEUM_TOUR_STEPS}
+          welcome={{
+            title: "You're in the 3D museum",
+            body: "Walk through your galleries in first person. Want a quick tour of the controls?",
+            yes: "Show me",
+            no: "I've got it",
+          }}
+        />
       )}
 
       {view === "ready" && station && (

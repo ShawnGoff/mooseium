@@ -25,15 +25,20 @@ export default function Tour({
   storageKey,
   autoStart = false,
   startSignal = 0,
+  welcome,
   onClose,
 }: {
   steps: TourStep[];
   storageKey: string;
   autoStart?: boolean;
   startSignal?: number; // bump to force-start (replay)
+  // When set, first-timers see this opt-in prompt instead of the tour launching
+  // straight away. They choose to take it or skip.
+  welcome?: { title: string; body: string; yes: string; no: string };
   onClose?: () => void;
 }) {
   const [running, setRunning] = useState(false);
+  const [asking, setAsking] = useState(false);
   const [i, setI] = useState(0);
   const [rect, setRect] = useState<Rect | null>(null);
   const cancelled = useRef(false);
@@ -49,7 +54,8 @@ export default function Tour({
     onClose?.();
   }, [storageKey, onClose]);
 
-  // Auto-start once for first-timers.
+  // First-timers: either show the opt-in welcome, or (if no welcome prop) launch
+  // straight into the tour.
   useEffect(() => {
     if (!autoStart) return;
     let seen = false;
@@ -58,18 +64,36 @@ export default function Tour({
     } catch {
       /* ignore */
     }
-    if (!seen) {
-      const t = setTimeout(() => {
+    if (seen) return;
+    const t = setTimeout(() => {
+      if (welcome) setAsking(true);
+      else {
         setI(0);
         setRunning(true);
-      }, 900);
-      return () => clearTimeout(t);
-    }
-  }, [autoStart, storageKey]);
+      }
+    }, 900);
+    return () => clearTimeout(t);
+  }, [autoStart, storageKey, welcome]);
 
-  // Replay trigger.
+  function declineWelcome() {
+    setAsking(false);
+    try {
+      localStorage.setItem(storageKey, "1");
+    } catch {
+      /* ignore */
+    }
+    onClose?.();
+  }
+  function acceptWelcome() {
+    setAsking(false);
+    setI(0);
+    setRunning(true);
+  }
+
+  // Replay trigger (skips the welcome — an explicit request).
   useEffect(() => {
     if (startSignal > 0) {
+      setAsking(false);
       setI(0);
       setRunning(true);
     }
@@ -146,6 +170,34 @@ export default function Tour({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [running, i]);
+
+  if (asking && welcome) {
+    return (
+      <div className="tour-root" role="dialog" aria-modal="true">
+        <div className="tour-scrim" onClick={declineWelcome} />
+        <div
+          className="tour-tip tour-welcome"
+          style={{
+            top: "50%",
+            left: "50%",
+            transform: "translate(-50%, -50%)",
+            width: Math.min(380, window.innerWidth - 24),
+          }}
+        >
+          <h3>{welcome.title}</h3>
+          <p>{welcome.body}</p>
+          <div className="tour-actions">
+            <button className="tour-back" onClick={declineWelcome}>
+              {welcome.no}
+            </button>
+            <button className="tour-next" onClick={acceptWelcome}>
+              {welcome.yes}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (!running) return null;
   const step = steps[i];

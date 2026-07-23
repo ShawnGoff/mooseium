@@ -955,6 +955,12 @@ export default function HomeClient() {
         autoStart
         startSignal={tourSignal}
         steps={homeTourSteps}
+        welcome={{
+          title: "Welcome to Mooseium 🫎",
+          body: "Curate the world's open-access art into your own galleries and 3D museum. Want a quick 30-second tour?",
+          yes: "Show me around",
+          no: "I'll explore",
+        }}
       />
     </main>
   );

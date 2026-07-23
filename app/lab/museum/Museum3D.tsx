@@ -2190,8 +2190,8 @@ export default function Museum3D({
         <div
           style={{
             position: "absolute",
-            top: 64,
-            left: 14,
+            top: 60,
+            right: 14,
             width: 260,
             maxHeight: "60vh",
             overflowY: "auto",

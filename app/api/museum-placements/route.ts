@@ -60,3 +60,73 @@ export async function GET(req: NextRequest) {
 
   return NextResponse.json({ placements });
 }
+
+// POST /api/museum-placements — create or replace the piece at a slot.
+// Owner-only: RLS checks auth.uid() = user_id; we also stamp user_id from the
+// session. Upserts on (user_id, slot_kind, slot_key) so re-assigning a slot
+// swaps the piece rather than erroring.
+export async function POST(req: NextRequest) {
+  if (!isSupabaseConfigured()) {
+    return NextResponse.json({ error: "Not configured." }, { status: 503 });
+  }
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: "Sign in required." }, { status: 401 });
+
+  const body = await req.json().catch(() => null);
+  if (!body?.slotKey || !body?.source || !body?.externalId) {
+    return NextResponse.json(
+      { error: "slotKey, source and externalId are required." },
+      { status: 400 }
+    );
+  }
+
+  const row = {
+    user_id: user.id,
+    slot_kind: body.slotKind === "object" ? "object" : "wall",
+    slot_key: String(body.slotKey),
+    source: String(body.source),
+    external_id: String(body.externalId),
+    title: body.title ?? null,
+    image_url: body.imageUrl ?? null,
+    real_w: typeof body.realW === "number" ? body.realW : null,
+    real_h: typeof body.realH === "number" ? body.realH : null,
+    rotation_y: typeof body.rotationY === "number" ? body.rotationY : 0,
+    mount: body.mount === "floor" ? "floor" : "pedestal",
+  };
+
+  const { error } = await supabase
+    .from("museum_placements")
+    .upsert(row, { onConflict: "user_id,slot_kind,slot_key" });
+  if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+  return NextResponse.json({ ok: true });
+}
+
+// DELETE /api/museum-placements?slotKey=...&slotKind=wall — clear a slot.
+export async function DELETE(req: NextRequest) {
+  if (!isSupabaseConfigured()) {
+    return NextResponse.json({ error: "Not configured." }, { status: 503 });
+  }
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: "Sign in required." }, { status: 401 });
+
+  const slotKey = req.nextUrl.searchParams.get("slotKey");
+  const slotKind = req.nextUrl.searchParams.get("slotKind") === "object" ? "object" : "wall";
+  if (!slotKey) {
+    return NextResponse.json({ error: "slotKey is required." }, { status: 400 });
+  }
+
+  const { error } = await supabase
+    .from("museum_placements")
+    .delete()
+    .eq("user_id", user.id)
+    .eq("slot_kind", slotKind)
+    .eq("slot_key", slotKey);
+  if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+  return NextResponse.json({ ok: true });
+}

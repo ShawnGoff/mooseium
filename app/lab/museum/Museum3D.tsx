@@ -1769,6 +1769,21 @@ export default function Museum3D({
 } = {}) {
   const [museum, setMuseum] = useState<Museum | null>(null);
   const [placements, setPlacements] = useState<WallPlacement[]>([]);
+  // In-museum editor (owner only). editing toggles the edit HUD; the 3D hotspots
+  // and art picker are added in the next (supervised) pass.
+  const [editing, setEditing] = useState(false);
+
+  // Optimistically clear a slot, then tell the server (RLS enforces ownership).
+  async function removePlacement(slotKey: string) {
+    setPlacements((ps) => ps.filter((p) => p.slotKey !== slotKey));
+    try {
+      await fetch(`/api/museum-placements?slotKey=${encodeURIComponent(slotKey)}`, {
+        method: "DELETE",
+      });
+    } catch {
+      /* best-effort; a reload reconciles */
+    }
+  }
   const [view, setView] = useState<"loading" | "ready" | "empty">("loading");
   const [previews, setPreviews] = useState<Record<string, GalleryPiece | null>>({});
   const [selected, setSelected] = useState<Piece | null>(null);
@@ -2164,6 +2179,75 @@ export default function Museum3D({
 
       {isTouch && view === "ready" && <JoystickPad joyRef={joyRef} />}
 
+      {isOwner && editing && view === "ready" && (
+        <div
+          style={{
+            position: "absolute",
+            top: 64,
+            left: 14,
+            width: 260,
+            maxHeight: "60vh",
+            overflowY: "auto",
+            background: "rgba(20,17,13,0.94)",
+            border: "1px solid #4a4030",
+            borderRadius: 10,
+            padding: 12,
+            color: "#ece0c8",
+            zIndex: 20,
+          }}
+        >
+          <div style={{ fontWeight: 600, marginBottom: 4 }}>Editing your museum</div>
+          <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 10 }}>
+            Click-to-place art on walls is coming next. For now you can remove pieces
+            you&rsquo;ve hung.
+          </div>
+          {placements.length === 0 ? (
+            <div style={{ fontSize: 12, opacity: 0.6 }}>No wall pieces placed yet.</div>
+          ) : (
+            placements.map((pl) => (
+              <div
+                key={pl.slotKey}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: 8,
+                  padding: "6px 0",
+                  borderTop: "0.5px solid #332c22",
+                }}
+              >
+                <span
+                  style={{
+                    fontSize: 13,
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }}
+                  title={pl.piece.title}
+                >
+                  {pl.piece.title}
+                </span>
+                <button
+                  onClick={() => removePlacement(pl.slotKey)}
+                  style={{
+                    flexShrink: 0,
+                    fontSize: 12,
+                    padding: "3px 8px",
+                    borderRadius: 6,
+                    border: "1px solid #6b4a4a",
+                    background: "transparent",
+                    color: "#e0a0a0",
+                    cursor: "pointer",
+                  }}
+                >
+                  Remove
+                </button>
+              </div>
+            ))
+          )}
+        </div>
+      )}
+
       {view === "ready" && (
         <Tour
           storageKey="mooseium-tour-3d"
@@ -2265,6 +2349,22 @@ export default function Museum3D({
             </button>
           )}
           <strong style={{ flex: 1 }}>{museum?.name ?? "Museum"}</strong>
+          {isOwner && view === "ready" && (
+            <button
+              onClick={() => setEditing((e) => !e)}
+              style={{
+                ...infoToggleStyle,
+                width: "auto",
+                padding: "0 10px",
+                color: editing ? "#14110d" : "#e6d3a3",
+                background: editing ? "#e6d3a3" : "transparent",
+              }}
+              aria-label={editing ? "Finish editing" : "Edit your museum"}
+              title={editing ? "Finish editing" : "Edit your museum"}
+            >
+              {editing ? "Done" : "Edit"}
+            </button>
+          )}
         </div>
         {view === "ready" && infoOpen && (
           <div style={{ opacity: 0.85, marginTop: 6 }}>

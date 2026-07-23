@@ -55,9 +55,12 @@ export default function Tour({
   }, [storageKey, onClose]);
 
   // First-timers: either show the opt-in welcome, or (if no welcome prop) launch
-  // straight into the tour.
+  // straight into the tour. Runs ONCE on mount — deps intentionally empty so
+  // re-renders (e.g. the demo search) can't re-trigger the welcome.
+  const started = useRef(false);
   useEffect(() => {
-    if (!autoStart) return;
+    if (!autoStart || started.current) return;
+    started.current = true;
     let seen = false;
     try {
       seen = localStorage.getItem(storageKey) === "1";
@@ -73,7 +76,8 @@ export default function Tour({
       }
     }, 900);
     return () => clearTimeout(t);
-  }, [autoStart, storageKey, welcome]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function declineWelcome() {
     setAsking(false);

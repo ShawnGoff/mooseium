@@ -795,8 +795,8 @@ export default function HomeClient() {
           )}
 
           {artShelves.length > 0 && (
-            <section className="home-section" data-tour="daily">
-              <h2 className="feed-heading">Today&apos;s collections</h2>
+            <section className="home-section">
+              <h2 className="feed-heading" data-tour="daily">Today&apos;s collections</h2>
               <p className="shelf-blurb">
                 Freshly curated themes — a new set every day.
               </p>

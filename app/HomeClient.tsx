@@ -476,7 +476,7 @@ export default function HomeClient({
     {
       target: '[data-tour="daily"]',
       title: "Today's collections",
-      body: "A fresh, hand-curated set every day. Come back for new discoveries.",
+      body: "A fresh, curated set every day. Come back for new discoveries.",
     },
     {
       target: '[data-tour="piece"]',

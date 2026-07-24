@@ -176,18 +176,25 @@ async function generateFor(surface: Surface): Promise<number> {
   if (shelves.length === 0) throw new Error("no shelves resolved to results");
 
   const admin = createAdminClient();
+  // Insert the new set FIRST, then remove the previous one — so a failed write
+  // never leaves the discover feed empty (worst case it briefly shows both).
+  const { data: inserted, error } = await admin
+    .from("discover_shelves")
+    .insert({
+      surface,
+      user_id: null,
+      shelves,
+      generated_at: new Date().toISOString(),
+    })
+    .select("id")
+    .single();
+  if (error) throw new Error(error.message);
   await admin
     .from("discover_shelves")
     .delete()
     .eq("surface", surface)
-    .is("user_id", null);
-  const { error } = await admin.from("discover_shelves").insert({
-    surface,
-    user_id: null,
-    shelves,
-    generated_at: new Date().toISOString(),
-  });
-  if (error) throw new Error(error.message);
+    .is("user_id", null)
+    .neq("id", inserted.id);
   return shelves.length;
 }
 

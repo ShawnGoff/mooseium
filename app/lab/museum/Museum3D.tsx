@@ -209,6 +209,9 @@ type WallPlacement = {
   externalId: string;
   rotationY: number;
   mount: string;
+  // Explicit world position once the curator has dragged it; null = use the
+  // slot anchor. Rotation always comes from the wall anchor (paintings stay flat).
+  pos?: [number, number, number] | null;
   piece: GalleryPiece;
 };
 
@@ -1922,7 +1925,7 @@ function Scene({
           <ProxyArtwork
             key={pl.slotKey}
             piece={pl.piece}
-            position={a.position}
+            position={pl.pos ?? a.position}
             rotation={a.rotation}
             onSelect={onSelect}
           />

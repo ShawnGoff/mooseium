@@ -19,6 +19,9 @@ type Row = {
   real_h: number | null;
   rotation_y: number;
   mount: string;
+  pos_x: number | null;
+  pos_y: number | null;
+  pos_z: number | null;
 };
 
 export async function GET(req: NextRequest) {
@@ -39,7 +42,9 @@ export async function GET(req: NextRequest) {
 
   const { data } = await supabase
     .from("museum_placements")
-    .select("slot_kind, slot_key, source, external_id, title, image_url, real_w, real_h, rotation_y, mount")
+    .select(
+      "slot_kind, slot_key, source, external_id, title, image_url, real_w, real_h, rotation_y, mount, pos_x, pos_y, pos_z"
+    )
     .eq("user_id", profile.id);
 
   const placements = ((data as Row[] | null) ?? []).map((r) => ({
@@ -49,6 +54,10 @@ export async function GET(req: NextRequest) {
     externalId: r.external_id,
     rotationY: r.rotation_y,
     mount: r.mount,
+    pos:
+      r.pos_x != null && r.pos_y != null && r.pos_z != null
+        ? ([r.pos_x, r.pos_y, r.pos_z] as [number, number, number])
+        : null,
     piece: {
       title: r.title ?? "Untitled",
       image: r.image_url ?? "",
@@ -95,6 +104,9 @@ export async function POST(req: NextRequest) {
     real_h: typeof body.realH === "number" ? body.realH : null,
     rotation_y: typeof body.rotationY === "number" ? body.rotationY : 0,
     mount: body.mount === "floor" ? "floor" : "pedestal",
+    pos_x: typeof body.posX === "number" ? body.posX : null,
+    pos_y: typeof body.posY === "number" ? body.posY : null,
+    pos_z: typeof body.posZ === "number" ? body.posZ : null,
   };
 
   const { error } = await supabase

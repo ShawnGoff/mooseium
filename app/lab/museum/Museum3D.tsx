@@ -2056,7 +2056,9 @@ function Scene({
         <pointLight
           key={i}
           position={[x, H - 0.6, z]}
-          intensity={i === 0 ? 18 : 14}
+          // Lights-off dims the interior lights for everyone (daylight/skylight
+          // still lifts the room), so the switch works for visitors too.
+          intensity={(i === 0 ? 18 : 14) * (lightsOn ? 1 : 0.12)}
           distance={i === 0 ? 44 : 26}
           decay={2}
           color={i === 0 ? "#fff4e4" : "#ffe6bd"}

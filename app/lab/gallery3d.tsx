@@ -121,7 +121,22 @@ export function Player({
   const keys = useRef<Record<string, boolean>>({});
 
   useEffect(() => {
-    const kd = (e: KeyboardEvent) => (keys.current[e.code] = true);
+    // Don't drive the player while the user is typing in a field (e.g. the art
+    // search box) — otherwise "WASD" in a query walks the character around.
+    const typing = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      return (
+        !!t &&
+        (t.tagName === "INPUT" ||
+          t.tagName === "TEXTAREA" ||
+          t.tagName === "SELECT" ||
+          t.isContentEditable)
+      );
+    };
+    const kd = (e: KeyboardEvent) => {
+      if (typing(e)) return;
+      keys.current[e.code] = true;
+    };
     const ku = (e: KeyboardEvent) => (keys.current[e.code] = false);
     window.addEventListener("keydown", kd);
     window.addEventListener("keyup", ku);

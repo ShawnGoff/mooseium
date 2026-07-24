@@ -266,22 +266,39 @@ function ArtPicker({
   title?: string;
 }) {
   const [q, setQ] = useState("");
+  const [museum, setMuseum] = useState("all");
+  const [museums, setMuseums] = useState<{ slug: string; displayName: string }[]>([]);
   const [cards, setCards] = useState<PickCard[] | null>(null);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
   const [busy, setBusy] = useState(false);
 
-  async function run() {
+  useEffect(() => {
+    fetch("/api/museums")
+      .then((r) => r.json())
+      .then((d) => setMuseums((d.museums as { slug: string; displayName: string }[]) ?? []))
+      .catch(() => {});
+  }, []);
+
+  async function fetchPage(p: number, append: boolean) {
     if (!q.trim()) return;
     setBusy(true);
-    setCards(null);
     try {
-      const r = await fetch(`/api/search?museum=all&q=${encodeURIComponent(q)}&page=1`);
+      const r = await fetch(
+        `/api/search?museum=${encodeURIComponent(museum)}&q=${encodeURIComponent(q)}&page=${p}`
+      );
       const d = await r.json();
-      setCards(((d.cards as PickCard[]) ?? []).filter((c) => c.thumbnailUrl).slice(0, 24));
+      const next = ((d.cards as PickCard[]) ?? []).filter((c) => c.thumbnailUrl);
+      setCards((prev) => (append && prev ? [...prev, ...next] : next));
+      setHasMore(Boolean(d.hasMore));
+      setPage(p);
     } catch {
-      setCards([]);
+      if (!append) setCards([]);
     }
     setBusy(false);
   }
+  const run = () => fetchPage(1, false);
+  const more = () => fetchPage(page + 1, true);
 
   async function pick(c: PickCard) {
     let image = c.thumbnailUrl;
@@ -330,14 +347,13 @@ function ArtPicker({
           e.preventDefault();
           run();
         }}
-        style={{ display: "flex", gap: 6 }}
+        style={{ display: "flex", flexDirection: "column", gap: 6 }}
       >
-        <input
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          placeholder="Search all museums…"
+        <select
+          value={museum}
+          onChange={(e) => setMuseum(e.target.value)}
+          aria-label="Museum to search"
           style={{
-            flex: 1,
             padding: "6px 8px",
             borderRadius: 6,
             border: "1px solid #4a4030",
@@ -345,51 +361,133 @@ function ArtPicker({
             color: "#ece0c8",
             fontSize: 13,
           }}
-        />
-        <button
-          type="submit"
-          style={{
-            padding: "0 12px",
-            borderRadius: 6,
-            border: "1px solid #c8a15a",
-            background: "transparent",
-            color: "#e6d3a3",
-            cursor: "pointer",
-            fontSize: 13,
-          }}
         >
-          Search
-        </button>
+          <option value="all">All museums</option>
+          {museums.map((m) => (
+            <option key={m.slug} value={m.slug}>
+              {m.displayName}
+            </option>
+          ))}
+        </select>
+        <div style={{ display: "flex", gap: 6 }}>
+          <input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Search…"
+            style={{
+              flex: 1,
+              padding: "6px 8px",
+              borderRadius: 6,
+              border: "1px solid #4a4030",
+              background: "#0e0b08",
+              color: "#ece0c8",
+              fontSize: 13,
+            }}
+          />
+          <button
+            type="submit"
+            style={{
+              padding: "0 12px",
+              borderRadius: 6,
+              border: "1px solid #c8a15a",
+              background: "transparent",
+              color: "#e6d3a3",
+              cursor: "pointer",
+              fontSize: 13,
+            }}
+          >
+            Search
+          </button>
+        </div>
       </form>
-      <div style={{ overflowY: "auto", flex: 1 }}>
-        {busy && <div style={{ fontSize: 13, opacity: 0.7 }}>Searching…</div>}
+      <div style={{ overflowY: "auto", flex: 1, display: "flex", flexDirection: "column", gap: 6 }}>
+        {busy && page === 1 && <div style={{ fontSize: 13, opacity: 0.7 }}>Searching…</div>}
         {cards && cards.length === 0 && !busy && (
           <div style={{ fontSize: 13, opacity: 0.7 }}>No results.</div>
         )}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-          {(cards ?? []).map((c) => (
-            <button
-              key={`${c.sourceMuseum}:${c.museumObjectId}`}
-              onClick={() => pick(c)}
-              title={c.title}
-              style={{
-                padding: 0,
-                border: "1px solid #332c22",
-                borderRadius: 6,
-                overflow: "hidden",
-                background: "transparent",
-                cursor: "pointer",
-              }}
-            >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={c.thumbnailUrl}
-                alt=""
-                style={{ width: "100%", height: 90, objectFit: "cover", display: "block" }}
-              />
-            </button>
-          ))}
-        </div>
+        {(cards ?? []).map((c) => (
+          <button
+            key={`${c.sourceMuseum}:${c.museumObjectId}`}
+            onClick={() => pick(c)}
+            title={c.title}
+            style={{
+              display: "flex",
+              gap: 8,
+              alignItems: "center",
+              width: "100%",
+              padding: 6,
+              border: "1px solid #332c22",
+              borderRadius: 8,
+              background: "transparent",
+              color: "#ece0c8",
+              cursor: "pointer",
+              textAlign: "left",
+            }}
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={c.thumbnailUrl}
+              alt=""
+              style={{ width: 52, height: 52, objectFit: "cover", borderRadius: 4, flexShrink: 0 }}
+            />
+            <div style={{ minWidth: 0 }}>
+              <div
+                style={{
+                  fontSize: 13,
+                  fontWeight: 600,
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {c.title}
+              </div>
+              {c.artist && (
+                <div
+                  style={{
+                    fontSize: 11,
+                    color: "#b8afa2",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {c.artist}
+                </div>
+              )}
+              <div
+                style={{
+                  fontSize: 11,
+                  color: "#c8a15a",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {MUSEUM_LABEL[c.sourceMuseum] ?? c.sourceMuseum}
+              </div>
+            </div>
+          </button>
+        ))}
+        {hasMore && cards && cards.length > 0 && (
+          <button
+            onClick={more}
+            disabled={busy}
+            style={{
+              width: "100%",
+              marginTop: 4,
+              padding: "7px 0",
+              borderRadius: 6,
+              border: "1px solid #4a4030",
+              background: "transparent",
+              color: "#e6d3a3",
+              cursor: busy ? "default" : "pointer",
+              fontSize: 13,
+            }}
+          >
+            {busy ? "Loading…" : "Load more"}
+          </button>
+        )}
       </div>
     </div>
   );
@@ -2456,6 +2554,8 @@ export default function Museum3D({
   useEffect(() => {
     if (!station || denPanel) return;
     const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
       if (e.key === "e" || e.key === "E" || e.key === "Enter") {
         e.preventDefault();
         enterStation();

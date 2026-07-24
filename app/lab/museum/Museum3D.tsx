@@ -208,6 +208,14 @@ const outwardYaw = (side: Side) =>
 
 // A free-standing painting the curator hung directly on a wall (in-museum
 // editor), outside the gallery collections. Denormalized so the 3D can hang it.
+type GalleryVis = {
+  id: string;
+  name: string;
+  count: number;
+  inMuseum: boolean;
+  shareSlug: string | null;
+  wing: string | null;
+};
 type WallPlacement = {
   slotKind: string;
   slotKey: string;
@@ -2238,11 +2246,9 @@ export default function Museum3D({
   // Bumped after a collection changes so mounted gallery rooms re-fetch + re-hang.
   const [galleryVersion, setGalleryVersion] = useState(0);
 
-  // The owner's real galleries with visibility. Hidden ones drop out of
-  // /api/museum, so the visibility toggles list them from here instead.
-  const [myGalleries, setMyGalleries] = useState<
-    { id: string; name: string; count: number; inMuseum: boolean; shareSlug: string | null }[]
-  >([]);
+  // The owner's real galleries with visibility + wing. Hidden ones drop out of
+  // /api/museum, so the toggles/grouping list them from here instead.
+  const [myGalleries, setMyGalleries] = useState<GalleryVis[]>([]);
   async function refreshGalleries() {
     if (!isOwner) return;
     try {
@@ -2263,6 +2269,32 @@ export default function Museum3D({
       pieceCache.clear();
       await reloadMuseum();
       setGalleryVersion((v) => v + 1);
+    } catch {
+      /* best-effort */
+    }
+  }
+  // Move a gallery into a wing (a named group). "" = Unassigned; "__new__"
+  // prompts for a new wing name.
+  async function reassignWing(id: string, value: string) {
+    let wing: string | null;
+    if (value === "__new__") {
+      const name = window.prompt("New wing name")?.trim();
+      if (!name) return;
+      wing = name;
+    } else {
+      wing = value || null;
+    }
+    setMyGalleries((gs) => gs.map((g) => (g.id === id ? { ...g, wing } : g)));
+    try {
+      await fetch(`/api/collections/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ wing }),
+      });
+      pieceCache.clear();
+      await reloadMuseum();
+      setGalleryVersion((v) => v + 1);
+      refreshGalleries();
     } catch {
       /* best-effort */
     }
@@ -2318,6 +2350,22 @@ export default function Museum3D({
       a === ORPHAN ? -1 : b === ORPHAN ? 1 : 0
     );
   }, [placements, galleryNameBySlug, layout]);
+
+  // Real galleries (published, with art), grouped by wing for the edit panel.
+  const publishedGalleries = myGalleries.filter((g) => g.shareSlug && g.count > 0);
+  const wingNames = Array.from(
+    new Set(publishedGalleries.map((g) => g.wing).filter((w): w is string => !!w))
+  );
+  const galleriesByWing = ((): [string, GalleryVis[]][] => {
+    const m = new Map<string, GalleryVis[]>();
+    for (const g of publishedGalleries) {
+      const key = g.wing || "Unassigned";
+      (m.get(key) ?? m.set(key, []).get(key)!).push(g);
+    }
+    return Array.from(m.entries()).sort(([a], [b]) =>
+      a === "Unassigned" ? 1 : b === "Unassigned" ? -1 : 0
+    );
+  })();
 
   // Visitor mode = the curated museum (what everyone sees). Curator mode =
   // editing: the whole museum opens up and the placement tools appear.
@@ -3091,70 +3139,104 @@ export default function Museum3D({
             ＋ New gallery
           </button>
 
-          {myGalleries.filter((g) => g.shareSlug && g.count > 0).length > 0 && (
+          {publishedGalleries.length > 0 && (
             <div style={{ marginBottom: 10 }}>
               <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 4 }}>
                 Your galleries{" "}
                 <span style={{ opacity: 0.65 }}>(check to show · up to 9 fit)</span>
               </div>
-              {myGalleries
-                .filter((g) => g.shareSlug && g.count > 0)
-                .map((c) => (
-                  <div
-                    key={c.id}
-                    style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 0" }}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={c.inMuseum}
-                      onChange={() => toggleGalleryVisibility(c.id, !c.inMuseum)}
-                      title={
-                        c.inMuseum
-                          ? "Shown in your museum — uncheck to hide"
-                          : "Hidden — check to show"
-                      }
-                      style={{ cursor: "pointer", flexShrink: 0 }}
-                    />
-                    <span
-                      style={{
-                        flex: 1,
-                        fontSize: 13,
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                        whiteSpace: "nowrap",
-                        opacity: c.inMuseum ? 1 : 0.5,
-                      }}
-                      title={c.name}
+              {galleriesByWing.map(([wing, gals]) => (
+                <div key={wing} style={{ marginTop: 6 }}>
+                  <div style={{ fontSize: 12, color: "#c8a15a", marginBottom: 2 }}>{wing}</div>
+                  {gals.map((c) => (
+                    <div
+                      key={c.id}
+                      style={{ padding: "5px 0", borderTop: "0.5px solid #332c22" }}
                     >
-                      {c.name}
-                    </span>
-                    <span
-                      style={{
-                        fontSize: 11,
-                        flexShrink: 0,
-                        color: c.count >= GALLERY_CAP ? "#c8a15a" : "#8a8175",
-                      }}
-                    >
-                      {Math.min(c.count, GALLERY_CAP)}/{GALLERY_CAP}
-                    </span>
-                    <button
-                      onClick={() => setCollectionTarget({ id: c.id, name: c.name })}
-                      disabled={c.count >= GALLERY_CAP}
-                      style={{
-                        flexShrink: 0,
-                        fontSize: 12,
-                        padding: "3px 12px",
-                        borderRadius: 6,
-                        border: "1px solid #6b6157",
-                        background: "transparent",
-                        color: c.count >= GALLERY_CAP ? "#6b6157" : "#e6d3a3",
-                        cursor: c.count >= GALLERY_CAP ? "default" : "pointer",
-                      }}
-                    >
-                      {c.count >= GALLERY_CAP ? "Full" : "Add"}
-                    </button>
-                  </div>
-                ))}
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <input
+                          type="checkbox"
+                          checked={c.inMuseum}
+                          onChange={() => toggleGalleryVisibility(c.id, !c.inMuseum)}
+                          title={c.inMuseum ? "Shown — uncheck to hide" : "Hidden — check to show"}
+                          style={{ cursor: "pointer", flexShrink: 0 }}
+                        />
+                        <span
+                          style={{
+                            flex: 1,
+                            fontSize: 13,
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            whiteSpace: "nowrap",
+                            opacity: c.inMuseum ? 1 : 0.5,
+                          }}
+                          title={c.name}
+                        >
+                          {c.name}
+                        </span>
+                        <span
+                          style={{
+                            fontSize: 11,
+                            flexShrink: 0,
+                            color: c.count >= GALLERY_CAP ? "#c8a15a" : "#8a8175",
+                          }}
+                        >
+                          {Math.min(c.count, GALLERY_CAP)}/{GALLERY_CAP}
+                        </span>
+                      </div>
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 6,
+                          marginTop: 4,
+                          paddingLeft: 22,
+                        }}
+                      >
+                        <select
+                          value={c.wing ?? ""}
+                          onChange={(e) => reassignWing(c.id, e.target.value)}
+                          aria-label="Wing"
+                          style={{
+                            flex: 1,
+                            fontSize: 12,
+                            padding: "3px 6px",
+                            borderRadius: 6,
+                            border: "1px solid #4a4030",
+                            background: "#0e0b08",
+                            color: "#ece0c8",
+                            cursor: "pointer",
+                          }}
+                        >
+                          <option value="">Unassigned</option>
+                          {wingNames.map((w) => (
+                            <option key={w} value={w}>
+                              {w}
+                            </option>
+                          ))}
+                          <option value="__new__">＋ New wing…</option>
+                        </select>
+                        <button
+                          onClick={() => setCollectionTarget({ id: c.id, name: c.name })}
+                          disabled={c.count >= GALLERY_CAP}
+                          style={{
+                            flexShrink: 0,
+                            fontSize: 12,
+                            padding: "3px 12px",
+                            borderRadius: 6,
+                            border: "1px solid #6b6157",
+                            background: "transparent",
+                            color: c.count >= GALLERY_CAP ? "#6b6157" : "#e6d3a3",
+                            cursor: c.count >= GALLERY_CAP ? "default" : "pointer",
+                          }}
+                        >
+                          {c.count >= GALLERY_CAP ? "Full" : "Add"}
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ))}
             </div>
           )}
           {placements.length === 0 ? (

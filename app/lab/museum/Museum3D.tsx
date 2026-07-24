@@ -54,7 +54,14 @@ const MUSEUM_TOUR_STEPS: TourStep[] = [
   },
 ];
 
-type Collection = { id: string; name: string; slug: string; count: number };
+type Collection = {
+  id: string;
+  name: string;
+  slug: string;
+  count: number;
+  // Source-museum showcases carry their pieces inline (no /api/gallery-pieces).
+  pieces?: GalleryPiece[];
+};
 type Wing = { name: string; collections: Collection[]; isDefault?: boolean };
 type Museum = { name: string; curator: string; handle: string; wings: Wing[] };
 
@@ -90,6 +97,8 @@ type GalleryBuild = {
   entrySide: Side;
   previewPos: [number, number, number];
   previewRot: [number, number, number];
+  // Source-museum showcases pass pieces inline instead of fetching by slug.
+  pieces?: GalleryPiece[];
 };
 type Nav = { wing: string; name: string; spawn: [number, number, number]; yaw: number };
 type Hint = { pos: [number, number, number]; rot: [number, number, number] };
@@ -751,6 +760,7 @@ function buildMuseum(m: Museum, editing = false): Layout {
         entrySide: opp(cs),
         previewPos,
         previewRot: faceRot(cs),
+        pieces: coll.pieces,
       });
       // No free-placement anchors inside galleries: a gallery holds only its
       // own collection (up to GALLERY_CAP pieces), so its 3D room and 2D page
@@ -873,9 +883,14 @@ function GalleryFull({
   onSelect: (p: Piece) => void;
 }) {
   const [pieces, setPieces] = useState<GalleryPiece[] | null>(
-    pieceCache.get(gallery.slug) ?? null
+    gallery.pieces ?? pieceCache.get(gallery.slug) ?? null
   );
   useEffect(() => {
+    // Source-museum showcases carry their pieces inline — no fetch.
+    if (gallery.pieces) {
+      setPieces(gallery.pieces);
+      return;
+    }
     if (pieceCache.has(gallery.slug)) {
       setPieces(pieceCache.get(gallery.slug)!);
       return;
@@ -893,18 +908,23 @@ function GalleryFull({
     return () => {
       cancelled = true;
     };
-  }, [gallery.slug]);
+  }, [gallery.slug, gallery.pieces]);
   const spots = useMemo(
     () => (pieces ? hangRoom(gallery.room, gallery.entrySide, pieces) : []),
     [pieces, gallery]
   );
   if (!pieces) return null;
+  // Source pieces are raw museum-CDN thumbnails, so load them through the
+  // CORS-safe proxy (like placements) to avoid tainted/black textures.
+  const isSource = Boolean(gallery.pieces);
   return (
     <>
       {pieces.map((p, i) => (
         <ProxyArtwork
           key={i}
-          piece={p}
+          piece={
+            isSource ? { ...p, image: `/api/img?url=${encodeURIComponent(p.image)}` } : p
+          }
           position={spots[i].position}
           rotation={spots[i].rotation}
           onSelect={onSelect}
@@ -2228,11 +2248,17 @@ const ENTRANCE_SPAWN: [number, number, number] = [0, EYE_Y, A + VEST_LEN - 2];
 
 export default function Museum3D({
   handle,
-  isOwner = false,
+  isOwner: isOwnerProp = false,
+  source,
 }: {
   handle?: string;
   isOwner?: boolean;
+  // When set, this is a pre-populated SOURCE museum (/museum/[slug]) built from
+  // one institution's own open-access art. Read-only: no editor, no placements.
+  source?: string;
 } = {}) {
+  // Source museums are never editable, no matter what the caller passes.
+  const isOwner = source ? false : isOwnerProp;
   const [museum, setMuseum] = useState<Museum | null>(null);
   const [placements, setPlacements] = useState<WallPlacement[]>([]);
   // In-museum editor (owner only). editing toggles the edit HUD; the 3D hotspots
@@ -2756,6 +2782,24 @@ export default function Museum3D({
   }, [layout]);
 
   useEffect(() => {
+    // Source museums load a pre-built, cached institution museum instead of a
+    // user's. No placements — everything comes baked into the gallery pieces.
+    if (source) {
+      fetch(`/api/source-museum?m=${encodeURIComponent(source)}`)
+        .then((r) => r.json())
+        .then((d) => {
+          const m = d.museum as Museum | null;
+          if (m && Array.isArray(m.wings) && m.wings.length > 0) {
+            setMuseum(m);
+            setView("ready");
+          } else {
+            setView("empty");
+          }
+        })
+        .catch(() => setView("empty"));
+      return;
+    }
+
     const h = handle ?? new URLSearchParams(window.location.search).get("u");
     if (!h) {
       setView("empty");
@@ -2782,14 +2826,35 @@ export default function Museum3D({
       .then((r) => r.json())
       .then((d) => setPlacements((d.placements as WallPlacement[]) ?? []))
       .catch(() => {});
-  }, [handle, isOwner]);
+  }, [handle, isOwner, source]);
 
   // Load one preview piece per gallery room.
   useEffect(() => {
     if (!layout) return;
     let cancelled = false;
-    const slugs = Array.from(new Set(layout.galleries.map((g) => g.slug)));
-    slugs.forEach((slug) => {
+    // Source galleries carry their pieces inline, so use the first one directly
+    // (proxied for CORS) instead of hitting /api/gallery-pieces, which has no row
+    // for a source slug.
+    const inlinePreviews: Record<string, GalleryPiece> = {};
+    const needFetch: string[] = [];
+    const seen = new Set<string>();
+    layout.galleries.forEach((g) => {
+      if (seen.has(g.slug)) return;
+      seen.add(g.slug);
+      if (g.pieces && g.pieces.length) {
+        const first = g.pieces[0];
+        inlinePreviews[g.slug] = {
+          ...first,
+          image: `/api/img?url=${encodeURIComponent(first.image)}`,
+        };
+      } else {
+        needFetch.push(g.slug);
+      }
+    });
+    if (Object.keys(inlinePreviews).length) {
+      setPreviews((p) => ({ ...p, ...inlinePreviews }));
+    }
+    needFetch.forEach((slug) => {
       fetch(`/api/gallery-pieces?slug=${encodeURIComponent(slug)}`)
         .then((r) => r.json())
         .then((pd) => {

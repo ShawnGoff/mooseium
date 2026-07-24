@@ -65,6 +65,7 @@ const DOORH = 3.6; // doorway height
 const CORR_HALF = 1.8; // corridor half-width
 const DOOR_HALF = 1.5; // doorway half-width
 const WING_HALF = 5; // wing room half-size
+const GALLERY_CAP = 11; // max pieces a gallery displays (3 walls + entry wall)
 const COLL_HALF = 4.5; // gallery room half-size
 const ATR_WING_CORR = 10; // atrium→wing corridor length (spaces the wings out)
 const WING_COLL_CORR = 3; // wing→gallery corridor length
@@ -742,10 +743,9 @@ function buildMuseum(m: Museum, editing = false): Layout {
         previewPos,
         previewRot: faceRot(cs),
       });
-
-      // Free-placement anchors on the gallery's entry wall — the one the
-      // collection's auto-layout leaves empty (hangRoom skips entrySide).
-      addWallAnchors(`gallery:${coll.slug}`, r, opp(cs));
+      // No free-placement anchors inside galleries: a gallery holds only its
+      // own collection (up to GALLERY_CAP pieces), so its 3D room and 2D page
+      // always match. Curate it with the "Add" button in the edit panel.
 
       // teleport target: just inside the doorway, facing the far wall
       const spawn: [number, number, number] =
@@ -851,7 +851,7 @@ function GalleryFull({
       .then((r) => r.json())
       .then((d) => {
         if (cancelled) return;
-        const ps = ((d.pieces ?? []) as GalleryPiece[]).slice(0, 9);
+        const ps = ((d.pieces ?? []) as GalleryPiece[]).slice(0, GALLERY_CAP);
         pieceCache.set(gallery.slug, ps);
         setPieces(ps);
       })
@@ -3040,21 +3040,31 @@ export default function Museum3D({
                   >
                     {c.name}
                   </span>
-                  <button
-                    onClick={() => setCollectionTarget({ id: c.id, name: c.name })}
-                    style={{
-                      flexShrink: 0,
-                      fontSize: 12,
-                      padding: "3px 12px",
-                      borderRadius: 6,
-                      border: "1px solid #6b6157",
-                      background: "transparent",
-                      color: "#e6d3a3",
-                      cursor: "pointer",
-                    }}
-                  >
-                    Add
-                  </button>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                    <span
+                      style={{
+                        fontSize: 11,
+                        color: c.count >= GALLERY_CAP ? "#c8a15a" : "#8a8175",
+                      }}
+                    >
+                      {Math.min(c.count, GALLERY_CAP)}/{GALLERY_CAP}
+                    </span>
+                    <button
+                      onClick={() => setCollectionTarget({ id: c.id, name: c.name })}
+                      disabled={c.count >= GALLERY_CAP}
+                      style={{
+                        fontSize: 12,
+                        padding: "3px 12px",
+                        borderRadius: 6,
+                        border: "1px solid #6b6157",
+                        background: "transparent",
+                        color: c.count >= GALLERY_CAP ? "#6b6157" : "#e6d3a3",
+                        cursor: c.count >= GALLERY_CAP ? "default" : "pointer",
+                      }}
+                    >
+                      {c.count >= GALLERY_CAP ? "Full" : "Add"}
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>

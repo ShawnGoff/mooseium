@@ -2208,6 +2208,36 @@ export default function Museum3D({
   // Bumped after a collection changes so mounted gallery rooms re-fetch + re-hang.
   const [galleryVersion, setGalleryVersion] = useState(0);
 
+  // Group placed wall pieces by location so the edit panel reads as sections
+  // (Main Room / North·West·East Gallery / a gallery's own walls) not one list.
+  const galleryNameBySlug = useMemo(() => {
+    const m = new Map<string, string>();
+    museum?.wings.forEach((w) => w.collections.forEach((c) => m.set(c.slug, c.name)));
+    return m;
+  }, [museum]);
+  const groupedPlacements = useMemo(() => {
+    const label = (slotKey: string): string => {
+      const [zone, a] = slotKey.split(":");
+      if (zone === "atrium") return "Main Room";
+      if (zone === "wing")
+        return a === "N"
+          ? "North Gallery"
+          : a === "W"
+          ? "West Gallery"
+          : a === "E"
+          ? "East Gallery"
+          : "Wing";
+      if (zone === "gallery") return galleryNameBySlug.get(a) ?? "Gallery walls";
+      return "Other";
+    };
+    const m = new Map<string, WallPlacement[]>();
+    for (const pl of placements) {
+      const g = label(pl.slotKey);
+      (m.get(g) ?? m.set(g, []).get(g)!).push(pl);
+    }
+    return Array.from(m.entries());
+  }, [placements, galleryNameBySlug]);
+
   // Visitor mode = the curated museum (what everyone sees). Curator mode =
   // editing: the whole museum opens up and the placement tools appear.
   function setMode(curator: boolean) {
@@ -3021,44 +3051,51 @@ export default function Museum3D({
           {placements.length === 0 ? (
             <div style={{ fontSize: 12, opacity: 0.6 }}>No wall pieces placed yet.</div>
           ) : (
-            placements.map((pl) => (
-              <div
-                key={pl.slotKey}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  gap: 8,
-                  padding: "6px 0",
-                  borderTop: "0.5px solid #332c22",
-                }}
-              >
-                <span
-                  style={{
-                    fontSize: 13,
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    whiteSpace: "nowrap",
-                  }}
-                  title={pl.piece.title}
-                >
-                  {pl.piece.title}
-                </span>
-                <button
-                  onClick={() => removePlacement(pl.slotKey)}
-                  style={{
-                    flexShrink: 0,
-                    fontSize: 12,
-                    padding: "3px 8px",
-                    borderRadius: 6,
-                    border: "1px solid #6b4a4a",
-                    background: "transparent",
-                    color: "#e0a0a0",
-                    cursor: "pointer",
-                  }}
-                >
-                  Remove
-                </button>
+            groupedPlacements.map(([group, items]) => (
+              <div key={group} style={{ marginTop: 8 }}>
+                <div style={{ fontSize: 12, color: "#c8a15a", marginBottom: 2 }}>
+                  {group} · {items.length}
+                </div>
+                {items.map((pl) => (
+                  <div
+                    key={pl.slotKey}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      gap: 8,
+                      padding: "5px 0",
+                      borderTop: "0.5px solid #332c22",
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontSize: 13,
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                      }}
+                      title={pl.piece.title}
+                    >
+                      {pl.piece.title}
+                    </span>
+                    <button
+                      onClick={() => removePlacement(pl.slotKey)}
+                      style={{
+                        flexShrink: 0,
+                        fontSize: 12,
+                        padding: "3px 8px",
+                        borderRadius: 6,
+                        border: "1px solid #6b4a4a",
+                        background: "transparent",
+                        color: "#e0a0a0",
+                        cursor: "pointer",
+                      }}
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ))}
               </div>
             ))
           )}

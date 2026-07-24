@@ -2233,6 +2233,11 @@ export default function Museum3D({
   // Bumped after a collection changes so mounted gallery rooms re-fetch + re-hang.
   const [galleryVersion, setGalleryVersion] = useState(0);
 
+  const layout = useMemo(
+    () => (museum ? buildMuseum(museum, editing) : null),
+    [museum, editing]
+  );
+
   // Group placed wall pieces by location so the edit panel reads as sections
   // (Main Room / North·West·East Gallery / a gallery's own walls) not one list.
   const galleryNameBySlug = useMemo(() => {
@@ -2240,8 +2245,13 @@ export default function Museum3D({
     museum?.wings.forEach((w) => w.collections.forEach((c) => m.set(c.slug, c.name)));
     return m;
   }, [museum]);
+  const ORPHAN = "Not on display";
   const groupedPlacements = useMemo(() => {
+    // A placement whose wall no longer exists (e.g. a wall that became a gallery
+    // doorway) is "orphaned" — surfaced separately so it's never silently lost.
+    const anchored = new Set((layout?.wallAnchors ?? []).map((a) => a.slotKey));
     const label = (slotKey: string): string => {
+      if (layout && !anchored.has(slotKey)) return ORPHAN;
       const [zone, a] = slotKey.split(":");
       if (zone === "atrium") return "Main Room";
       if (zone === "wing")
@@ -2260,8 +2270,11 @@ export default function Museum3D({
       const g = label(pl.slotKey);
       (m.get(g) ?? m.set(g, []).get(g)!).push(pl);
     }
-    return Array.from(m.entries());
-  }, [placements, galleryNameBySlug]);
+    // Surface the orphaned group first so it gets attention.
+    return Array.from(m.entries()).sort(([a], [b]) =>
+      a === ORPHAN ? -1 : b === ORPHAN ? 1 : 0
+    );
+  }, [placements, galleryNameBySlug, layout]);
 
   // Visitor mode = the curated museum (what everyone sees). Curator mode =
   // editing: the whole museum opens up and the placement tools appear.
@@ -2634,10 +2647,6 @@ export default function Museum3D({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [trackIdx]);
 
-  const layout = useMemo(
-    () => (museum ? buildMuseum(museum, editing) : null),
-    [museum, editing]
-  );
   const constrain: Constrain = useMemo(() => {
     if (!layout) return (nx, nz) => ({ x: nx, z: nz });
     const walk = layout.walk;
@@ -3099,9 +3108,21 @@ export default function Museum3D({
           ) : (
             groupedPlacements.map(([group, items]) => (
               <div key={group} style={{ marginTop: 8 }}>
-                <div style={{ fontSize: 12, color: "#c8a15a", marginBottom: 2 }}>
+                <div
+                  style={{
+                    fontSize: 12,
+                    color: group === ORPHAN ? "#e0a0a0" : "#c8a15a",
+                    marginBottom: 2,
+                  }}
+                >
                   {group} · {items.length}
                 </div>
+                {group === ORPHAN && (
+                  <div style={{ fontSize: 11, opacity: 0.7, marginBottom: 4 }}>
+                    These lost their wall (it became a doorway). Remove them, or
+                    they&rsquo;ll wait here.
+                  </div>
+                )}
                 {items.map((pl) => (
                   <div
                     key={pl.slotKey}

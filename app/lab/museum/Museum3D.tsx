@@ -54,7 +54,7 @@ const MUSEUM_TOUR_STEPS: TourStep[] = [
   },
 ];
 
-type Collection = { name: string; slug: string; count: number };
+type Collection = { id: string; name: string; slug: string; count: number };
 type Wing = { name: string; collections: Collection[]; isDefault?: boolean };
 type Museum = { name: string; curator: string; handle: string; wings: Wing[] };
 
@@ -2557,6 +2557,53 @@ export default function Museum3D({
           >
             ＋ New gallery
           </button>
+
+          {(museum?.wings.flatMap((w) => w.collections) ?? []).length > 0 && (
+            <div style={{ marginBottom: 10 }}>
+              <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 4 }}>
+                Add art to a gallery
+              </div>
+              {(museum?.wings.flatMap((w) => w.collections) ?? []).map((c) => (
+                <div
+                  key={c.id}
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    gap: 8,
+                    padding: "4px 0",
+                  }}
+                >
+                  <span
+                    style={{
+                      fontSize: 13,
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    }}
+                    title={c.name}
+                  >
+                    {c.name}
+                  </span>
+                  <button
+                    onClick={() => setCollectionTarget({ id: c.id, name: c.name })}
+                    style={{
+                      flexShrink: 0,
+                      fontSize: 12,
+                      padding: "3px 8px",
+                      borderRadius: 6,
+                      border: "1px solid #6b6157",
+                      background: "transparent",
+                      color: "#e6d3a3",
+                      cursor: "pointer",
+                    }}
+                  >
+                    ＋ art
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
           {placements.length === 0 ? (
             <div style={{ fontSize: 12, opacity: 0.6 }}>No wall pieces placed yet.</div>
           ) : (

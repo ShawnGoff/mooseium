@@ -273,10 +273,12 @@ function ArtPicker({
   onClose,
   onPlace,
   title = "Place art on this wall",
+  placeLabel = "Place on this wall",
 }: {
   onClose: () => void;
   onPlace: (art: { source: string; externalId: string; title: string; image: string }) => void;
   title?: string;
+  placeLabel?: string;
 }) {
   const [q, setQ] = useState("");
   const [museum, setMuseum] = useState("all");
@@ -584,7 +586,7 @@ function ArtPicker({
               fontWeight: 600,
             }}
           >
-            Place on this wall
+            {placeLabel}
           </button>
         </div>
       )}
@@ -1976,6 +1978,7 @@ function Scene({
   onPick,
   onNudgeSelect,
   onSelectPlacement,
+  galleryVersion,
   hot,
   reflect,
   lowPower,
@@ -1992,6 +1995,7 @@ function Scene({
   onPick: (slotKey: string) => void;
   onNudgeSelect: (slotKey: string) => void;
   onSelectPlacement: (pl: WallPlacement) => void;
+  galleryVersion: number;
   hot: string[];
   reflect: boolean;
   lowPower: boolean;
@@ -2125,7 +2129,7 @@ function Scene({
 
       {layout.galleries.map((g) =>
         hot.includes(g.slug) ? (
-          <GalleryFull key={g.slug} gallery={g} onSelect={onSelect} />
+          <GalleryFull key={`${g.slug}:${galleryVersion}`} gallery={g} onSelect={onSelect} />
         ) : null
       )}
 
@@ -2201,6 +2205,8 @@ export default function Museum3D({
   );
   // The wall placement currently selected for nudging (edit mode).
   const [selectedPlacement, setSelectedPlacement] = useState<string | null>(null);
+  // Bumped after a collection changes so mounted gallery rooms re-fetch + re-hang.
+  const [galleryVersion, setGalleryVersion] = useState(0);
 
   // Visitor mode = the curated museum (what everyone sees). Curator mode =
   // editing: the whole museum opens up and the placement tools appear.
@@ -2288,6 +2294,7 @@ export default function Museum3D({
       });
       pieceCache.clear();
       await reloadMuseum();
+      setGalleryVersion((v) => v + 1);
     } catch {
       /* best-effort */
     }
@@ -2758,6 +2765,7 @@ export default function Museum3D({
             onSelectPlacement={(pl) => {
               if (!dragRef.current) openPlacementInfo(pl);
             }}
+            galleryVersion={galleryVersion}
             hot={hot}
             reflect={!isTouch && !lite}
             lowPower={isTouch}
@@ -2842,6 +2850,7 @@ export default function Museum3D({
       {isOwner && editing && (editTarget || collectionTarget) && view === "ready" && (
         <ArtPicker
           title={collectionTarget ? `Add to ${collectionTarget.name}` : undefined}
+          placeLabel={collectionTarget ? `Add to ${collectionTarget.name}` : undefined}
           onClose={() => {
             setEditTarget(null);
             setCollectionTarget(null);
@@ -2995,7 +3004,7 @@ export default function Museum3D({
                     style={{
                       flexShrink: 0,
                       fontSize: 12,
-                      padding: "3px 8px",
+                      padding: "3px 12px",
                       borderRadius: 6,
                       border: "1px solid #6b6157",
                       background: "transparent",
@@ -3003,7 +3012,7 @@ export default function Museum3D({
                       cursor: "pointer",
                     }}
                   >
-                    ＋ art
+                    Add
                   </button>
                 </div>
               ))}

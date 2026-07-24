@@ -2345,7 +2345,10 @@ export default function Museum3D({
       .then((r) => r.json())
       .then((d) => {
         const m = d.museum as Museum | null;
-        if (m && Array.isArray(m.wings) && m.wings.length > 0) {
+        // The owner can always walk in — even an empty museum (just the atrium) —
+        // so they can create galleries and place art from inside. Visitors only
+        // enter once there's at least one public gallery.
+        if (m && Array.isArray(m.wings) && (m.wings.length > 0 || isOwner)) {
           setMuseum(m);
           setView("ready");
         } else {
@@ -2359,7 +2362,7 @@ export default function Museum3D({
       .then((r) => r.json())
       .then((d) => setPlacements((d.placements as WallPlacement[]) ?? []))
       .catch(() => {});
-  }, [handle]);
+  }, [handle, isOwner]);
 
   // Load one preview piece per gallery room.
   useEffect(() => {

@@ -10,7 +10,7 @@ export const metadata: Metadata = {
   alternates: { canonical: "/credits" },
 };
 
-const MUSEUMS: { name: string; href: string }[] = [
+const MUSEUMS: { name: string; href: string; units?: string[] }[] = [
   {
     name: "The Metropolitan Museum of Art",
     href: "https://www.metmuseum.org/about-the-met/policies-and-documents/open-access",
@@ -25,7 +25,21 @@ const MUSEUMS: { name: string; href: string }[] = [
     name: "Harvard Art Museums",
     href: "https://harvardartmuseums.org/collections/api",
   },
-  { name: "Smithsonian Open Access", href: "https://www.si.edu/openaccess" },
+  {
+    name: "Smithsonian Open Access",
+    href: "https://www.si.edu/openaccess",
+    units: [
+      "Smithsonian American Art Museum",
+      "Freer Gallery of Art and Arthur M. Sackler Gallery (National Museum of Asian Art)",
+      "National Portrait Gallery",
+      "Cooper Hewitt, Smithsonian Design Museum",
+      "Hirshhorn Museum and Sculpture Garden",
+      "National Museum of African Art",
+      "National Museum of African American History and Culture",
+      "National Museum of the American Indian",
+      "Anacostia Community Museum",
+    ],
+  },
 ];
 
 // Music attributions — attribution isn't required by Pixabay's license, but we
@@ -81,6 +95,12 @@ export default function CreditsPage() {
           {MUSEUMS.map((m) => (
             <li key={m.name}>
               <Ext href={m.href}>{m.name}</Ext>
+              {m.units && (
+                <span className="credits-fine">
+                  {" "}
+                  — including {m.units.join(", ")}.
+                </span>
+              )}
             </li>
           ))}
         </ul>

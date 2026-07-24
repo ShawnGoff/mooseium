@@ -771,6 +771,18 @@ function hangRoom(
   pieces: GalleryPiece[]
 ): { position: [number, number, number]; rotation: [number, number, number] }[] {
   const M = 1.1; // corner margin
+  const sizeOf = (p: GalleryPiece) =>
+    p.realW && p.realH
+      ? { w: Math.min(4.8, Math.max(1.2, p.realW)), h: Math.min(3.8, Math.max(0.35, p.realH)) }
+      : { w: 2.2, h: 1.6 };
+  const out: { position: [number, number, number]; rotation: [number, number, number] }[] =
+    new Array(pieces.length);
+
+  // First GALLERY_CAP-2 pieces auto-arrange across the 3 solid walls; the last
+  // up-to-2 hang on the ENTRY wall, flanking the doorway (where the old
+  // free-placement slots were).
+  const mainCount = Math.min(pieces.length, GALLERY_CAP - 2);
+
   const sides = (["N", "S", "W", "E"] as Side[]).filter((s) => s !== entrySide);
   const bins = sides.map((side) => {
     const horiz = side === "N" || side === "S";
@@ -789,13 +801,9 @@ function hangRoom(
     };
     return { a, b, len: b - a, place, items: [] as number[], used: 0 };
   });
-  const sizeOf = (p: GalleryPiece) =>
-    p.realW && p.realH
-      ? { w: Math.min(4.8, Math.max(1.2, p.realW)), h: Math.min(3.8, Math.max(0.35, p.realH)) }
-      : { w: 2.2, h: 1.6 };
   const GAP = 1.2; // nominal, only for balancing pieces across the walls
-  pieces.forEach((p, i) => {
-    const w = sizeOf(p).w;
+  for (let i = 0; i < mainCount; i++) {
+    const w = sizeOf(pieces[i]).w;
     let best = 0;
     let bestScore = Infinity;
     bins.forEach((bin, k) => {
@@ -808,9 +816,7 @@ function hangRoom(
     });
     bins[best].used += (bins[best].items.length ? GAP : 0) + w;
     bins[best].items.push(i);
-  });
-  const out: { position: [number, number, number]; rotation: [number, number, number] }[] =
-    new Array(pieces.length);
+  }
   bins.forEach((bin) => {
     const n = bin.items.length;
     const widths = bin.items.map((i) => sizeOf(pieces[i]).w);
@@ -825,6 +831,25 @@ function hangRoom(
       cursor += widths[k] + gap;
     });
   });
+
+  // Overflow: the last up-to-2 pieces flank the doorway on the entry wall.
+  const horiz = entrySide === "N" || entrySide === "S";
+  const cx = (room.x0 + room.x1) / 2;
+  const cz = (room.z0 + room.z1) / 2;
+  const flank = ((horiz ? room.x1 - room.x0 : room.z1 - room.z0) / 2) * 0.55;
+  const offsets = [-flank, flank];
+  for (let i = mainCount; i < pieces.length; i++) {
+    const c = offsets[i - mainCount] ?? 0;
+    const position: [number, number, number] =
+      entrySide === "N"
+        ? [cx + c, ART_Y, room.z0 + 0.12]
+        : entrySide === "S"
+        ? [cx + c, ART_Y, room.z1 - 0.12]
+        : entrySide === "W"
+        ? [room.x0 + 0.12, ART_Y, cz + c]
+        : [room.x1 - 0.12, ART_Y, cz + c];
+    out[i] = { position, rotation: faceRot(entrySide) };
+  }
   return out;
 }
 

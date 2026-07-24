@@ -694,8 +694,16 @@ function buildMuseum(m: Museum, editing = false): Layout {
       addWallAnchors(`wing:${side}`, wingRoom.rect, s)
     );
 
-    // (Wing names are intentionally NOT labeled over the doorway — the name
-    // lives in the edit panel / directory instead.)
+    // A NAMED wing gets its name over its atrium doorway; an unnamed/placeholder
+    // (compass-only) wing stays unlabeled — no "West Wing" plastered over a room.
+    const wl =
+      side === "W"
+        ? { pos: [-A + 0.06, DOORH + 0.4, 0] as [number, number, number], rot: [0, Math.PI / 2, 0] as [number, number, number] }
+        : side === "N"
+        ? { pos: [0, DOORH + 0.4, -A + 0.06] as [number, number, number], rot: [0, 0, 0] as [number, number, number] }
+        : { pos: [A - 0.06, DOORH + 0.4, 0] as [number, number, number], rot: [0, -Math.PI / 2, 0] as [number, number, number] };
+    if (wing.name)
+      labels.push({ text: wing.name.toUpperCase(), pos: wl.pos, rot: wl.rot, size: 0.34 });
 
     const cSides = collectionSides(side);
     wing.collections.forEach((coll, j) => {

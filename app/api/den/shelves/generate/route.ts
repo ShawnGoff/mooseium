@@ -86,26 +86,42 @@ async function generateThemes(prompt: string): Promise<ShelfDef[]> {
     process.env.LLM_API_URL || "https://api.groq.com/openai/v1/chat/completions";
   const model = process.env.LLM_MODEL || "llama-3.3-70b-versatile";
 
-  const res = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${key}`,
-    },
-    body: JSON.stringify({
-      model,
-      temperature: 0.9,
-      messages: [
-        { role: "system", content: "You output only valid JSON — no prose." },
-        { role: "user", content: prompt },
-      ],
-    }),
-  });
-  if (!res.ok) throw new Error(`LLM error ${res.status}`);
-  const data = (await res.json()) as {
-    choices?: { message?: { content?: string } }[];
-  };
-  return parseShelves(data.choices?.[0]?.message?.content ?? "");
+  // Retry a few times: a single transient LLM hiccup (rate-limit, 5xx, or a
+  // response we couldn't parse) shouldn't waste the whole daily run.
+  let lastErr = "LLM failed";
+  for (let attempt = 0; attempt < 3; attempt++) {
+    if (attempt > 0) await new Promise((r) => setTimeout(r, 1200 * attempt));
+    try {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${key}`,
+        },
+        body: JSON.stringify({
+          model,
+          temperature: 0.9,
+          messages: [
+            { role: "system", content: "You output only valid JSON — no prose." },
+            { role: "user", content: prompt },
+          ],
+        }),
+      });
+      if (!res.ok) {
+        lastErr = `LLM error ${res.status}`;
+        continue;
+      }
+      const data = (await res.json()) as {
+        choices?: { message?: { content?: string } }[];
+      };
+      const shelves = parseShelves(data.choices?.[0]?.message?.content ?? "");
+      if (shelves.length > 0) return shelves;
+      lastErr = "LLM returned no usable shelves";
+    } catch (e) {
+      lastErr = (e as Error).message;
+    }
+  }
+  throw new Error(lastErr);
 }
 
 // Resolve one art theme to real open-access artworks by fanning out across all
@@ -221,5 +237,7 @@ async function handle(req: NextRequest) {
   return NextResponse.json({ ok: anyOk, results }, { status: anyOk ? 200 : 502 });
 }
 
+// The daily job fans out to the LLM + every museum API, so give it room.
+export const maxDuration = 60;
 export const POST = handle;
 export const GET = handle;

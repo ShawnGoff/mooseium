@@ -2493,8 +2493,12 @@ export default function Museum3D({
             previews={previews}
             placements={placements}
             editing={editing}
-            onPick={setEditTarget}
-            onNudgeSelect={setSelectedPlacement}
+            onPick={(k) => {
+              if (!dragRef.current) setEditTarget(k);
+            }}
+            onNudgeSelect={(k) => {
+              if (!dragRef.current) setSelectedPlacement(k);
+            }}
             hot={hot}
             reflect={!isTouch && !lite}
             lowPower={isTouch}

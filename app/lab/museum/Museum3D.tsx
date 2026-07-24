@@ -2161,10 +2161,15 @@ function Scene({
       {placements.map((pl) => {
         const a = anchorMap.get(pl.slotKey);
         if (!a || !pl.piece.image) return null;
+        // Load through the CORS-safe image proxy so textures from museums whose
+        // CDN lacks CORS headers don't taint and render as black boxes.
         return (
           <ProxyArtwork
             key={pl.slotKey}
-            piece={pl.piece}
+            piece={{
+              ...pl.piece,
+              image: `/api/img?url=${encodeURIComponent(pl.piece.image)}`,
+            }}
             position={pl.pos ?? a.position}
             rotation={a.rotation}
             onSelect={editing ? () => onNudgeSelect(pl.slotKey) : () => onSelectPlacement(pl)}

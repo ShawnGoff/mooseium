@@ -1773,6 +1773,7 @@ function Scene({
   editing,
   onPick,
   onNudgeSelect,
+  onSelectPlacement,
   hot,
   reflect,
   lowPower,
@@ -1788,6 +1789,7 @@ function Scene({
   editing: boolean;
   onPick: (slotKey: string) => void;
   onNudgeSelect: (slotKey: string) => void;
+  onSelectPlacement: (pl: WallPlacement) => void;
   hot: string[];
   reflect: boolean;
   lowPower: boolean;
@@ -1934,7 +1936,7 @@ function Scene({
             piece={pl.piece}
             position={pl.pos ?? a.position}
             rotation={a.rotation}
-            onSelect={editing ? () => onNudgeSelect(pl.slotKey) : onSelect}
+            onSelect={editing ? () => onNudgeSelect(pl.slotKey) : () => onSelectPlacement(pl)}
           />
         );
       })}
@@ -2098,9 +2100,12 @@ export default function Museum3D({
     if (!anchor || !pl) return;
     const side = slotKey.split(":").at(-2);
     const axis = side === "N" || side === "S" ? 0 : 2;
+    // "Right" from the viewer facing the wall is +world-axis on the N/E walls but
+    // -world-axis on the S/W walls (you're facing the opposite way), so flip there.
+    const sign = side === "S" || side === "W" ? -1 : 1;
     const base = pl.pos ?? anchor.position;
     const np: [number, number, number] = [base[0], base[1], base[2]];
-    np[axis] += dAlong;
+    np[axis] += dAlong * sign;
     np[1] = Math.max(0.8, np[1] + dY);
     setPlacements((ps) => ps.map((p) => (p.slotKey === slotKey ? { ...p, pos: np } : p)));
     fetch("/api/museum-placements", {
@@ -2117,6 +2122,34 @@ export default function Museum3D({
         posZ: np[2],
       }),
     }).catch(() => {});
+  }
+
+  // Open the full info placard for a placed piece. Placements only store title +
+  // image, so we enrich from the full artwork record (covers older placements too).
+  async function openPlacementInfo(pl: WallPlacement) {
+    setSelected({ title: pl.piece.title, image: pl.piece.image, museum: pl.piece.museum });
+    try {
+      const d = await fetch(
+        `/api/artwork?museum=${encodeURIComponent(pl.source)}&objectId=${encodeURIComponent(
+          pl.externalId
+        )}`
+      ).then((r) => r.json());
+      const a = d.artwork;
+      if (a)
+        setSelected({
+          title: a.title || pl.piece.title,
+          artist: a.artist || undefined,
+          dateText: a.dateText || undefined,
+          culture: a.culture || undefined,
+          medium: a.medium || undefined,
+          description: a.description || undefined,
+          museum: pl.piece.museum,
+          sourceUrl: a.sourceUrl || undefined,
+          image: a.image || pl.piece.image,
+        });
+    } catch {
+      /* keep the basic card */
+    }
   }
 
   // Place (or replace) a piece at a slot: optimistic render, then POST.
@@ -2517,6 +2550,9 @@ export default function Museum3D({
             }}
             onNudgeSelect={(k) => {
               if (!dragRef.current) setSelectedPlacement(k);
+            }}
+            onSelectPlacement={(pl) => {
+              if (!dragRef.current) openPlacementInfo(pl);
             }}
             hot={hot}
             reflect={!isTouch && !lite}

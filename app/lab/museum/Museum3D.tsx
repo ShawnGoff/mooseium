@@ -99,6 +99,11 @@ type WallAnchor = {
   slotKey: string;
   position: [number, number, number];
   rotation: [number, number, number];
+  // The coordinate that slides along this wall (0 = x, 2 = z) and its clamp
+  // range, so nudging can't push a piece off the wall into open room.
+  axis: 0 | 2;
+  lo: number;
+  hi: number;
 };
 type Layout = {
   rooms: Room[];
@@ -256,6 +261,14 @@ type PickCard = {
   artist?: string;
   thumbnailUrl: string;
 };
+type FullArt = {
+  image?: string;
+  artist?: string;
+  dateText?: string;
+  medium?: string;
+  description?: string;
+  sourceUrl?: string;
+};
 function ArtPicker({
   onClose,
   onPlace,
@@ -272,6 +285,7 @@ function ArtPicker({
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [preview, setPreview] = useState<{ card: PickCard; full: FullArt | null } | null>(null);
 
   useEffect(() => {
     fetch("/api/museums")
@@ -300,18 +314,29 @@ function ArtPicker({
   const run = () => fetchPage(1, false);
   const more = () => fetchPage(page + 1, true);
 
-  async function pick(c: PickCard) {
-    let image = c.thumbnailUrl;
+  // Clicking a result opens a larger preview with full details instead of
+  // placing immediately, so you can inspect a piece before committing.
+  async function openPreview(c: PickCard) {
+    setPreview({ card: c, full: null });
     try {
       const r = await fetch(
         `/api/artwork?museum=${encodeURIComponent(c.sourceMuseum)}&objectId=${encodeURIComponent(c.museumObjectId)}`
       );
       const d = await r.json();
-      if (d.artwork?.image) image = d.artwork.image as string;
+      if (d.artwork) setPreview({ card: c, full: d.artwork as FullArt });
     } catch {
-      /* keep the thumbnail */
+      /* keep the basic preview */
     }
-    onPlace({ source: c.sourceMuseum, externalId: c.museumObjectId, title: c.title, image });
+  }
+  function placePreview() {
+    if (!preview) return;
+    const c = preview.card;
+    onPlace({
+      source: c.sourceMuseum,
+      externalId: c.museumObjectId,
+      title: c.title,
+      image: preview.full?.image || c.thumbnailUrl,
+    });
   }
 
   return (
@@ -408,7 +433,7 @@ function ArtPicker({
         {(cards ?? []).map((c) => (
           <button
             key={`${c.sourceMuseum}:${c.museumObjectId}`}
-            onClick={() => pick(c)}
+            onClick={() => openPreview(c)}
             title={c.title}
             style={{
               display: "flex",
@@ -489,6 +514,80 @@ function ArtPicker({
           </button>
         )}
       </div>
+
+      {preview && (
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            background: "rgba(16,13,10,0.98)",
+            padding: 14,
+            display: "flex",
+            flexDirection: "column",
+            gap: 8,
+          }}
+        >
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <button
+              onClick={() => setPreview(null)}
+              style={{ background: "transparent", border: "none", color: "#e6d3a3", cursor: "pointer", fontSize: 13 }}
+            >
+              ← Back
+            </button>
+            <button
+              onClick={onClose}
+              style={{ background: "transparent", border: "none", color: "#ece0c8", cursor: "pointer", fontSize: 16 }}
+              aria-label="Close"
+            >
+              ✕
+            </button>
+          </div>
+          <div style={{ overflowY: "auto", flex: 1 }}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={preview.full?.image || preview.card.thumbnailUrl}
+              alt=""
+              style={{ width: "100%", borderRadius: 8, marginBottom: 10, display: "block" }}
+            />
+            <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 2 }}>{preview.card.title}</div>
+            {(preview.full?.artist || preview.card.artist) && (
+              <div style={{ color: "#b8afa2", fontSize: 13 }}>
+                {preview.full?.artist || preview.card.artist}
+              </div>
+            )}
+            <div style={{ color: "#c8a15a", fontSize: 12, marginBottom: 8 }}>
+              {MUSEUM_LABEL[preview.card.sourceMuseum] ?? preview.card.sourceMuseum}
+            </div>
+            {(preview.full?.dateText || preview.full?.medium) && (
+              <div style={{ fontSize: 12, opacity: 0.85, marginBottom: 8 }}>
+                {[preview.full?.dateText, preview.full?.medium].filter(Boolean).join(" · ")}
+              </div>
+            )}
+            {preview.full?.description && (
+              <div style={{ fontSize: 12, opacity: 0.85, lineHeight: 1.5 }}>
+                {preview.full.description}
+              </div>
+            )}
+            {!preview.full && <div style={{ fontSize: 12, opacity: 0.6 }}>Loading details…</div>}
+          </div>
+          <button
+            onClick={placePreview}
+            style={{
+              width: "100%",
+              padding: "9px 0",
+              borderRadius: 6,
+              border: "1px solid #c8a15a",
+              background: "rgba(200,161,90,0.14)",
+              color: "#e6d3a3",
+              cursor: "pointer",
+              fontSize: 14,
+              fontWeight: 600,
+            }}
+          >
+            Place on this wall
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -555,6 +654,11 @@ function buildMuseum(m: Museum, editing = false): Layout {
   const addWallAnchors = (prefix: string, rect: AABB, s: Side) => {
     const cx = ctrX(rect);
     const cz = ctrZ(rect);
+    const horiz = s === "N" || s === "S"; // slides along x on N/S walls, z on E/W
+    const axis: 0 | 2 = horiz ? 0 : 2;
+    const M = 1.1; // keep art off the corners
+    const lo = horiz ? rect.x0 + M : rect.z0 + M;
+    const hi = horiz ? rect.x1 - M : rect.z1 - M;
     WALL_ART_OFFSETS.forEach((off, i) => {
       const position: [number, number, number] =
         s === "N"
@@ -564,7 +668,7 @@ function buildMuseum(m: Museum, editing = false): Layout {
           : s === "W"
           ? [rect.x0 + 0.12, ART_Y, cz + off]
           : [rect.x1 - 0.12, ART_Y, cz + off];
-      wallAnchors.push({ slotKey: `${prefix}:${s}:${i}`, position, rotation: faceRot(s) });
+      wallAnchors.push({ slotKey: `${prefix}:${s}:${i}`, position, rotation: faceRot(s), axis, lo, hi });
     });
   };
   (["N", "S", "E", "W"] as Side[]).forEach((s) => addWallAnchors("atrium", atrium.rect, s));
@@ -2197,14 +2301,14 @@ export default function Museum3D({
     const pl = placements.find((p) => p.slotKey === slotKey);
     if (!anchor || !pl) return;
     const side = slotKey.split(":").at(-2);
-    const axis = side === "N" || side === "S" ? 0 : 2;
     // "Right" from the viewer facing the wall is +world-axis on the N/E walls but
     // -world-axis on the S/W walls (you're facing the opposite way), so flip there.
     const sign = side === "S" || side === "W" ? -1 : 1;
     const base = pl.pos ?? anchor.position;
     const np: [number, number, number] = [base[0], base[1], base[2]];
-    np[axis] += dAlong * sign;
-    np[1] = Math.max(0.8, np[1] + dY);
+    // Clamp along the wall (can't slide off into the room) and in height.
+    np[anchor.axis] = Math.max(anchor.lo, Math.min(anchor.hi, base[anchor.axis] + dAlong * sign));
+    np[1] = Math.max(0.8, Math.min(H - 0.8, base[1] + dY));
     setPlacements((ps) => ps.map((p) => (p.slotKey === slotKey ? { ...p, pos: np } : p)));
     fetch("/api/museum-placements", {
       method: "POST",

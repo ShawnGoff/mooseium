@@ -7,6 +7,25 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/client";
+import { getAdapter } from "@/lib/museums";
+import { decodeEntities } from "@/lib/util/text";
+
+// Free-placed art also lives in a lazy per-location 2D collection. These are
+// marked in_museum=false so /api/museum never turns them into 3D rooms — they're
+// just the flat 2D home for what you've hung in that part of the museum.
+function locationName(slotKey: string): string | null {
+  const [zone, side] = slotKey.split(":");
+  if (zone === "atrium") return "Main Room";
+  if (zone === "wing")
+    return side === "N"
+      ? "North Gallery"
+      : side === "W"
+      ? "West Gallery"
+      : side === "E"
+      ? "East Gallery"
+      : null;
+  return null;
+}
 
 type Row = {
   slot_kind: string;
@@ -113,6 +132,65 @@ export async function POST(req: NextRequest) {
     .from("museum_placements")
     .upsert(row, { onConflict: "user_id,slot_kind,slot_key" });
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+
+  // Also add the piece to its lazy per-location 2D collection (best-effort; the
+  // placement itself already succeeded).
+  const locName = locationName(row.slot_key);
+  if (locName) {
+    try {
+      const { data: found } = await supabase
+        .from("galleries")
+        .select("id")
+        .eq("user_id", user.id)
+        .eq("name", locName)
+        .eq("in_museum", false)
+        .limit(1)
+        .maybeSingle();
+      let galleryId = (found as { id: string } | null)?.id;
+      if (!galleryId) {
+        const { data: created } = await supabase
+          .from("galleries")
+          .insert({ user_id: user.id, name: locName, in_museum: false })
+          .select("id")
+          .single();
+        galleryId = (created as { id: string } | null)?.id;
+      }
+      const adapter = galleryId ? getAdapter(row.source) : undefined;
+      if (galleryId && adapter) {
+        const art = await adapter.getObject(row.external_id);
+        if (art.rights.isOpenAccess && art.sourceImageUrl) {
+          await supabase.rpc("save_artwork_to_gallery", {
+            p_gallery_id: galleryId,
+            p_source_museum: art.sourceMuseum,
+            p_museum_object_id: art.museumObjectId,
+            p_title: decodeEntities(art.title),
+            p_artist: decodeEntities(art.artist) ?? null,
+            p_date_text: decodeEntities(art.dateText) ?? null,
+            p_medium: decodeEntities(art.medium) ?? null,
+            p_culture: decodeEntities(art.culture) ?? null,
+            p_dimensions: decodeEntities(art.dimensions) ?? null,
+            p_object_type: decodeEntities(art.objectType) ?? null,
+            p_description: decodeEntities(art.description) ?? null,
+            p_credit_line: decodeEntities(art.creditLine) ?? null,
+            p_tags: art.tags ?? [],
+            p_rights_status: art.rights.status,
+            p_license: art.rights.license ?? null,
+            p_attribution: art.rights.attribution ?? null,
+            p_source_image_url: art.sourceImageUrl,
+            p_image_thumb_url: adapter.getImageUrl(art, 400),
+            p_image_medium_url: adapter.getImageUrl(art, 1024),
+            p_image_large_url: adapter.getImageUrl(art, 2048),
+            p_aspect_ratio: art.aspectRatio ?? null,
+            p_source_url: art.sourceUrl ?? null,
+            p_raw_metadata: art.raw ?? {},
+          });
+        }
+      }
+    } catch {
+      /* collection sync is best-effort */
+    }
+  }
+
   return NextResponse.json({ ok: true });
 }
 
@@ -133,6 +211,16 @@ export async function DELETE(req: NextRequest) {
     return NextResponse.json({ error: "slotKey is required." }, { status: 400 });
   }
 
+  // Grab the piece's identity before deleting, so we can also pull it from its
+  // location collection.
+  const { data: existing } = await supabase
+    .from("museum_placements")
+    .select("source, external_id")
+    .eq("user_id", user.id)
+    .eq("slot_kind", slotKind)
+    .eq("slot_key", slotKey)
+    .maybeSingle();
+
   const { error } = await supabase
     .from("museum_placements")
     .delete()
@@ -140,5 +228,38 @@ export async function DELETE(req: NextRequest) {
     .eq("slot_kind", slotKind)
     .eq("slot_key", slotKey);
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+
+  const locName = existing ? locationName(slotKey) : null;
+  if (existing && locName) {
+    try {
+      const ex = existing as { source: string; external_id: string };
+      const { data: gal } = await supabase
+        .from("galleries")
+        .select("id")
+        .eq("user_id", user.id)
+        .eq("name", locName)
+        .eq("in_museum", false)
+        .limit(1)
+        .maybeSingle();
+      const { data: art } = await supabase
+        .from("artworks")
+        .select("id")
+        .eq("source_museum", ex.source)
+        .eq("museum_object_id", ex.external_id)
+        .limit(1)
+        .maybeSingle();
+      const galleryId = (gal as { id: string } | null)?.id;
+      const artworkId = (art as { id: string } | null)?.id;
+      if (galleryId && artworkId) {
+        await supabase
+          .from("placed_artworks")
+          .delete()
+          .eq("gallery_id", galleryId)
+          .eq("artwork_id", artworkId);
+      }
+    } catch {
+      /* best-effort */
+    }
+  }
   return NextResponse.json({ ok: true });
 }

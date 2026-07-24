@@ -395,7 +395,7 @@ function ArtPicker({
   );
 }
 
-function buildMuseum(m: Museum): Layout {
+function buildMuseum(m: Museum, editing = false): Layout {
   const rooms: Room[] = [];
   const walk: AABB[] = [];
   const labels: LabelSpec[] = [];
@@ -428,6 +428,12 @@ function buildMuseum(m: Museum): Layout {
   const defaultWing = m.wings.find((w) => w.isDefault) ?? null;
   const namedWings = m.wings.filter((w) => !w.isDefault);
   const ordered = defaultWing ? [defaultWing, ...namedWings] : namedWings;
+  // In edit mode the whole museum is open: pad to three walkable wings so the
+  // owner can walk in and place art (or, later, create galleries) on any wing
+  // wall. Visitors only ever get the wings that actually have content.
+  if (editing) {
+    while (ordered.length < 3) ordered.push({ name: "", collections: [] });
+  }
   const CENTER_FIRST: Side[] = ["N", "W", "E"];
   const placements: { wing: Wing; side: Side }[] = ordered
     .slice(0, 3)
@@ -469,12 +475,10 @@ function buildMuseum(m: Museum): Layout {
     const wingRoom = connect(rooms, walk, atrium, side, ATR_WING_CORR, WING_HALF);
     lights.push([ctrX(wingRoom.rect), ctrZ(wingRoom.rect)]);
 
-    // Wing walls get anchors too, keyed by a stable slug of the wing name.
-    const wingKey = wing.isDefault
-      ? "main"
-      : wing.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") || "wing";
+    // Wing walls get anchors too, keyed by the wing's ATRIUM SIDE (stable for
+    // empty/placeholder wings and collision-free, unlike a name slug).
     (["N", "S", "E", "W"] as Side[]).forEach((s) =>
-      addWallAnchors(`wing:${wingKey}`, wingRoom.rect, s)
+      addWallAnchors(`wing:${side}`, wingRoom.rect, s)
     );
 
     // wing name above its atrium door, facing the atrium interior
@@ -484,7 +488,8 @@ function buildMuseum(m: Museum): Layout {
         : side === "N"
         ? { pos: [0, DOORH + 0.4, -A + 0.06] as [number, number, number], rot: [0, 0, 0] as [number, number, number] }
         : { pos: [A - 0.06, DOORH + 0.4, 0] as [number, number, number], rot: [0, -Math.PI / 2, 0] as [number, number, number] };
-    labels.push({ text: wing.name.toUpperCase(), pos: wl.pos, rot: wl.rot, size: 0.34 });
+    if (wing.name)
+      labels.push({ text: wing.name.toUpperCase(), pos: wl.pos, rot: wl.rot, size: 0.34 });
 
     const cSides = collectionSides(side);
     wing.collections.forEach((coll, j) => {
@@ -1993,6 +1998,17 @@ export default function Museum3D({
   // The wall placement currently selected for nudging (edit mode).
   const [selectedPlacement, setSelectedPlacement] = useState<string | null>(null);
 
+  // Visitor mode = the curated museum (what everyone sees). Curator mode =
+  // editing: the whole museum opens up and the placement tools appear.
+  function setMode(curator: boolean) {
+    setEditing(curator);
+    if (!curator) {
+      setSelectedPlacement(null);
+      setEditTarget(null);
+      setCollectionTarget(null);
+    }
+  }
+
   // Optimistically clear a slot, then tell the server (RLS enforces ownership).
   async function removePlacement(slotKey: string) {
     setPlacements((ps) => ps.filter((p) => p.slotKey !== slotKey));
@@ -2321,7 +2337,10 @@ export default function Museum3D({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [trackIdx]);
 
-  const layout = useMemo(() => (museum ? buildMuseum(museum) : null), [museum]);
+  const layout = useMemo(
+    () => (museum ? buildMuseum(museum, editing) : null),
+    [museum, editing]
+  );
   const constrain: Constrain = useMemo(() => {
     if (!layout) return (nx, nz) => ({ x: nx, z: nz });
     const walk = layout.walk;
@@ -2548,6 +2567,37 @@ export default function Museum3D({
       )}
 
       {isTouch && view === "ready" && <JoystickPad joyRef={joyRef} />}
+
+      {isOwner && view === "ready" && (
+        <div
+          style={{
+            position: "absolute",
+            top: 14,
+            left: "50%",
+            transform: "translateX(-50%)",
+            zIndex: 22,
+          }}
+        >
+          <select
+            value={editing ? "curator" : "visitor"}
+            onChange={(e) => setMode(e.target.value === "curator")}
+            aria-label="Museum mode"
+            style={{
+              background: editing ? "#e6d3a3" : "rgba(20,17,13,0.92)",
+              color: editing ? "#14110d" : "#e6d3a3",
+              border: `1px solid ${editing ? "#e6d3a3" : "#4a4030"}`,
+              borderRadius: 8,
+              padding: "6px 12px",
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: "pointer",
+            }}
+          >
+            <option value="visitor">Visitor mode</option>
+            <option value="curator">Curator mode</option>
+          </select>
+        </div>
+      )}
 
       {isOwner && editing && (editTarget || collectionTarget) && view === "ready" && (
         <ArtPicker
@@ -2867,27 +2917,6 @@ export default function Museum3D({
             </button>
           )}
           <strong style={{ flex: 1 }}>{museum?.name ?? "Museum"}</strong>
-          {isOwner && view === "ready" && (
-            <button
-              onClick={() => {
-                setEditing((e) => !e);
-                setSelectedPlacement(null);
-                setEditTarget(null);
-                setCollectionTarget(null);
-              }}
-              style={{
-                ...infoToggleStyle,
-                width: "auto",
-                padding: "0 10px",
-                color: editing ? "#14110d" : "#e6d3a3",
-                background: editing ? "#e6d3a3" : "transparent",
-              }}
-              aria-label={editing ? "Finish editing" : "Edit your museum"}
-              title={editing ? "Finish editing" : "Edit your museum"}
-            >
-              {editing ? "Done" : "Edit"}
-            </button>
-          )}
         </div>
         {view === "ready" && infoOpen && (
           <div style={{ opacity: 0.85, marginTop: 6 }}>

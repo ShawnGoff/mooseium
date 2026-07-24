@@ -1767,6 +1767,7 @@ function Scene({
   placements,
   editing,
   onPick,
+  onNudgeSelect,
   hot,
   reflect,
   lowPower,
@@ -1781,6 +1782,7 @@ function Scene({
   placements: WallPlacement[];
   editing: boolean;
   onPick: (slotKey: string) => void;
+  onNudgeSelect: (slotKey: string) => void;
   hot: string[];
   reflect: boolean;
   lowPower: boolean;
@@ -1927,7 +1929,7 @@ function Scene({
             piece={pl.piece}
             position={pl.pos ?? a.position}
             rotation={a.rotation}
-            onSelect={onSelect}
+            onSelect={editing ? () => onNudgeSelect(pl.slotKey) : onSelect}
           />
         );
       })}
@@ -1988,6 +1990,8 @@ export default function Museum3D({
   const [collectionTarget, setCollectionTarget] = useState<{ id: string; name: string } | null>(
     null
   );
+  // The wall placement currently selected for nudging (edit mode).
+  const [selectedPlacement, setSelectedPlacement] = useState<string | null>(null);
 
   // Optimistically clear a slot, then tell the server (RLS enforces ownership).
   async function removePlacement(slotKey: string) {
@@ -2067,6 +2071,36 @@ export default function Museum3D({
     } catch {
       /* best-effort */
     }
+  }
+
+  // Nudge a selected placement along its wall (dAlong) or in height (dY), then
+  // persist. Rotation is fixed by the wall; only position moves. The wall axis
+  // comes from the slotKey's side (N/S walls run along X, E/W along Z).
+  function nudgePlacement(slotKey: string, dAlong: number, dY: number) {
+    const anchor = layout?.wallAnchors.find((a) => a.slotKey === slotKey);
+    const pl = placements.find((p) => p.slotKey === slotKey);
+    if (!anchor || !pl) return;
+    const side = slotKey.split(":").at(-2);
+    const axis = side === "N" || side === "S" ? 0 : 2;
+    const base = pl.pos ?? anchor.position;
+    const np: [number, number, number] = [base[0], base[1], base[2]];
+    np[axis] += dAlong;
+    np[1] = Math.max(0.8, np[1] + dY);
+    setPlacements((ps) => ps.map((p) => (p.slotKey === slotKey ? { ...p, pos: np } : p)));
+    fetch("/api/museum-placements", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        slotKey,
+        source: pl.source,
+        externalId: pl.externalId,
+        title: pl.piece.title,
+        imageUrl: pl.piece.image,
+        posX: np[0],
+        posY: np[1],
+        posZ: np[2],
+      }),
+    }).catch(() => {});
   }
 
   // Place (or replace) a piece at a slot: optimistic render, then POST.
@@ -2457,6 +2491,7 @@ export default function Museum3D({
             placements={placements}
             editing={editing}
             onPick={setEditTarget}
+            onNudgeSelect={setSelectedPlacement}
             hot={hot}
             reflect={!isTouch && !lite}
             lowPower={isTouch}
@@ -2521,6 +2556,76 @@ export default function Museum3D({
           }
         />
       )}
+
+      {isOwner &&
+        editing &&
+        selectedPlacement &&
+        !editTarget &&
+        !collectionTarget &&
+        view === "ready" &&
+        (() => {
+          const pl = placements.find((p) => p.slotKey === selectedPlacement);
+          if (!pl) return null;
+          const nbtn = {
+            width: 34,
+            height: 30,
+            borderRadius: 6,
+            border: "1px solid #6b6157",
+            background: "transparent",
+            color: "#e6d3a3",
+            cursor: "pointer",
+            fontSize: 15,
+          } as const;
+          return (
+            <div
+              style={{
+                position: "absolute",
+                bottom: 96,
+                left: "50%",
+                transform: "translateX(-50%)",
+                background: "rgba(20,17,13,0.95)",
+                border: "1px solid #4a4030",
+                borderRadius: 10,
+                padding: "10px 14px",
+                color: "#ece0c8",
+                zIndex: 25,
+                display: "flex",
+                flexDirection: "column",
+                gap: 8,
+                alignItems: "center",
+              }}
+            >
+              <div style={{ fontSize: 12, opacity: 0.7, maxWidth: 220, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                Move &ldquo;{pl.piece.title}&rdquo;
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 34px)", gap: 4, justifyItems: "center" }}>
+                <span />
+                <button style={nbtn} onClick={() => nudgePlacement(selectedPlacement, 0, 0.2)} aria-label="Up">↑</button>
+                <span />
+                <button style={nbtn} onClick={() => nudgePlacement(selectedPlacement, -0.3, 0)} aria-label="Left">←</button>
+                <button style={nbtn} onClick={() => nudgePlacement(selectedPlacement, 0, -0.2)} aria-label="Down">↓</button>
+                <button style={nbtn} onClick={() => nudgePlacement(selectedPlacement, 0.3, 0)} aria-label="Right">→</button>
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button
+                  onClick={() => {
+                    removePlacement(selectedPlacement);
+                    setSelectedPlacement(null);
+                  }}
+                  style={{ fontSize: 12, padding: "3px 10px", borderRadius: 6, border: "1px solid #6b4a4a", background: "transparent", color: "#e0a0a0", cursor: "pointer" }}
+                >
+                  Remove
+                </button>
+                <button
+                  onClick={() => setSelectedPlacement(null)}
+                  style={{ fontSize: 12, padding: "3px 10px", borderRadius: 6, border: "1px solid #6b6157", background: "transparent", color: "#ece0c8", cursor: "pointer" }}
+                >
+                  Done
+                </button>
+              </div>
+            </div>
+          );
+        })()}
 
       {isOwner && editing && !editTarget && !collectionTarget && view === "ready" && (
         <div
@@ -2757,7 +2862,12 @@ export default function Museum3D({
           <strong style={{ flex: 1 }}>{museum?.name ?? "Museum"}</strong>
           {isOwner && view === "ready" && (
             <button
-              onClick={() => setEditing((e) => !e)}
+              onClick={() => {
+                setEditing((e) => !e);
+                setSelectedPlacement(null);
+                setEditTarget(null);
+                setCollectionTarget(null);
+              }}
               style={{
                 ...infoToggleStyle,
                 width: "auto",

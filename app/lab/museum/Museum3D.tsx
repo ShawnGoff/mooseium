@@ -2945,6 +2945,17 @@ export default function Museum3D({
               <div style={{ display: "flex", gap: 8 }}>
                 <button
                   onClick={() => {
+                    const k = pl.slotKey;
+                    setSelectedPlacement(null);
+                    removePlacement(k); // clears the slot + its collection membership
+                    setEditTarget(k); // reopen the picker on the same slot
+                  }}
+                  style={{ fontSize: 12, padding: "3px 10px", borderRadius: 6, border: "1px solid #c8a15a", background: "transparent", color: "#e6d3a3", cursor: "pointer" }}
+                >
+                  Replace
+                </button>
+                <button
+                  onClick={() => {
                     removePlacement(selectedPlacement);
                     setSelectedPlacement(null);
                   }}

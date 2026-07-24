@@ -3240,69 +3240,90 @@ export default function Museum3D({
               ))}
             </div>
           )}
-          {placements.length === 0 ? (
-            <div style={{ fontSize: 12, opacity: 0.6 }}>No wall pieces placed yet.</div>
-          ) : (
-            groupedPlacements.map(([group, items]) => (
-              <div key={group} style={{ marginTop: 8 }}>
-                <div
+          {(() => {
+            const anchored = new Set((layout?.wallAnchors ?? []).map((a) => a.slotKey));
+            const orphans = layout ? placements.filter((p) => !anchored.has(p.slotKey)) : [];
+            const areas = [
+              { prefix: "atrium", label: "Main Gallery" },
+              { prefix: "wing:N", label: "North Gallery" },
+              { prefix: "wing:W", label: "West Gallery" },
+              { prefix: "wing:E", label: "East Gallery" },
+            ];
+            const row = (pl: WallPlacement) => (
+              <div
+                key={pl.slotKey}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: 8,
+                  padding: "5px 0",
+                  borderTop: "0.5px solid #332c22",
+                }}
+              >
+                <span
                   style={{
+                    fontSize: 13,
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }}
+                  title={pl.piece.title}
+                >
+                  {pl.piece.title}
+                </span>
+                <button
+                  onClick={() => removePlacement(pl.slotKey)}
+                  style={{
+                    flexShrink: 0,
                     fontSize: 12,
-                    color: group === ORPHAN ? "#e0a0a0" : "#c8a15a",
-                    marginBottom: 2,
+                    padding: "3px 8px",
+                    borderRadius: 6,
+                    border: "1px solid #6b4a4a",
+                    background: "transparent",
+                    color: "#e0a0a0",
+                    cursor: "pointer",
                   }}
                 >
-                  {group} · {items.length}
-                </div>
-                {group === ORPHAN && (
-                  <div style={{ fontSize: 11, opacity: 0.7, marginBottom: 4 }}>
-                    These lost their wall (it became a doorway). Remove them, or
-                    they&rsquo;ll wait here.
+                  Remove
+                </button>
+              </div>
+            );
+            return (
+              <div style={{ marginTop: 6 }}>
+                <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 4 }}>Wall art by area</div>
+                {orphans.length > 0 && (
+                  <div style={{ marginTop: 8 }}>
+                    <div style={{ fontSize: 12, color: "#e0a0a0", marginBottom: 2 }}>
+                      {ORPHAN} · {orphans.length}
+                    </div>
+                    <div style={{ fontSize: 11, opacity: 0.7, marginBottom: 4 }}>
+                      These lost their wall (it became a doorway). Remove them, or
+                      they&rsquo;ll wait here.
+                    </div>
+                    {orphans.map(row)}
                   </div>
                 )}
-                {items.map((pl) => (
-                  <div
-                    key={pl.slotKey}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      gap: 8,
-                      padding: "5px 0",
-                      borderTop: "0.5px solid #332c22",
-                    }}
-                  >
-                    <span
-                      style={{
-                        fontSize: 13,
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                        whiteSpace: "nowrap",
-                      }}
-                      title={pl.piece.title}
-                    >
-                      {pl.piece.title}
-                    </span>
-                    <button
-                      onClick={() => removePlacement(pl.slotKey)}
-                      style={{
-                        flexShrink: 0,
-                        fontSize: 12,
-                        padding: "3px 8px",
-                        borderRadius: 6,
-                        border: "1px solid #6b4a4a",
-                        background: "transparent",
-                        color: "#e0a0a0",
-                        cursor: "pointer",
-                      }}
-                    >
-                      Remove
-                    </button>
-                  </div>
-                ))}
+                {areas.map((area) => {
+                  const cap = (layout?.wallAnchors ?? []).filter((a) =>
+                    a.slotKey.startsWith(area.prefix + ":")
+                  ).length;
+                  if (cap === 0) return null;
+                  const items = placements.filter(
+                    (p) => p.slotKey.startsWith(area.prefix + ":") && anchored.has(p.slotKey)
+                  );
+                  return (
+                    <div key={area.prefix} style={{ marginTop: 8 }}>
+                      <div style={{ fontSize: 12, color: "#c8a15a", marginBottom: 2 }}>
+                        {area.label} · {items.length}/{cap}
+                      </div>
+                      {items.map(row)}
+                    </div>
+                  );
+                })}
               </div>
-            ))
-          )}
+            );
+          })()}
         </div>
       )}
 

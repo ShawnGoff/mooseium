@@ -2238,10 +2238,48 @@ export default function Museum3D({
   // Bumped after a collection changes so mounted gallery rooms re-fetch + re-hang.
   const [galleryVersion, setGalleryVersion] = useState(0);
 
+  // The owner's real galleries with visibility. Hidden ones drop out of
+  // /api/museum, so the visibility toggles list them from here instead.
+  const [myGalleries, setMyGalleries] = useState<
+    { id: string; name: string; count: number; inMuseum: boolean; shareSlug: string | null }[]
+  >([]);
+  async function refreshGalleries() {
+    if (!isOwner) return;
+    try {
+      const d = await fetch("/api/collections").then((r) => r.json());
+      setMyGalleries(d.collections ?? []);
+    } catch {
+      /* keep current */
+    }
+  }
+  async function toggleGalleryVisibility(id: string, next: boolean) {
+    setMyGalleries((gs) => gs.map((g) => (g.id === id ? { ...g, inMuseum: next } : g)));
+    try {
+      await fetch(`/api/collections/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ inMuseum: next }),
+      });
+      pieceCache.clear();
+      await reloadMuseum();
+      setGalleryVersion((v) => v + 1);
+    } catch {
+      /* best-effort */
+    }
+  }
+
   const layout = useMemo(
     () => (museum ? buildMuseum(museum, editing) : null),
     [museum, editing]
   );
+
+  useEffect(() => {
+    if (!isOwner) return;
+    fetch("/api/collections")
+      .then((r) => r.json())
+      .then((d) => setMyGalleries(d.collections ?? []))
+      .catch(() => {});
+  }, [isOwner]);
 
   // Group placed wall pieces by location so the edit panel reads as sections
   // (Main Room / North·West·East Gallery / a gallery's own walls) not one list.
@@ -2368,6 +2406,7 @@ export default function Museum3D({
       pieceCache.clear();
       await reloadMuseum();
       setGalleryVersion((v) => v + 1);
+      refreshGalleries();
     } catch {
       /* best-effort */
     }
@@ -3052,37 +3091,47 @@ export default function Museum3D({
             ＋ New gallery
           </button>
 
-          {(museum?.wings.flatMap((w) => w.collections) ?? []).length > 0 && (
+          {myGalleries.filter((g) => g.shareSlug && g.count > 0).length > 0 && (
             <div style={{ marginBottom: 10 }}>
               <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 4 }}>
-                Add art to a gallery
+                Your galleries{" "}
+                <span style={{ opacity: 0.65 }}>(check to show · up to 9 fit)</span>
               </div>
-              {(museum?.wings.flatMap((w) => w.collections) ?? []).map((c) => (
-                <div
-                  key={c.id}
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    gap: 8,
-                    padding: "4px 0",
-                  }}
-                >
-                  <span
-                    style={{
-                      fontSize: 13,
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                      whiteSpace: "nowrap",
-                    }}
-                    title={c.name}
+              {myGalleries
+                .filter((g) => g.shareSlug && g.count > 0)
+                .map((c) => (
+                  <div
+                    key={c.id}
+                    style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 0" }}
                   >
-                    {c.name}
-                  </span>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                    <input
+                      type="checkbox"
+                      checked={c.inMuseum}
+                      onChange={() => toggleGalleryVisibility(c.id, !c.inMuseum)}
+                      title={
+                        c.inMuseum
+                          ? "Shown in your museum — uncheck to hide"
+                          : "Hidden — check to show"
+                      }
+                      style={{ cursor: "pointer", flexShrink: 0 }}
+                    />
+                    <span
+                      style={{
+                        flex: 1,
+                        fontSize: 13,
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                        opacity: c.inMuseum ? 1 : 0.5,
+                      }}
+                      title={c.name}
+                    >
+                      {c.name}
+                    </span>
                     <span
                       style={{
                         fontSize: 11,
+                        flexShrink: 0,
                         color: c.count >= GALLERY_CAP ? "#c8a15a" : "#8a8175",
                       }}
                     >
@@ -3092,6 +3141,7 @@ export default function Museum3D({
                       onClick={() => setCollectionTarget({ id: c.id, name: c.name })}
                       disabled={c.count >= GALLERY_CAP}
                       style={{
+                        flexShrink: 0,
                         fontSize: 12,
                         padding: "3px 12px",
                         borderRadius: 6,
@@ -3104,8 +3154,7 @@ export default function Museum3D({
                       {c.count >= GALLERY_CAP ? "Full" : "Add"}
                     </button>
                   </div>
-                </div>
-              ))}
+                ))}
             </div>
           )}
           {placements.length === 0 ? (

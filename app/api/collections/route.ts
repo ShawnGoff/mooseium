@@ -22,7 +22,7 @@ export async function GET() {
   // recently added piece (falling back to the collection's own creation time).
   const { data, error } = await supabase
     .from("galleries")
-    .select("id, name, created_at, placed_artworks(created_at)")
+    .select("id, name, created_at, in_museum, share_slug, placed_artworks(created_at)")
     .eq("user_id", user.id);
 
   if (error) {
@@ -33,6 +33,8 @@ export async function GET() {
     id: string;
     name: string;
     created_at: string;
+    in_museum: boolean | null;
+    share_slug: string | null;
     placed_artworks: { created_at: string }[];
   };
 
@@ -43,7 +45,14 @@ export async function GET() {
         (max, p) => (p.created_at > max ? p.created_at : max),
         g.created_at
       );
-      return { id: g.id, name: g.name, count: placed.length, lastActivity };
+      return {
+        id: g.id,
+        name: g.name,
+        count: placed.length,
+        lastActivity,
+        inMuseum: g.in_museum !== false, // null/true = shown in the 3D museum
+        shareSlug: g.share_slug, // null = a location collection, not a real gallery
+      };
     })
     .sort((a, b) => (a.lastActivity < b.lastActivity ? 1 : -1));
 

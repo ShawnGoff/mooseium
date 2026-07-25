@@ -797,10 +797,15 @@ function hangRoom(
   pieces: GalleryPiece[]
 ): { position: [number, number, number]; rotation: [number, number, number] }[] {
   const M = 1.1; // corner margin
+  // Reserve at least as much width as ProxyArtwork will actually RENDER, or wide
+  // pieces (screens, handscrolls) overrun their slot and overlap a neighbour.
+  // The renderer caps width at MAX_W (5.5) and, when a piece has no real
+  // dimensions, at ~3.2 — so mirror both caps here instead of the old 4.8 / 2.2.
+  const REN_MAX_W = 5.5;
   const sizeOf = (p: GalleryPiece) =>
     p.realW && p.realH
-      ? { w: Math.min(4.8, Math.max(1.2, p.realW)), h: Math.min(3.8, Math.max(0.35, p.realH)) }
-      : { w: 2.2, h: 1.6 };
+      ? { w: Math.min(REN_MAX_W, Math.max(1.2, p.realW)), h: Math.min(3.8, Math.max(0.35, p.realH)) }
+      : { w: 3.2, h: 1.6 };
   const out: { position: [number, number, number]; rotation: [number, number, number] }[] =
     new Array(pieces.length);
 
@@ -849,7 +854,7 @@ function hangRoom(
     const sumW = widths.reduce((s, w) => s + w, 0);
     // Even spacing: share the leftover wall width between pieces, clamped so they
     // never touch and never drift too far apart — regardless of size mix.
-    const gap = n > 1 ? Math.max(0.7, Math.min(2.4, (bin.len - sumW) / (n - 1))) : 0;
+    const gap = n > 1 ? Math.max(0.8, Math.min(2.4, (bin.len - sumW) / (n - 1))) : 0;
     let cursor = (bin.a + bin.b) / 2 - (sumW + gap * (n - 1)) / 2;
     bin.items.forEach((i, k) => {
       const h = sizeOf(pieces[i]).h;
@@ -859,13 +864,22 @@ function hangRoom(
   });
 
   // Overflow: the last up-to-2 pieces flank the doorway on the entry wall.
+  // Width-aware: push each piece far enough that its inner edge clears the
+  // doorway and its outer edge stays off the corner, so two wide pieces don't
+  // collide over the entrance.
   const horiz = entrySide === "N" || entrySide === "S";
   const cx = (room.x0 + room.x1) / 2;
   const cz = (room.z0 + room.z1) / 2;
-  const flank = ((horiz ? room.x1 - room.x0 : room.z1 - room.z0) / 2) * 0.55;
-  const offsets = [-flank, flank];
+  const wallHalf = (horiz ? room.x1 - room.x0 : room.z1 - room.z0) / 2;
   for (let i = mainCount; i < pieces.length; i++) {
-    const c = offsets[i - mainCount] ?? 0;
+    const idx = i - mainCount;
+    const sign = idx === 0 ? -1 : 1;
+    const w = sizeOf(pieces[i]).w;
+    // Ideal: inner edge past the doorway (+0.4 breathing room). Clamp so the
+    // outer edge stays inside the wall (off the corner).
+    const ideal = DOOR_HALF + 0.4 + w / 2;
+    const maxC = Math.max(0, wallHalf - M - w / 2);
+    const c = sign * Math.min(ideal, maxC);
     const position: [number, number, number] =
       entrySide === "N"
         ? [cx + c, ART_Y, room.z0 + 0.12]

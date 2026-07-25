@@ -996,27 +996,41 @@ function segmentsMulti(a: number, b: number, gaps: { lo: number; hi: number }[])
   return segs;
 }
 
+// Wall thickness. Walls used to be zero-thickness planes, which let a painting
+// hung near a doorway edge poke through to the far side and z-fight. Giving the
+// wall real depth (a thin box that extends OUTWARD from the room, so the inner
+// face stays exactly where the plane was and all art keeps its position) hides
+// the overhang and stops the flicker.
+const WALL_T = 0.3;
+
 function WallSide({
   axis,
   fixed,
+  inward,
   a,
   b,
   gaps,
 }: {
   axis: "x" | "z";
   fixed: number;
+  // +1 if the room interior lies toward increasing coordinate from `fixed`,
+  // -1 if toward decreasing. The wall box is pushed the OTHER way so its inner
+  // face sits on `fixed`.
+  inward: 1 | -1;
   a: number;
   b: number;
   gaps: { lo: number; hi: number }[];
 }) {
   const segs = segmentsMulti(a, b, gaps);
+  // Offset the box center outward by half its thickness → inner face on `fixed`.
+  const off = -inward * (WALL_T / 2);
   return (
     <>
       {segs.map((s, i) =>
         axis === "x" ? (
           <group key={i}>
-            <mesh position={[s.center, H / 2, fixed]}>
-              <planeGeometry args={[s.len, H]} />
+            <mesh position={[s.center, H / 2, fixed + off]}>
+              <boxGeometry args={[s.len, H, WALL_T]} />
               <meshStandardMaterial color="#e7e3db" side={2} />
             </mesh>
             <mesh position={[s.center, 0.09, fixed]}>
@@ -1030,8 +1044,8 @@ function WallSide({
           </group>
         ) : (
           <group key={i}>
-            <mesh position={[fixed, H / 2, s.center]} rotation={[0, Math.PI / 2, 0]}>
-              <planeGeometry args={[s.len, H]} />
+            <mesh position={[fixed + off, H / 2, s.center]}>
+              <boxGeometry args={[WALL_T, H, s.len]} />
               <meshStandardMaterial color="#e7e3db" side={2} />
             </mesh>
             <mesh position={[fixed, 0.09, s.center]}>
@@ -1049,13 +1063,13 @@ function WallSide({
         const c = (g.lo + g.hi) / 2;
         const w = g.hi - g.lo;
         return axis === "x" ? (
-          <mesh key={"l" + i} position={[c, (DOORH + H) / 2, fixed]}>
-            <planeGeometry args={[w, H - DOORH]} />
+          <mesh key={"l" + i} position={[c, (DOORH + H) / 2, fixed + off]}>
+            <boxGeometry args={[w, H - DOORH, WALL_T]} />
             <meshStandardMaterial color="#e7e3db" side={2} />
           </mesh>
         ) : (
-          <mesh key={"l" + i} position={[fixed, (DOORH + H) / 2, c]} rotation={[0, Math.PI / 2, 0]}>
-            <planeGeometry args={[w, H - DOORH]} />
+          <mesh key={"l" + i} position={[fixed + off, (DOORH + H) / 2, c]}>
+            <boxGeometry args={[WALL_T, H - DOORH, w]} />
             <meshStandardMaterial color="#e7e3db" side={2} />
           </mesh>
         );
@@ -1122,10 +1136,10 @@ function RoomMesh({ room }: { room: Room }) {
         <planeGeometry args={[R.x1 - R.x0, R.z1 - R.z0]} />
         <meshStandardMaterial color="#efece6" />
       </mesh>
-      <WallSide axis="x" fixed={r.z0} a={r.x0} b={r.x1} gaps={g("N")} />
-      <WallSide axis="x" fixed={r.z1} a={r.x0} b={r.x1} gaps={g("S")} />
-      <WallSide axis="z" fixed={r.x0} a={r.z0} b={r.z1} gaps={g("W")} />
-      <WallSide axis="z" fixed={r.x1} a={r.z0} b={r.z1} gaps={g("E")} />
+      <WallSide axis="x" fixed={r.z0} inward={1} a={r.x0} b={r.x1} gaps={g("N")} />
+      <WallSide axis="x" fixed={r.z1} inward={-1} a={r.x0} b={r.x1} gaps={g("S")} />
+      <WallSide axis="z" fixed={r.x0} inward={1} a={r.z0} b={r.z1} gaps={g("W")} />
+      <WallSide axis="z" fixed={r.x1} inward={-1} a={r.z0} b={r.z1} gaps={g("E")} />
     </>
   );
 }

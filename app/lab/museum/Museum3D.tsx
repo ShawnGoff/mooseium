@@ -2342,43 +2342,10 @@ export default function Museum3D({
       .catch(() => {});
   }, [isOwner]);
 
-  // Group placed wall pieces by location so the edit panel reads as sections
-  // (Main Room / North·West·East Gallery / a gallery's own walls) not one list.
-  const galleryNameBySlug = useMemo(() => {
-    const m = new Map<string, string>();
-    museum?.wings.forEach((w) => w.collections.forEach((c) => m.set(c.slug, c.name)));
-    return m;
-  }, [museum]);
+  // Label for the wall-art orphan group (art whose wall became a doorway). The
+  // edit panel groups placements by area inline; this is the shared header for
+  // the never-silently-lost bucket.
   const ORPHAN = "Not on display";
-  const groupedPlacements = useMemo(() => {
-    // A placement whose wall no longer exists (e.g. a wall that became a gallery
-    // doorway) is "orphaned" — surfaced separately so it's never silently lost.
-    const anchored = new Set((layout?.wallAnchors ?? []).map((a) => a.slotKey));
-    const label = (slotKey: string): string => {
-      if (layout && !anchored.has(slotKey)) return ORPHAN;
-      const [zone, a] = slotKey.split(":");
-      if (zone === "atrium") return "Main Room";
-      if (zone === "wing")
-        return a === "N"
-          ? "North Gallery"
-          : a === "W"
-          ? "West Gallery"
-          : a === "E"
-          ? "East Gallery"
-          : "Wing";
-      if (zone === "gallery") return galleryNameBySlug.get(a) ?? "Gallery walls";
-      return "Other";
-    };
-    const m = new Map<string, WallPlacement[]>();
-    for (const pl of placements) {
-      const g = label(pl.slotKey);
-      (m.get(g) ?? m.set(g, []).get(g)!).push(pl);
-    }
-    // Surface the orphaned group first so it gets attention.
-    return Array.from(m.entries()).sort(([a], [b]) =>
-      a === ORPHAN ? -1 : b === ORPHAN ? 1 : 0
-    );
-  }, [placements, galleryNameBySlug, layout]);
 
   // Real galleries (published, with art), grouped by wing for the edit panel.
   const publishedGalleries = myGalleries.filter((g) => g.shareSlug && g.count > 0);
@@ -3311,7 +3278,7 @@ export default function Museum3D({
             const anchored = new Set((layout?.wallAnchors ?? []).map((a) => a.slotKey));
             const orphans = layout ? placements.filter((p) => !anchored.has(p.slotKey)) : [];
             const areas = [
-              { prefix: "atrium", label: "Main Gallery" },
+              { prefix: "atrium", label: "Main Room" },
               { prefix: "wing:N", label: "North Gallery" },
               { prefix: "wing:W", label: "West Gallery" },
               { prefix: "wing:E", label: "East Gallery" },

@@ -38,9 +38,13 @@ create index if not exists museum_placements_user_idx on museum_placements (user
 -- world-readable; only the owner can create/change/remove them.
 alter table museum_placements enable row level security;
 
+-- Idempotent: drop-then-create so re-running this migration never errors on an
+-- already-existing policy (Postgres has no CREATE POLICY IF NOT EXISTS).
+drop policy if exists "museum placements are viewable by everyone" on museum_placements;
 create policy "museum placements are viewable by everyone"
   on museum_placements for select using (true);
 
+drop policy if exists "users manage own museum placements" on museum_placements;
 create policy "users manage own museum placements"
   on museum_placements for all
   using (auth.uid() = user_id) with check (auth.uid() = user_id);

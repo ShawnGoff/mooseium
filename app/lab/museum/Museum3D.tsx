@@ -705,12 +705,16 @@ function buildMuseum(m: Museum, editing = false): Layout {
 
     // A NAMED wing gets its name over its atrium doorway; an unnamed/placeholder
     // (compass-only) wing stays unlabeled — no "West Wing" plastered over a room.
+    // Offset past the wall thickness (0.3) + the abutting corridor wall that
+    // pokes into this room at the doorway, so the sign floats clear in the room
+    // rather than getting buried inside that protruding wall.
+    const LO = 0.45;
     const wl =
       side === "W"
-        ? { pos: [-A + 0.06, DOORH + 0.4, 0] as [number, number, number], rot: [0, Math.PI / 2, 0] as [number, number, number] }
+        ? { pos: [-A + LO, DOORH + 0.4, 0] as [number, number, number], rot: [0, Math.PI / 2, 0] as [number, number, number] }
         : side === "N"
-        ? { pos: [0, DOORH + 0.4, -A + 0.06] as [number, number, number], rot: [0, 0, 0] as [number, number, number] }
-        : { pos: [A - 0.06, DOORH + 0.4, 0] as [number, number, number], rot: [0, -Math.PI / 2, 0] as [number, number, number] };
+        ? { pos: [0, DOORH + 0.4, -A + LO] as [number, number, number], rot: [0, 0, 0] as [number, number, number] }
+        : { pos: [A - LO, DOORH + 0.4, 0] as [number, number, number], rot: [0, -Math.PI / 2, 0] as [number, number, number] };
     if (wing.name)
       labels.push({ text: wing.name.toUpperCase(), pos: wl.pos, rot: wl.rot, size: 0.34 });
 
@@ -733,14 +737,17 @@ function buildMuseum(m: Museum, editing = false): Layout {
 
       // gallery name on the wing wall, over the doorway, facing into the wing
       const wr = wingRoom.rect;
+      // Same 0.45 clearance as wing labels: past this wall's thickness and the
+      // gallery corridor wall that protrudes into the wing at the doorway.
+      const GLO = 0.45;
       const gl: LabelSpec =
         cs === "N"
-          ? { text: coll.name, pos: [ctrX(wr), DOORH + 0.3, wr.z0 + 0.06], rot: [0, 0, 0], size: 0.28 }
+          ? { text: coll.name, pos: [ctrX(wr), DOORH + 0.3, wr.z0 + GLO], rot: [0, 0, 0], size: 0.28 }
           : cs === "S"
-          ? { text: coll.name, pos: [ctrX(wr), DOORH + 0.3, wr.z1 - 0.06], rot: [0, Math.PI, 0], size: 0.28 }
+          ? { text: coll.name, pos: [ctrX(wr), DOORH + 0.3, wr.z1 - GLO], rot: [0, Math.PI, 0], size: 0.28 }
           : cs === "W"
-          ? { text: coll.name, pos: [wr.x0 + 0.06, DOORH + 0.3, ctrZ(wr)], rot: [0, Math.PI / 2, 0], size: 0.28 }
-          : { text: coll.name, pos: [wr.x1 - 0.06, DOORH + 0.3, ctrZ(wr)], rot: [0, -Math.PI / 2, 0], size: 0.28 };
+          ? { text: coll.name, pos: [wr.x0 + GLO, DOORH + 0.3, ctrZ(wr)], rot: [0, Math.PI / 2, 0], size: 0.28 }
+          : { text: coll.name, pos: [wr.x1 - GLO, DOORH + 0.3, ctrZ(wr)], rot: [0, -Math.PI / 2, 0], size: 0.28 };
       labels.push(gl);
 
       // preview artwork on the gallery's far wall (shown until the full

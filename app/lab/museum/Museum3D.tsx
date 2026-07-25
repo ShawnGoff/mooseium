@@ -805,7 +805,10 @@ function hangRoom(
   const sizeOf = (p: GalleryPiece) =>
     p.realW && p.realH
       ? { w: Math.min(REN_MAX_W, Math.max(1.2, p.realW)), h: Math.min(3.8, Math.max(0.35, p.realH)) }
-      : { w: 3.2, h: 1.6 };
+      : // No real dimensions: reserve a MODERATE width. (Reserving the renderer's
+        // 3.2 worst case made two such pieces overflow a short wall and get shoved
+        // into the corners. Most no-dimension pieces render ~1.3–2.2 wide.)
+        { w: 2.2, h: 1.6 };
   const out: { position: [number, number, number]; rotation: [number, number, number] }[] =
     new Array(pieces.length);
 

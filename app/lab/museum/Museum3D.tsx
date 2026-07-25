@@ -2387,6 +2387,10 @@ export default function Museum3D({
   // Visitor mode = the curated museum (what everyone sees). Curator mode =
   // editing: the whole museum opens up and the placement tools appear.
   function setMode(curator: boolean) {
+    // Clear any held movement input — the mode <select> ate the keyup, so W/etc.
+    // would otherwise stay "down" and keep walking after the switch.
+    keysRef.current = {};
+    joyRef.current = { x: 0, y: 0 };
     setEditing(curator);
     if (!curator) {
       setSelectedPlacement(null);
@@ -2716,6 +2720,9 @@ export default function Museum3D({
   });
   const dragRef = useRef(false);
   const joyRef = useRef({ x: 0, y: 0 });
+  // Held movement keys, lifted so switching Visitor/Curator mode can clear them —
+  // the native mode <select> swallows the keyup, otherwise leaving you drifting.
+  const keysRef = useRef<Record<string, boolean>>({});
   const posRef = useRef({ x: ENTRANCE_SPAWN[0], z: ENTRANCE_SPAWN[2] });
   const audioRef = useRef<HTMLAudioElement>(null);
   const [musicOn, setMusicOn] = useState(false);
@@ -3011,6 +3018,7 @@ export default function Museum3D({
             key={tp.k}
             dragRef={dragRef}
             joyRef={joyRef}
+            keysRef={keysRef}
             spawn={tp.spawn}
             spawnYaw={tp.yaw}
             constrain={constrain}

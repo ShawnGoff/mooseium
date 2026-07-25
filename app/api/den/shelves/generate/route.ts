@@ -124,6 +124,20 @@ async function generateThemes(prompt: string): Promise<ShelfDef[]> {
   throw new Error(lastErr);
 }
 
+// Reject if a promise doesn't settle within `ms`. A museum's search API can
+// hang with no response; without this, Promise.allSettled below would wait for
+// it indefinitely and the whole daily run dies at the function timeout — which
+// is exactly why the museum shelves stopped refreshing while the (search-free)
+// library shelves kept working.
+function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
+  return Promise.race([
+    p,
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms)
+    ),
+  ]);
+}
+
 // Resolve one art theme to real open-access artworks by fanning out across all
 // museums (server-side — these APIs aren't IP-blocked like Gutendex).
 async function resolveArt(query: string): Promise<ArtworkCard[]> {
@@ -132,14 +146,20 @@ async function resolveArt(query: string): Promise<ArtworkCard[]> {
     slugs.map((slug) => {
       const a = getAdapter(slug);
       if (!a) return Promise.resolve(null);
-      return a.search({
-        query,
-        filters: {},
-        page: 1,
-        pageSize: 4,
-        hasImage: true,
-        openAccessOnly: true,
-      });
+      // Cap each museum at 8s: a slow/hanging API is skipped (allSettled tolerates
+      // the rejection) instead of stalling the entire generation.
+      return withTimeout(
+        a.search({
+          query,
+          filters: {},
+          page: 1,
+          pageSize: 4,
+          hasImage: true,
+          openAccessOnly: true,
+        }),
+        8000,
+        `${slug} search`
+      );
     })
   );
   const lists: ArtworkCard[][] = [];

@@ -140,6 +140,15 @@ function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
 
 // Resolve one art theme to real open-access artworks by fanning out across all
 // museums (server-side — these APIs aren't IP-blocked like Gutendex).
+function shuffle<T>(arr: T[]): T[] {
+  const a = arr.slice();
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
 async function resolveArt(query: string): Promise<ArtworkCard[]> {
   const slugs = listMuseums().map((m) => m.slug);
   const settled = await Promise.allSettled(
@@ -148,12 +157,15 @@ async function resolveArt(query: string): Promise<ArtworkCard[]> {
       if (!a) return Promise.resolve(null);
       // Cap each museum at 8s: a slow/hanging API is skipped (allSettled tolerates
       // the rejection) instead of stalling the entire generation.
+      // Pull a WIDER page than we need (24) so we can randomly sample from it —
+      // otherwise a given subject returns the same top few results every run and
+      // recurring themes never visibly rotate.
       return withTimeout(
         a.search({
           query,
           filters: {},
           page: 1,
-          pageSize: 4,
+          pageSize: 24,
           hasImage: true,
           openAccessOnly: true,
         }),
@@ -165,7 +177,10 @@ async function resolveArt(query: string): Promise<ArtworkCard[]> {
   const lists: ArtworkCard[][] = [];
   for (const r of settled) {
     if (r.status === "fulfilled" && r.value) {
-      lists.push(r.value.cards.filter((c) => c.thumbnailUrl));
+      // Randomly sample up to 4 per museum from the wider result set, so the
+      // shelf shows different pieces each time even for a repeated subject.
+      const withImg = r.value.cards.filter((c) => c.thumbnailUrl);
+      lists.push(shuffle(withImg).slice(0, 4));
     }
   }
   // Round-robin merge so a shelf mixes museums rather than grouping them.

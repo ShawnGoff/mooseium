@@ -32,24 +32,25 @@ Rules:
 
 Example element: {"title":"Shadows & Séances","blurb":"Ghost stories and gothic dread.","query":"topic=horror"}`;
 
-// A broad pool of visual, well-represented art subjects. Each daily run draws 3
-// at random from here rather than letting the LLM pick — the model, left to
-// choose, keeps converging on the same crowd-pleasers (flowers/gardens). This
-// guarantees a varied mix that actually rotates. The LLM only NAMES the chosen
-// subjects (title + blurb); the subject itself is the search query.
+// Pool of BROAD, well-represented art subjects. These are drawn from the actual
+// subject/classification vocabulary the collections are indexed on (the Art
+// Institute's `term_titles`/`classification_title`, mirrored across the Met,
+// Rijksmuseum, etc.) — genres and categories that return plenty of results in
+// every collection, deliberately NOT niche motifs (a "peacocks" or "dragons"
+// shelf would come up thin). Each daily run draws 3 at random; the LLM only
+// NAMES them (title + blurb), and the subject itself is the search query.
 const ART_SUBJECTS = [
-  "seascape", "mountain landscape", "portrait of a woman", "self-portrait",
-  "horses", "cats", "dogs", "birds", "peacock", "lions", "tigers", "elephants",
-  "flowers", "sunflowers", "roses", "still life", "fruit", "banquet",
-  "moonlight", "night sky", "storm", "snow", "autumn", "waterfall",
-  "rivers", "bridges", "ships", "shipwreck", "harbor", "windmills",
-  "angels", "saints", "mythology", "gods and goddesses", "dragons",
-  "dancers", "musicians", "musical instruments", "market scene", "hunting",
-  "armor", "masks", "ceramics", "porcelain", "textiles", "tapestry",
-  "jewelry", "gold", "maps", "ruins", "temples", "gardens",
-  "children", "mother and child", "forest", "desert", "camels",
-  "samurai", "kimono", "Buddha", "calligraphy", "fans", "lanterns",
-  "clocks", "mirrors", "books", "letters", "sculpture", "bronze",
+  // Genres / scenes
+  "landscape", "seascape", "marine", "still life", "portrait", "self-portrait",
+  "genre scene", "interiors", "nudes", "religious", "mythology", "history",
+  "hunting", "market scene", "dance", "music",
+  // Subjects / motifs (broad)
+  "flowers", "fruit", "animals", "birds", "horses", "cats", "dogs",
+  "ships", "harbor", "rivers", "bridges", "mountains", "forest", "gardens",
+  "ruins", "architecture", "saints", "angels", "children", "winter", "night",
+  // Classifications (whole categories of objects)
+  "sculpture", "prints", "drawings", "ceramics", "textiles", "arms and armor",
+  "jewelry", "furniture",
 ];
 
 // Capitalize each word — a safe fallback title if the LLM naming step fails.

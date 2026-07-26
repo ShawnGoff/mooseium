@@ -32,19 +32,30 @@ Rules:
 
 Example element: {"title":"Shadows & Séances","blurb":"Ghost stories and gothic dread.","query":"topic=horror"}`;
 
-const MUSEUM_PROMPT = `You are curating "discovery shelves" for an online art museum that searches the Met, Art Institute of Chicago, Cleveland, Rijksmuseum, Harvard, and the Smithsonian.
+// A broad pool of visual, well-represented art subjects. Each daily run draws 3
+// at random from here rather than letting the LLM pick — the model, left to
+// choose, keeps converging on the same crowd-pleasers (flowers/gardens). This
+// guarantees a varied mix that actually rotates. The LLM only NAMES the chosen
+// subjects (title + blurb); the subject itself is the search query.
+const ART_SUBJECTS = [
+  "seascape", "mountain landscape", "portrait of a woman", "self-portrait",
+  "horses", "cats", "dogs", "birds", "peacock", "lions", "tigers", "elephants",
+  "flowers", "sunflowers", "roses", "still life", "fruit", "banquet",
+  "moonlight", "night sky", "storm", "snow", "autumn", "waterfall",
+  "rivers", "bridges", "ships", "shipwreck", "harbor", "windmills",
+  "angels", "saints", "mythology", "gods and goddesses", "dragons",
+  "dancers", "musicians", "musical instruments", "market scene", "hunting",
+  "armor", "masks", "ceramics", "porcelain", "textiles", "tapestry",
+  "jewelry", "gold", "maps", "ruins", "temples", "gardens",
+  "children", "mother and child", "forest", "desert", "camels",
+  "samurai", "kimono", "Buddha", "calligraphy", "fans", "lanterns",
+  "clocks", "mirrors", "books", "letters", "sculpture", "bronze",
+];
 
-Produce exactly 3 themed shelves. Each shelf is an object with:
-- "title": a short, evocative shelf name (2-5 words), e.g. "Storms & Seascapes" or "The Color Blue".
-- "blurb": one inviting sentence, max ~12 words.
-- "query": a short, concrete search phrase that matches lots of artworks — a subject, motif, place, or thing (e.g. "seascape", "portrait of a woman", "flowers", "horses", "moonlight", "still life"). Plain keywords only — NO field prefixes.
-
-Rules:
-- Favor visual, well-represented subjects so each shelf has plenty of images.
-- Vary moods, eras, and cultures; make them feel freshly curated.
-- Respond with ONLY a JSON array of 3 objects. No preamble, no markdown fences.
-
-Example element: {"title":"Storms & Seascapes","blurb":"The sea in all its moods.","query":"seascape"}`;
+// Capitalize each word — a safe fallback title if the LLM naming step fails.
+function titleCase(s: string): string {
+  return s.replace(/\b\w/g, (c) => c.toUpperCase());
+}
 
 function authorized(req: NextRequest): boolean {
   const secret = process.env.CRON_SECRET;
@@ -124,6 +135,34 @@ async function generateThemes(prompt: string): Promise<ShelfDef[]> {
   throw new Error(lastErr);
 }
 
+// Museum shelves: pick 3 distinct subjects at random from the pool, then ask the
+// LLM only to NAME them (title + blurb). The query is forced to the chosen
+// subject regardless of what the model returns, and a plain title fills in if the
+// model drops one — so we always get 3 varied, freshly-rotated shelves even if
+// the LLM misbehaves or is down.
+async function museumThemes(): Promise<ShelfDef[]> {
+  const chosen = shuffle(ART_SUBJECTS).slice(0, 3);
+  const prompt = `You name "discovery shelves" for an online art museum. I give you 3 art subjects. For EACH, in the SAME order, write a short evocative "title" (2-5 words) and a one-sentence "blurb" (max ~12 words), and set "query" to the subject EXACTLY as given.
+
+Subjects, in order:
+1. ${chosen[0]}
+2. ${chosen[1]}
+3. ${chosen[2]}
+
+Respond with ONLY a JSON array of 3 objects {"title","blurb","query"} in that order. No preamble, no markdown fences.`;
+  let named: ShelfDef[] = [];
+  try {
+    named = await generateThemes(prompt);
+  } catch {
+    named = [];
+  }
+  return chosen.map((subject, i) => ({
+    title: named[i]?.title || titleCase(subject),
+    blurb: named[i]?.blurb || "",
+    query: subject,
+  }));
+}
+
 // Reject if a promise doesn't settle within `ms`. A museum's search API can
 // hang with no response; without this, Promise.allSettled below would wait for
 // it indefinitely and the whole daily run dies at the function timeout — which
@@ -197,9 +236,8 @@ type Surface = "library" | "museum";
 // Generate and cache one surface's shelves. Throws with a readable message so
 // the caller can report per-surface results.
 async function generateFor(surface: Surface): Promise<number> {
-  const themes = await generateThemes(
-    surface === "museum" ? MUSEUM_PROMPT : LIBRARY_PROMPT
-  );
+  const themes =
+    surface === "museum" ? await museumThemes() : await generateThemes(LIBRARY_PROMPT);
   if (themes.length === 0) throw new Error("no usable shelves generated");
 
   // Library shelves keep a Gutendex query (resolved in the browser); museum

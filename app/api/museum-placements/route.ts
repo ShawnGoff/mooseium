@@ -13,17 +13,23 @@ import { decodeEntities } from "@/lib/util/text";
 // Free-placed art also lives in a lazy per-location 2D collection. These are
 // marked in_museum=false so /api/museum never turns them into 3D rooms — they're
 // just the flat 2D home for what you've hung in that part of the museum.
-function locationName(slotKey: string): string | null {
+//
+// The collection is resolved by its SLOT, never by its name: these collections
+// are user-facing, so the curator can rename one or flip its "show in my 3D
+// museum" toggle, and neither may cost us the mapping (a missed lookup would
+// mint a duplicate collection and strand the piece on removal). galleries.
+// location_slot holds this id; see 0029_gallery_location_slot.sql.
+//
+// One slot per museum LOCATION, not per wall: every atrium wall shares "Main
+// Room", and a wing's four walls share that wing's collection.
+function locationFor(slotKey: string): { slot: string; name: string } | null {
   const [zone, side] = slotKey.split(":");
-  if (zone === "atrium") return "Main Room";
-  if (zone === "wing")
-    return side === "N"
-      ? "North Gallery"
-      : side === "W"
-      ? "West Gallery"
-      : side === "E"
-      ? "East Gallery"
-      : null;
+  if (zone === "atrium") return { slot: "atrium", name: "Main Room" };
+  if (zone === "wing") {
+    if (side === "N") return { slot: "wing:N", name: "North Gallery" };
+    if (side === "W") return { slot: "wing:W", name: "West Gallery" };
+    if (side === "E") return { slot: "wing:E", name: "East Gallery" };
+  }
   return null;
 }
 
@@ -135,22 +141,29 @@ export async function POST(req: NextRequest) {
 
   // Also add the piece to its lazy per-location 2D collection (best-effort; the
   // placement itself already succeeded).
-  const locName = locationName(row.slot_key);
-  if (locName) {
+  const loc = locationFor(row.slot_key);
+  if (loc) {
     try {
       const { data: found } = await supabase
         .from("galleries")
         .select("id")
         .eq("user_id", user.id)
-        .eq("name", locName)
-        .eq("in_museum", false)
+        .eq("location_slot", loc.slot)
         .limit(1)
         .maybeSingle();
       let galleryId = (found as { id: string } | null)?.id;
       if (!galleryId) {
+        // The name is the curator's to change from here on; only location_slot
+        // is load-bearing. in_museum=false keeps it out of the 3D museum, where
+        // its pieces are already hanging on the walls.
         const { data: created } = await supabase
           .from("galleries")
-          .insert({ user_id: user.id, name: locName, in_museum: false })
+          .insert({
+            user_id: user.id,
+            name: loc.name,
+            in_museum: false,
+            location_slot: loc.slot,
+          })
           .select("id")
           .single();
         galleryId = (created as { id: string } | null)?.id;
@@ -229,16 +242,15 @@ export async function DELETE(req: NextRequest) {
     .eq("slot_key", slotKey);
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
 
-  const locName = existing ? locationName(slotKey) : null;
-  if (existing && locName) {
+  const loc = existing ? locationFor(slotKey) : null;
+  if (existing && loc) {
     try {
       const ex = existing as { source: string; external_id: string };
       const { data: gal } = await supabase
         .from("galleries")
         .select("id")
         .eq("user_id", user.id)
-        .eq("name", locName)
-        .eq("in_museum", false)
+        .eq("location_slot", loc.slot)
         .limit(1)
         .maybeSingle();
       const { data: art } = await supabase

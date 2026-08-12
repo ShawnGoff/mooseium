@@ -938,17 +938,15 @@ function GalleryFull({
     [pieces, gallery]
   );
   if (!pieces) return null;
-  // Source pieces are raw museum-CDN thumbnails, so load them through the
-  // CORS-safe proxy (like placements) to avoid tainted/black textures.
-  const isSource = Boolean(gallery.pieces);
+  // Source pieces are raw museum-CDN thumbnails; ProxyArtwork already routes
+  // every piece through the CORS-safe /api/img proxy, so hand it the raw URL.
+  // Pre-wrapping here double-proxied them into a 400 and a blank title card.
   return (
     <>
       {pieces.map((p, i) => (
         <ProxyArtwork
           key={i}
-          piece={
-            isSource ? { ...p, image: `/api/img?url=${encodeURIComponent(p.image)}` } : p
-          }
+          piece={p}
           position={spots[i].position}
           rotation={spots[i].rotation}
           onSelect={onSelect}
@@ -2230,15 +2228,15 @@ function Scene({
       {placements.map((pl) => {
         const a = anchorMap.get(pl.slotKey);
         if (!a || !pl.piece.image) return null;
-        // Load through the CORS-safe image proxy so textures from museums whose
-        // CDN lacks CORS headers don't taint and render as black boxes.
+        // Pass the RAW museum URL: ProxyArtwork already loads every piece through
+        // /api/img itself. Wrapping it here too produced /api/img?url=/api/img...,
+        // whose inner value is a relative path that the proxy's allowlist rejects
+        // (new URL() throws without a base) — a 400 for every piece, so each one
+        // fell back to its title card.
         return (
           <ProxyArtwork
             key={pl.slotKey}
-            piece={{
-              ...pl.piece,
-              image: `/api/img?url=${encodeURIComponent(pl.piece.image)}`,
-            }}
+            piece={pl.piece}
             position={pl.pos ?? a.position}
             rotation={a.rotation}
             onSelect={editing ? () => onNudgeSelect(pl.slotKey) : () => onSelectPlacement(pl)}

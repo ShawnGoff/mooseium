@@ -2255,7 +2255,8 @@ function Scene({
 function Directory({ nav, onPick, onHome }: { nav: Nav[]; onPick: (i: number) => void; onHome: () => void }) {
   const [open, setOpen] = useState(false);
   return (
-    <div style={{ position: "absolute", top: 14, right: 14, textAlign: "right" }}>
+    // right: 60 leaves the top-right corner for the hide-interface button.
+    <div style={{ position: "absolute", top: 14, right: 60, textAlign: "right" }}>
       <button
         onClick={() => setOpen((o) => !o)}
         style={dirBtnStyle}
@@ -2594,6 +2595,8 @@ export default function Museum3D({
   const [view, setView] = useState<"loading" | "ready" | "empty">("loading");
   const [previews, setPreviews] = useState<Record<string, GalleryPiece | null>>({});
   const [selected, setSelected] = useState<Piece | null>(null);
+  // Hide every HUD overlay (H, or the corner button) for a clean view.
+  const [hideUI, setHideUI] = useState(false);
   const [isTouch] = useState(
     () =>
       typeof window !== "undefined" &&
@@ -2911,6 +2914,23 @@ export default function Museum3D({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [station, denPanel]);
 
+  // H hides every overlay for an unobstructed look at the room (and for clean
+  // screenshots). The restore button stays put so the way back is always in the
+  // same corner. Skipped while a panel owns the keyboard, and while typing.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "h" && e.key !== "H") return;
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return; // leave browser shortcuts alone
+      if (denPanel) return;
+      e.preventDefault();
+      setHideUI((h) => !h);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [denPanel]);
+
   // Closing the tool: stand back up if we were seated, then release control.
   const closeDenPanel = () => {
     setDenPanel(null);
@@ -3049,13 +3069,18 @@ export default function Museum3D({
         <DenPanel initialTab={denPanel} onClose={closeDenPanel} />
       )}
 
-      {isTouch && view === "ready" && <JoystickPad joyRef={joyRef} />}
+      {/* The joystick goes too — it's the loudest thing on a phone screen, and
+          drag-to-look still works while hidden. The corner button brings it back. */}
+      {isTouch && view === "ready" && !hideUI && <JoystickPad joyRef={joyRef} />}
 
-      {isOwner && view === "ready" && (
+      {isOwner && view === "ready" && !hideUI && (
         <div
           style={{
             position: "absolute",
-            top: 14,
+            // Bottom-centre: clear of the header, and it reads as a persistent
+            // status control rather than a header item. Lifted above the phone
+            // home indicator so it stays tappable.
+            bottom: isTouch ? "calc(env(safe-area-inset-bottom, 0px) + 76px)" : 14,
             left: "50%",
             transform: "translateX(-50%)",
             zIndex: 22,
@@ -3419,7 +3444,7 @@ export default function Museum3D({
         />
       )}
 
-      {view === "ready" && station && (
+      {view === "ready" && station && !hideUI && (
         <button onClick={enterStation} style={stationPromptStyle}>
           {station.label}
           <span style={{ opacity: 0.6, marginLeft: 10, fontSize: 12 }}>
@@ -3432,7 +3457,7 @@ export default function Museum3D({
       <audio ref={audioRef} loop preload="none" src={MUSIC_TRACKS[trackIdx].src} />
       {/* Rain loop uses Web Audio (see the rain effect above) from public/rain.mp3 */}
 
-      {view === "ready" && (
+      {view === "ready" && !hideUI && (
         <div
           data-tour="music"
           style={{
@@ -3484,7 +3509,7 @@ export default function Museum3D({
 
       {/* Desktop: weather bottom-left, lifted to align with the middle of the
           music control stack on the right. */}
-      {view === "ready" && !isTouch && (
+      {view === "ready" && !isTouch && !hideUI && (
         <div
           data-tour="weather"
           style={{ ...skyToggleStyle, position: "absolute", bottom: 44, left: 14 }}
@@ -3493,6 +3518,7 @@ export default function Museum3D({
         </div>
       )}
 
+      {!hideUI && (
       <div style={panelStyle}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           {view === "ready" && (
@@ -3515,8 +3541,22 @@ export default function Museum3D({
         )}
         {view !== "ready" && <div style={{ opacity: 0.85 }}>Loading…</div>}
       </div>
+      )}
 
-      {view === "ready" && layout && layout.nav.length > 0 && (
+      {/* Always reachable, in a fixed corner, so hidden UI is never a dead end. */}
+      {view === "ready" && (
+        <button
+          onClick={() => setHideUI((h) => !h)}
+          style={hideUIBtnStyle}
+          aria-pressed={hideUI}
+          aria-label={hideUI ? "Show interface" : "Hide interface"}
+          title={hideUI ? "Show interface (H)" : "Hide interface (H)"}
+        >
+          {hideUI ? "👁" : "⛶"}
+        </button>
+      )}
+
+      {view === "ready" && layout && layout.nav.length > 0 && !hideUI && (
         <Directory
           nav={layout.nav}
           onPick={(i) => teleport(layout.nav[i].spawn, layout.nav[i].yaw)}
@@ -3638,6 +3678,28 @@ const infoToggleStyle: React.CSSProperties = {
   lineHeight: 1,
   padding: 2,
   opacity: 0.8,
+};
+// Top-right corner, outboard of the Directory button (which sits at right: 60 to
+// leave this room). Fixed position in both states so restoring the UI is always
+// the same click target.
+const hideUIBtnStyle: React.CSSProperties = {
+  position: "absolute",
+  top: 14,
+  right: 14,
+  zIndex: 23,
+  width: 34,
+  height: 34,
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  background: "rgba(20,18,16,0.72)",
+  color: "#f3efe9",
+  border: "1px solid #4a423b",
+  borderRadius: 8,
+  cursor: "pointer",
+  fontSize: 15,
+  lineHeight: 1,
+  padding: 0,
 };
 const musicRowStyle: React.CSSProperties = {
   position: "absolute",

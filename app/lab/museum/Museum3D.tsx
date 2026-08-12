@@ -54,7 +54,14 @@ const MUSEUM_TOUR_STEPS: TourStep[] = [
   },
 ];
 
-type Collection = { name: string; slug: string; count: number };
+type Collection = {
+  id: string;
+  name: string;
+  slug: string;
+  count: number;
+  // Source-museum showcases carry their pieces inline (no /api/gallery-pieces).
+  pieces?: GalleryPiece[];
+};
 type Wing = { name: string; collections: Collection[]; isDefault?: boolean };
 type Museum = { name: string; curator: string; handle: string; wings: Wing[] };
 
@@ -65,6 +72,7 @@ const DOORH = 3.6; // doorway height
 const CORR_HALF = 1.8; // corridor half-width
 const DOOR_HALF = 1.5; // doorway half-width
 const WING_HALF = 5; // wing room half-size
+const GALLERY_CAP = 11; // max pieces a gallery displays (3 walls + entry wall)
 const COLL_HALF = 4.5; // gallery room half-size
 const ATR_WING_CORR = 10; // atrium→wing corridor length (spaces the wings out)
 const WING_COLL_CORR = 3; // wing→gallery corridor length
@@ -89,9 +97,24 @@ type GalleryBuild = {
   entrySide: Side;
   previewPos: [number, number, number];
   previewRot: [number, number, number];
+  // Source-museum showcases pass pieces inline instead of fetching by slug.
+  pieces?: GalleryPiece[];
 };
 type Nav = { wing: string; name: string; spawn: [number, number, number]; yaw: number };
 type Hint = { pos: [number, number, number]; rot: [number, number, number] };
+// A stable spot a curator can hang a free-standing painting (in-museum editor):
+// atrium walls + every wing's walls. Generated from room geometry so the DB only
+// ever stores an opaque slotKey, never coordinates.
+type WallAnchor = {
+  slotKey: string;
+  position: [number, number, number];
+  rotation: [number, number, number];
+  // The coordinate that slides along this wall (0 = x, 2 = z) and its clamp
+  // range, so nudging can't push a piece off the wall into open room.
+  axis: 0 | 2;
+  lo: number;
+  hi: number;
+};
 type Layout = {
   rooms: Room[];
   walk: AABB[];
@@ -100,6 +123,7 @@ type Layout = {
   lights: [number, number][];
   nav: Nav[];
   hints: Hint[];
+  wallAnchors: WallAnchor[];
 };
 
 // Roman inscriptional serif for the signage — the lettering carved over real
@@ -191,7 +215,404 @@ const faceRot = (side: Side): [number, number, number] =>
 const outwardYaw = (side: Side) =>
   side === "N" ? 0 : side === "S" ? Math.PI : side === "W" ? Math.PI / 2 : -Math.PI / 2;
 
-function buildMuseum(m: Museum): Layout {
+// A free-standing painting the curator hung directly on a wall (in-museum
+// editor), outside the gallery collections. Denormalized so the 3D can hang it.
+type GalleryVis = {
+  id: string;
+  name: string;
+  count: number;
+  inMuseum: boolean;
+  shareSlug: string | null;
+  wing: string | null;
+};
+type WallPlacement = {
+  slotKind: string;
+  slotKey: string;
+  source: string;
+  externalId: string;
+  rotationY: number;
+  mount: string;
+  // Explicit world position once the curator has dragged it; null = use the
+  // slot anchor. Rotation always comes from the wall anchor (paintings stay flat).
+  pos?: [number, number, number] | null;
+  piece: GalleryPiece;
+};
+
+// Two flanking painting spots per wall (they clear the centred doorway). Anchor
+// positions are computed from room geometry in buildLayout and carried on the
+// layout; the DB only ever stores the opaque slotKey.
+const WALL_ART_OFFSETS = [-3.2, 3.2];
+
+// A clickable "+" marker at an empty wall anchor. Owner-only (only rendered
+// while editing). Clicking opens the art picker for that slot.
+function Hotspot({ anchor, onPick }: { anchor: WallAnchor; onPick: (k: string) => void }) {
+  return (
+    <group position={anchor.position} rotation={anchor.rotation}>
+      <mesh
+        onClick={(e) => {
+          e.stopPropagation();
+          onPick(anchor.slotKey);
+        }}
+      >
+        <planeGeometry args={[1.7, 1.3]} />
+        <meshBasicMaterial
+          color="#c8a15a"
+          transparent
+          opacity={0.16}
+          side={THREE.DoubleSide}
+        />
+      </mesh>
+      <Text position={[0, 0, 0.03]} fontSize={0.55} color="#f0dfb0" anchorX="center" anchorY="middle">
+        +
+      </Text>
+    </group>
+  );
+}
+
+// Art picker for the in-museum editor: search every museum, tap a result to
+// hang it. Resolves the display image via /api/artwork so walls aren't fed
+// tiny thumbnails.
+type PickCard = {
+  sourceMuseum: string;
+  museumObjectId: string;
+  title: string;
+  artist?: string;
+  thumbnailUrl: string;
+};
+type FullArt = {
+  image?: string;
+  artist?: string;
+  dateText?: string;
+  medium?: string;
+  description?: string;
+  sourceUrl?: string;
+};
+function ArtPicker({
+  onClose,
+  onPlace,
+  title = "Place art on this wall",
+  placeLabel = "Place on this wall",
+}: {
+  onClose: () => void;
+  onPlace: (art: { source: string; externalId: string; title: string; image: string }) => void;
+  title?: string;
+  placeLabel?: string;
+}) {
+  const [q, setQ] = useState("");
+  const [museum, setMuseum] = useState("all");
+  const [museums, setMuseums] = useState<{ slug: string; displayName: string }[]>([]);
+  const [cards, setCards] = useState<PickCard[] | null>(null);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [preview, setPreview] = useState<{ card: PickCard; full: FullArt | null } | null>(null);
+
+  useEffect(() => {
+    fetch("/api/museums")
+      .then((r) => r.json())
+      .then((d) => setMuseums((d.museums as { slug: string; displayName: string }[]) ?? []))
+      .catch(() => {});
+  }, []);
+
+  async function fetchPage(p: number, append: boolean) {
+    if (!q.trim()) return;
+    setBusy(true);
+    try {
+      const r = await fetch(
+        `/api/search?museum=${encodeURIComponent(museum)}&q=${encodeURIComponent(q)}&page=${p}`
+      );
+      const d = await r.json();
+      const next = ((d.cards as PickCard[]) ?? []).filter((c) => c.thumbnailUrl);
+      setCards((prev) => (append && prev ? [...prev, ...next] : next));
+      setHasMore(Boolean(d.hasMore));
+      setPage(p);
+    } catch {
+      if (!append) setCards([]);
+    }
+    setBusy(false);
+  }
+  const run = () => fetchPage(1, false);
+  const more = () => fetchPage(page + 1, true);
+
+  // Clicking a result opens a larger preview with full details instead of
+  // placing immediately, so you can inspect a piece before committing.
+  async function openPreview(c: PickCard) {
+    setPreview({ card: c, full: null });
+    try {
+      const r = await fetch(
+        `/api/artwork?museum=${encodeURIComponent(c.sourceMuseum)}&objectId=${encodeURIComponent(c.museumObjectId)}`
+      );
+      const d = await r.json();
+      if (d.artwork) setPreview({ card: c, full: d.artwork as FullArt });
+    } catch {
+      /* keep the basic preview */
+    }
+  }
+  function placePreview() {
+    if (!preview) return;
+    const c = preview.card;
+    onPlace({
+      source: c.sourceMuseum,
+      externalId: c.museumObjectId,
+      title: c.title,
+      image: preview.full?.image || c.thumbnailUrl,
+    });
+  }
+
+  return (
+    <div
+      style={{
+        position: "absolute",
+        top: 0,
+        right: 0,
+        bottom: 0,
+        width: 340,
+        background: "rgba(16,13,10,0.97)",
+        borderLeft: "1px solid #4a4030",
+        padding: 14,
+        color: "#ece0c8",
+        zIndex: 30,
+        display: "flex",
+        flexDirection: "column",
+        gap: 10,
+      }}
+    >
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <strong>{title}</strong>
+        <button
+          onClick={onClose}
+          style={{ background: "transparent", border: "none", color: "#ece0c8", cursor: "pointer", fontSize: 16 }}
+          aria-label="Close"
+        >
+          ✕
+        </button>
+      </div>
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          run();
+        }}
+        style={{ display: "flex", flexDirection: "column", gap: 6 }}
+      >
+        <select
+          value={museum}
+          onChange={(e) => setMuseum(e.target.value)}
+          aria-label="Museum to search"
+          style={{
+            padding: "6px 8px",
+            borderRadius: 6,
+            border: "1px solid #4a4030",
+            background: "#0e0b08",
+            color: "#ece0c8",
+            fontSize: 13,
+          }}
+        >
+          <option value="all">All museums</option>
+          {museums.map((m) => (
+            <option key={m.slug} value={m.slug}>
+              {m.displayName}
+            </option>
+          ))}
+        </select>
+        <div style={{ display: "flex", gap: 6 }}>
+          <input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Search…"
+            style={{
+              flex: 1,
+              padding: "6px 8px",
+              borderRadius: 6,
+              border: "1px solid #4a4030",
+              background: "#0e0b08",
+              color: "#ece0c8",
+              fontSize: 13,
+            }}
+          />
+          <button
+            type="submit"
+            style={{
+              padding: "0 12px",
+              borderRadius: 6,
+              border: "1px solid #c8a15a",
+              background: "transparent",
+              color: "#e6d3a3",
+              cursor: "pointer",
+              fontSize: 13,
+            }}
+          >
+            Search
+          </button>
+        </div>
+      </form>
+      <div style={{ overflowY: "auto", flex: 1, display: "flex", flexDirection: "column", gap: 6 }}>
+        {busy && page === 1 && <div style={{ fontSize: 13, opacity: 0.7 }}>Searching…</div>}
+        {cards && cards.length === 0 && !busy && (
+          <div style={{ fontSize: 13, opacity: 0.7 }}>No results.</div>
+        )}
+        {(cards ?? []).map((c) => (
+          <button
+            key={`${c.sourceMuseum}:${c.museumObjectId}`}
+            onClick={() => openPreview(c)}
+            title={c.title}
+            style={{
+              display: "flex",
+              gap: 8,
+              alignItems: "center",
+              width: "100%",
+              padding: 6,
+              border: "1px solid #332c22",
+              borderRadius: 8,
+              background: "transparent",
+              color: "#ece0c8",
+              cursor: "pointer",
+              textAlign: "left",
+            }}
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={c.thumbnailUrl}
+              alt=""
+              style={{ width: 52, height: 52, objectFit: "cover", borderRadius: 4, flexShrink: 0 }}
+            />
+            <div style={{ minWidth: 0 }}>
+              <div
+                style={{
+                  fontSize: 13,
+                  fontWeight: 600,
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {c.title}
+              </div>
+              {c.artist && (
+                <div
+                  style={{
+                    fontSize: 11,
+                    color: "#b8afa2",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {c.artist}
+                </div>
+              )}
+              <div
+                style={{
+                  fontSize: 11,
+                  color: "#c8a15a",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {MUSEUM_LABEL[c.sourceMuseum] ?? c.sourceMuseum}
+              </div>
+            </div>
+          </button>
+        ))}
+        {hasMore && cards && cards.length > 0 && (
+          <button
+            onClick={more}
+            disabled={busy}
+            style={{
+              width: "100%",
+              marginTop: 4,
+              padding: "7px 0",
+              borderRadius: 6,
+              border: "1px solid #4a4030",
+              background: "transparent",
+              color: "#e6d3a3",
+              cursor: busy ? "default" : "pointer",
+              fontSize: 13,
+            }}
+          >
+            {busy ? "Loading…" : "Load more"}
+          </button>
+        )}
+      </div>
+
+      {preview && (
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            background: "rgba(16,13,10,0.98)",
+            padding: 14,
+            display: "flex",
+            flexDirection: "column",
+            gap: 8,
+          }}
+        >
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <button
+              onClick={() => setPreview(null)}
+              style={{ background: "transparent", border: "none", color: "#e6d3a3", cursor: "pointer", fontSize: 13 }}
+            >
+              ← Back
+            </button>
+            <button
+              onClick={onClose}
+              style={{ background: "transparent", border: "none", color: "#ece0c8", cursor: "pointer", fontSize: 16 }}
+              aria-label="Close"
+            >
+              ✕
+            </button>
+          </div>
+          <div style={{ overflowY: "auto", flex: 1 }}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={preview.full?.image || preview.card.thumbnailUrl}
+              alt=""
+              style={{ width: "100%", borderRadius: 8, marginBottom: 10, display: "block" }}
+            />
+            <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 2 }}>{preview.card.title}</div>
+            {(preview.full?.artist || preview.card.artist) && (
+              <div style={{ color: "#b8afa2", fontSize: 13 }}>
+                {preview.full?.artist || preview.card.artist}
+              </div>
+            )}
+            <div style={{ color: "#c8a15a", fontSize: 12, marginBottom: 8 }}>
+              {MUSEUM_LABEL[preview.card.sourceMuseum] ?? preview.card.sourceMuseum}
+            </div>
+            {(preview.full?.dateText || preview.full?.medium) && (
+              <div style={{ fontSize: 12, opacity: 0.85, marginBottom: 8 }}>
+                {[preview.full?.dateText, preview.full?.medium].filter(Boolean).join(" · ")}
+              </div>
+            )}
+            {preview.full?.description && (
+              <div style={{ fontSize: 12, opacity: 0.85, lineHeight: 1.5 }}>
+                {preview.full.description}
+              </div>
+            )}
+            {!preview.full && <div style={{ fontSize: 12, opacity: 0.6 }}>Loading details…</div>}
+          </div>
+          <button
+            onClick={placePreview}
+            style={{
+              width: "100%",
+              padding: "9px 0",
+              borderRadius: 6,
+              border: "1px solid #c8a15a",
+              background: "rgba(200,161,90,0.14)",
+              color: "#e6d3a3",
+              cursor: "pointer",
+              fontSize: 14,
+              fontWeight: 600,
+            }}
+          >
+            {placeLabel}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function buildMuseum(m: Museum, editing = false): Layout {
   const rooms: Room[] = [];
   const walk: AABB[] = [];
   const labels: LabelSpec[] = [];
@@ -224,6 +645,12 @@ function buildMuseum(m: Museum): Layout {
   const defaultWing = m.wings.find((w) => w.isDefault) ?? null;
   const namedWings = m.wings.filter((w) => !w.isDefault);
   const ordered = defaultWing ? [defaultWing, ...namedWings] : namedWings;
+  // In edit mode the whole museum is open: pad to three walkable wings so the
+  // owner can walk in and place art (or, later, create galleries) on any wing
+  // wall. Visitors only ever get the wings that actually have content.
+  if (editing) {
+    while (ordered.length < 3) ordered.push({ name: "", collections: [] });
+  }
   const CENTER_FIRST: Side[] = ["N", "W", "E"];
   const placements: { wing: Wing; side: Side }[] = ordered
     .slice(0, 3)
@@ -241,18 +668,55 @@ function buildMuseum(m: Museum): Layout {
     else hints.push({ pos: [A - 0.06, y, 0], rot: [0, -Math.PI / 2, 0] });
   });
 
+  // Editor wall anchors: two flanking spots on each wall of the atrium and of
+  // every wing. Keyed by a stable prefix so placements survive across sessions.
+  const wallAnchors: WallAnchor[] = [];
+  const addWallAnchors = (prefix: string, rect: AABB, s: Side) => {
+    const cx = ctrX(rect);
+    const cz = ctrZ(rect);
+    const horiz = s === "N" || s === "S"; // slides along x on N/S walls, z on E/W
+    const axis: 0 | 2 = horiz ? 0 : 2;
+    const M = 1.1; // keep art off the corners
+    const lo = horiz ? rect.x0 + M : rect.z0 + M;
+    const hi = horiz ? rect.x1 - M : rect.z1 - M;
+    WALL_ART_OFFSETS.forEach((off, i) => {
+      const position: [number, number, number] =
+        s === "N"
+          ? [cx + off, ART_Y, rect.z0 + 0.12]
+          : s === "S"
+          ? [cx + off, ART_Y, rect.z1 - 0.12]
+          : s === "W"
+          ? [rect.x0 + 0.12, ART_Y, cz + off]
+          : [rect.x1 - 0.12, ART_Y, cz + off];
+      wallAnchors.push({ slotKey: `${prefix}:${s}:${i}`, position, rotation: faceRot(s), axis, lo, hi });
+    });
+  };
+  (["N", "S", "E", "W"] as Side[]).forEach((s) => addWallAnchors("atrium", atrium.rect, s));
+
   placements.forEach(({ wing, side }) => {
     const wingRoom = connect(rooms, walk, atrium, side, ATR_WING_CORR, WING_HALF);
     lights.push([ctrX(wingRoom.rect), ctrZ(wingRoom.rect)]);
 
-    // wing name above its atrium door, facing the atrium interior
+    // Wing walls get anchors too, keyed by the wing's ATRIUM SIDE (stable for
+    // empty/placeholder wings and collision-free, unlike a name slug).
+    (["N", "S", "E", "W"] as Side[]).forEach((s) =>
+      addWallAnchors(`wing:${side}`, wingRoom.rect, s)
+    );
+
+    // A NAMED wing gets its name over its atrium doorway; an unnamed/placeholder
+    // (compass-only) wing stays unlabeled — no "West Wing" plastered over a room.
+    // Offset past the wall thickness (0.3) + the abutting corridor wall that
+    // pokes into this room at the doorway, so the sign floats clear in the room
+    // rather than getting buried inside that protruding wall.
+    const LO = 0.45;
     const wl =
       side === "W"
-        ? { pos: [-A + 0.06, DOORH + 0.4, 0] as [number, number, number], rot: [0, Math.PI / 2, 0] as [number, number, number] }
+        ? { pos: [-A + LO, DOORH + 0.4, 0] as [number, number, number], rot: [0, Math.PI / 2, 0] as [number, number, number] }
         : side === "N"
-        ? { pos: [0, DOORH + 0.4, -A + 0.06] as [number, number, number], rot: [0, 0, 0] as [number, number, number] }
-        : { pos: [A - 0.06, DOORH + 0.4, 0] as [number, number, number], rot: [0, -Math.PI / 2, 0] as [number, number, number] };
-    labels.push({ text: wing.name.toUpperCase(), pos: wl.pos, rot: wl.rot, size: 0.34 });
+        ? { pos: [0, DOORH + 0.4, -A + LO] as [number, number, number], rot: [0, 0, 0] as [number, number, number] }
+        : { pos: [A - LO, DOORH + 0.4, 0] as [number, number, number], rot: [0, -Math.PI / 2, 0] as [number, number, number] };
+    if (wing.name)
+      labels.push({ text: wing.name.toUpperCase(), pos: wl.pos, rot: wl.rot, size: 0.34 });
 
     const cSides = collectionSides(side);
     wing.collections.forEach((coll, j) => {
@@ -273,14 +737,17 @@ function buildMuseum(m: Museum): Layout {
 
       // gallery name on the wing wall, over the doorway, facing into the wing
       const wr = wingRoom.rect;
+      // Same 0.45 clearance as wing labels: past this wall's thickness and the
+      // gallery corridor wall that protrudes into the wing at the doorway.
+      const GLO = 0.45;
       const gl: LabelSpec =
         cs === "N"
-          ? { text: coll.name, pos: [ctrX(wr), DOORH + 0.3, wr.z0 + 0.06], rot: [0, 0, 0], size: 0.28 }
+          ? { text: coll.name, pos: [ctrX(wr), DOORH + 0.3, wr.z0 + GLO], rot: [0, 0, 0], size: 0.28 }
           : cs === "S"
-          ? { text: coll.name, pos: [ctrX(wr), DOORH + 0.3, wr.z1 - 0.06], rot: [0, Math.PI, 0], size: 0.28 }
+          ? { text: coll.name, pos: [ctrX(wr), DOORH + 0.3, wr.z1 - GLO], rot: [0, Math.PI, 0], size: 0.28 }
           : cs === "W"
-          ? { text: coll.name, pos: [wr.x0 + 0.06, DOORH + 0.3, ctrZ(wr)], rot: [0, Math.PI / 2, 0], size: 0.28 }
-          : { text: coll.name, pos: [wr.x1 - 0.06, DOORH + 0.3, ctrZ(wr)], rot: [0, -Math.PI / 2, 0], size: 0.28 };
+          ? { text: coll.name, pos: [wr.x0 + GLO, DOORH + 0.3, ctrZ(wr)], rot: [0, Math.PI / 2, 0], size: 0.28 }
+          : { text: coll.name, pos: [wr.x1 - GLO, DOORH + 0.3, ctrZ(wr)], rot: [0, -Math.PI / 2, 0], size: 0.28 };
       labels.push(gl);
 
       // preview artwork on the gallery's far wall (shown until the full
@@ -300,7 +767,11 @@ function buildMuseum(m: Museum): Layout {
         entrySide: opp(cs),
         previewPos,
         previewRot: faceRot(cs),
+        pieces: coll.pieces,
       });
+      // No free-placement anchors inside galleries: a gallery holds only its
+      // own collection (up to GALLERY_CAP pieces), so its 3D room and 2D page
+      // always match. Curate it with the "Add" button in the edit panel.
 
       // teleport target: just inside the doorway, facing the far wall
       const spawn: [number, number, number] =
@@ -315,7 +786,7 @@ function buildMuseum(m: Museum): Layout {
     });
   });
 
-  return { rooms, walk, labels, galleries, lights, nav, hints };
+  return { rooms, walk, labels, galleries, lights, nav, hints, wallAnchors };
 }
 
 // Distribute a collection's pieces across the three non-doorway walls of a
@@ -326,6 +797,26 @@ function hangRoom(
   pieces: GalleryPiece[]
 ): { position: [number, number, number]; rotation: [number, number, number] }[] {
   const M = 1.1; // corner margin
+  // Reserve at least as much width as ProxyArtwork will actually RENDER, or wide
+  // pieces (screens, handscrolls) overrun their slot and overlap a neighbour.
+  // The renderer caps width at MAX_W (5.5) and, when a piece has no real
+  // dimensions, at ~3.2 — so mirror both caps here instead of the old 4.8 / 2.2.
+  const REN_MAX_W = 5.5;
+  const sizeOf = (p: GalleryPiece) =>
+    p.realW && p.realH
+      ? { w: Math.min(REN_MAX_W, Math.max(1.2, p.realW)), h: Math.min(3.8, Math.max(0.35, p.realH)) }
+      : // No real dimensions: reserve a MODERATE width. (Reserving the renderer's
+        // 3.2 worst case made two such pieces overflow a short wall and get shoved
+        // into the corners. Most no-dimension pieces render ~1.3–2.2 wide.)
+        { w: 2.2, h: 1.6 };
+  const out: { position: [number, number, number]; rotation: [number, number, number] }[] =
+    new Array(pieces.length);
+
+  // First GALLERY_CAP-2 pieces auto-arrange across the 3 solid walls; the last
+  // up-to-2 hang on the ENTRY wall, flanking the doorway (where the old
+  // free-placement slots were).
+  const mainCount = Math.min(pieces.length, GALLERY_CAP - 2);
+
   const sides = (["N", "S", "W", "E"] as Side[]).filter((s) => s !== entrySide);
   const bins = sides.map((side) => {
     const horiz = side === "N" || side === "S";
@@ -344,13 +835,9 @@ function hangRoom(
     };
     return { a, b, len: b - a, place, items: [] as number[], used: 0 };
   });
-  const sizeOf = (p: GalleryPiece) =>
-    p.realW && p.realH
-      ? { w: Math.min(4.8, Math.max(1.2, p.realW)), h: Math.min(3.8, Math.max(0.35, p.realH)) }
-      : { w: 2.2, h: 1.6 };
   const GAP = 1.2; // nominal, only for balancing pieces across the walls
-  pieces.forEach((p, i) => {
-    const w = sizeOf(p).w;
+  for (let i = 0; i < mainCount; i++) {
+    const w = sizeOf(pieces[i]).w;
     let best = 0;
     let bestScore = Infinity;
     bins.forEach((bin, k) => {
@@ -363,16 +850,14 @@ function hangRoom(
     });
     bins[best].used += (bins[best].items.length ? GAP : 0) + w;
     bins[best].items.push(i);
-  });
-  const out: { position: [number, number, number]; rotation: [number, number, number] }[] =
-    new Array(pieces.length);
+  }
   bins.forEach((bin) => {
     const n = bin.items.length;
     const widths = bin.items.map((i) => sizeOf(pieces[i]).w);
     const sumW = widths.reduce((s, w) => s + w, 0);
     // Even spacing: share the leftover wall width between pieces, clamped so they
     // never touch and never drift too far apart — regardless of size mix.
-    const gap = n > 1 ? Math.max(0.7, Math.min(2.4, (bin.len - sumW) / (n - 1))) : 0;
+    const gap = n > 1 ? Math.max(0.8, Math.min(2.4, (bin.len - sumW) / (n - 1))) : 0;
     let cursor = (bin.a + bin.b) / 2 - (sumW + gap * (n - 1)) / 2;
     bin.items.forEach((i, k) => {
       const h = sizeOf(pieces[i]).h;
@@ -380,6 +865,34 @@ function hangRoom(
       cursor += widths[k] + gap;
     });
   });
+
+  // Overflow: the last up-to-2 pieces flank the doorway on the entry wall.
+  // Width-aware: push each piece far enough that its inner edge clears the
+  // doorway and its outer edge stays off the corner, so two wide pieces don't
+  // collide over the entrance.
+  const horiz = entrySide === "N" || entrySide === "S";
+  const cx = (room.x0 + room.x1) / 2;
+  const cz = (room.z0 + room.z1) / 2;
+  const wallHalf = (horiz ? room.x1 - room.x0 : room.z1 - room.z0) / 2;
+  for (let i = mainCount; i < pieces.length; i++) {
+    const idx = i - mainCount;
+    const sign = idx === 0 ? -1 : 1;
+    const w = sizeOf(pieces[i]).w;
+    // Ideal: inner edge past the doorway (+0.4 breathing room). Clamp so the
+    // outer edge stays inside the wall (off the corner).
+    const ideal = DOOR_HALF + 0.4 + w / 2;
+    const maxC = Math.max(0, wallHalf - M - w / 2);
+    const c = sign * Math.min(ideal, maxC);
+    const position: [number, number, number] =
+      entrySide === "N"
+        ? [cx + c, ART_Y, room.z0 + 0.12]
+        : entrySide === "S"
+        ? [cx + c, ART_Y, room.z1 - 0.12]
+        : entrySide === "W"
+        ? [room.x0 + 0.12, ART_Y, cz + c]
+        : [room.x1 - 0.12, ART_Y, cz + c];
+    out[i] = { position, rotation: faceRot(entrySide) };
+  }
   return out;
 }
 
@@ -394,9 +907,14 @@ function GalleryFull({
   onSelect: (p: Piece) => void;
 }) {
   const [pieces, setPieces] = useState<GalleryPiece[] | null>(
-    pieceCache.get(gallery.slug) ?? null
+    gallery.pieces ?? pieceCache.get(gallery.slug) ?? null
   );
   useEffect(() => {
+    // Source-museum showcases carry their pieces inline — no fetch.
+    if (gallery.pieces) {
+      setPieces(gallery.pieces);
+      return;
+    }
     if (pieceCache.has(gallery.slug)) {
       setPieces(pieceCache.get(gallery.slug)!);
       return;
@@ -406,7 +924,7 @@ function GalleryFull({
       .then((r) => r.json())
       .then((d) => {
         if (cancelled) return;
-        const ps = ((d.pieces ?? []) as GalleryPiece[]).slice(0, 9);
+        const ps = ((d.pieces ?? []) as GalleryPiece[]).slice(0, GALLERY_CAP);
         pieceCache.set(gallery.slug, ps);
         setPieces(ps);
       })
@@ -414,18 +932,23 @@ function GalleryFull({
     return () => {
       cancelled = true;
     };
-  }, [gallery.slug]);
+  }, [gallery.slug, gallery.pieces]);
   const spots = useMemo(
     () => (pieces ? hangRoom(gallery.room, gallery.entrySide, pieces) : []),
     [pieces, gallery]
   );
   if (!pieces) return null;
+  // Source pieces are raw museum-CDN thumbnails, so load them through the
+  // CORS-safe proxy (like placements) to avoid tainted/black textures.
+  const isSource = Boolean(gallery.pieces);
   return (
     <>
       {pieces.map((p, i) => (
         <ProxyArtwork
           key={i}
-          piece={p}
+          piece={
+            isSource ? { ...p, image: `/api/img?url=${encodeURIComponent(p.image)}` } : p
+          }
           position={spots[i].position}
           rotation={spots[i].rotation}
           onSelect={onSelect}
@@ -497,27 +1020,41 @@ function segmentsMulti(a: number, b: number, gaps: { lo: number; hi: number }[])
   return segs;
 }
 
+// Wall thickness. Walls used to be zero-thickness planes, which let a painting
+// hung near a doorway edge poke through to the far side and z-fight. Giving the
+// wall real depth (a thin box that extends OUTWARD from the room, so the inner
+// face stays exactly where the plane was and all art keeps its position) hides
+// the overhang and stops the flicker.
+const WALL_T = 0.3;
+
 function WallSide({
   axis,
   fixed,
+  inward,
   a,
   b,
   gaps,
 }: {
   axis: "x" | "z";
   fixed: number;
+  // +1 if the room interior lies toward increasing coordinate from `fixed`,
+  // -1 if toward decreasing. The wall box is pushed the OTHER way so its inner
+  // face sits on `fixed`.
+  inward: 1 | -1;
   a: number;
   b: number;
   gaps: { lo: number; hi: number }[];
 }) {
   const segs = segmentsMulti(a, b, gaps);
+  // Offset the box center outward by half its thickness → inner face on `fixed`.
+  const off = -inward * (WALL_T / 2);
   return (
     <>
       {segs.map((s, i) =>
         axis === "x" ? (
           <group key={i}>
-            <mesh position={[s.center, H / 2, fixed]}>
-              <planeGeometry args={[s.len, H]} />
+            <mesh position={[s.center, H / 2, fixed + off]}>
+              <boxGeometry args={[s.len, H, WALL_T]} />
               <meshStandardMaterial color="#e7e3db" side={2} />
             </mesh>
             <mesh position={[s.center, 0.09, fixed]}>
@@ -531,8 +1068,8 @@ function WallSide({
           </group>
         ) : (
           <group key={i}>
-            <mesh position={[fixed, H / 2, s.center]} rotation={[0, Math.PI / 2, 0]}>
-              <planeGeometry args={[s.len, H]} />
+            <mesh position={[fixed + off, H / 2, s.center]}>
+              <boxGeometry args={[WALL_T, H, s.len]} />
               <meshStandardMaterial color="#e7e3db" side={2} />
             </mesh>
             <mesh position={[fixed, 0.09, s.center]}>
@@ -550,13 +1087,13 @@ function WallSide({
         const c = (g.lo + g.hi) / 2;
         const w = g.hi - g.lo;
         return axis === "x" ? (
-          <mesh key={"l" + i} position={[c, (DOORH + H) / 2, fixed]}>
-            <planeGeometry args={[w, H - DOORH]} />
+          <mesh key={"l" + i} position={[c, (DOORH + H) / 2, fixed + off]}>
+            <boxGeometry args={[w, H - DOORH, WALL_T]} />
             <meshStandardMaterial color="#e7e3db" side={2} />
           </mesh>
         ) : (
-          <mesh key={"l" + i} position={[fixed, (DOORH + H) / 2, c]} rotation={[0, Math.PI / 2, 0]}>
-            <planeGeometry args={[w, H - DOORH]} />
+          <mesh key={"l" + i} position={[fixed + off, (DOORH + H) / 2, c]}>
+            <boxGeometry args={[WALL_T, H - DOORH, w]} />
             <meshStandardMaterial color="#e7e3db" side={2} />
           </mesh>
         );
@@ -623,10 +1160,10 @@ function RoomMesh({ room }: { room: Room }) {
         <planeGeometry args={[R.x1 - R.x0, R.z1 - R.z0]} />
         <meshStandardMaterial color="#efece6" />
       </mesh>
-      <WallSide axis="x" fixed={r.z0} a={r.x0} b={r.x1} gaps={g("N")} />
-      <WallSide axis="x" fixed={r.z1} a={r.x0} b={r.x1} gaps={g("S")} />
-      <WallSide axis="z" fixed={r.x0} a={r.z0} b={r.z1} gaps={g("W")} />
-      <WallSide axis="z" fixed={r.x1} a={r.z0} b={r.z1} gaps={g("E")} />
+      <WallSide axis="x" fixed={r.z0} inward={1} a={r.x0} b={r.x1} gaps={g("N")} />
+      <WallSide axis="x" fixed={r.z1} inward={-1} a={r.x0} b={r.x1} gaps={g("S")} />
+      <WallSide axis="z" fixed={r.x0} inward={1} a={r.z0} b={r.z1} gaps={g("W")} />
+      <WallSide axis="z" fixed={r.x1} inward={-1} a={r.z0} b={r.z1} gaps={g("E")} />
     </>
   );
 }
@@ -1528,6 +2065,12 @@ function StationWatcher({
 function Scene({
   layout,
   previews,
+  placements,
+  editing,
+  onPick,
+  onNudgeSelect,
+  onSelectPlacement,
+  galleryVersion,
   hot,
   reflect,
   lowPower,
@@ -1539,6 +2082,12 @@ function Scene({
 }: {
   layout: Layout;
   previews: Record<string, GalleryPiece | null>;
+  placements: WallPlacement[];
+  editing: boolean;
+  onPick: (slotKey: string) => void;
+  onNudgeSelect: (slotKey: string) => void;
+  onSelectPlacement: (pl: WallPlacement) => void;
+  galleryVersion: number;
   hot: string[];
   reflect: boolean;
   lowPower: boolean;
@@ -1548,6 +2097,10 @@ function Scene({
   denName: string;
   onSelect: (p: Piece) => void;
 }) {
+  const anchorMap = useMemo(
+    () => new Map(layout.wallAnchors.map((a) => [a.slotKey, a] as const)),
+    [layout.wallAnchors]
+  );
   return (
     <>
       {/* Sky-vs-floor gradient (cool top, warm bounce) replaces flat ambient */}
@@ -1561,6 +2114,8 @@ function Scene({
         <pointLight
           key={i}
           position={[x, H - 0.6, z]}
+          // Lights-off dims the interior lights for everyone (daylight/skylight
+          // still lifts the room), so the switch works for visitors too.
           intensity={(i === 0 ? 18 : 14) * (lightsOn ? 1 : 0.12)}
           distance={i === 0 ? 44 : 26}
           decay={2}
@@ -1622,10 +2177,10 @@ function Scene({
         <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.012, 0]}>
           <planeGeometry args={[A * 2 - 0.4, A * 2 - 0.4]} />
           <MeshReflectorMaterial
-            resolution={512}
-            mixBlur={8}
+            resolution={256}
+            mixBlur={6}
             mixStrength={0.35}
-            blur={[300, 80]}
+            blur={[150, 60]}
             minDepthThreshold={0.9}
             maxDepthThreshold={1.1}
             depthScale={1}
@@ -1668,9 +2223,33 @@ function Scene({
 
       {layout.galleries.map((g) =>
         hot.includes(g.slug) ? (
-          <GalleryFull key={g.slug} gallery={g} onSelect={onSelect} />
+          <GalleryFull key={`${g.slug}:${galleryVersion}`} gallery={g} onSelect={onSelect} />
         ) : null
       )}
+
+      {placements.map((pl) => {
+        const a = anchorMap.get(pl.slotKey);
+        if (!a || !pl.piece.image) return null;
+        // Load through the CORS-safe image proxy so textures from museums whose
+        // CDN lacks CORS headers don't taint and render as black boxes.
+        return (
+          <ProxyArtwork
+            key={pl.slotKey}
+            piece={{
+              ...pl.piece,
+              image: `/api/img?url=${encodeURIComponent(pl.piece.image)}`,
+            }}
+            position={pl.pos ?? a.position}
+            rotation={a.rotation}
+            onSelect={editing ? () => onNudgeSelect(pl.slotKey) : () => onSelectPlacement(pl)}
+          />
+        );
+      })}
+
+      {editing &&
+        layout.wallAnchors
+          .filter((a) => !placements.some((p) => p.slotKey === a.slotKey))
+          .map((a) => <Hotspot key={a.slotKey} anchor={a} onPick={onPick} />)}
     </>
   );
 }
@@ -1707,12 +2286,313 @@ const ENTRANCE_SPAWN: [number, number, number] = [0, EYE_Y, A + VEST_LEN - 2];
 
 export default function Museum3D({
   handle,
-  isOwner = false,
+  isOwner: isOwnerProp = false,
+  source,
 }: {
   handle?: string;
   isOwner?: boolean;
+  // When set, this is a pre-populated SOURCE museum (/museum/[slug]) built from
+  // one institution's own open-access art. Read-only: no editor, no placements.
+  source?: string;
 } = {}) {
+  // Source museums are never editable, no matter what the caller passes.
+  const isOwner = source ? false : isOwnerProp;
   const [museum, setMuseum] = useState<Museum | null>(null);
+  const [placements, setPlacements] = useState<WallPlacement[]>([]);
+  // In-museum editor (owner only). editing toggles the edit HUD; the 3D hotspots
+  // and art picker are added in the next (supervised) pass.
+  const [editing, setEditing] = useState(false);
+  const [editTarget, setEditTarget] = useState<string | null>(null);
+  // When set, the picker adds the chosen piece to this gallery's COLLECTION
+  // (which syncs to the 2D gallery and auto-hangs in 3D) rather than free-placing.
+  const [collectionTarget, setCollectionTarget] = useState<{ id: string; name: string } | null>(
+    null
+  );
+  // The wall placement currently selected for nudging (edit mode).
+  const [selectedPlacement, setSelectedPlacement] = useState<string | null>(null);
+  // Bumped after a collection changes so mounted gallery rooms re-fetch + re-hang.
+  const [galleryVersion, setGalleryVersion] = useState(0);
+
+  // The owner's real galleries with visibility + wing. Hidden ones drop out of
+  // /api/museum, so the toggles/grouping list them from here instead.
+  const [myGalleries, setMyGalleries] = useState<GalleryVis[]>([]);
+  async function refreshGalleries() {
+    if (!isOwner) return;
+    try {
+      const d = await fetch("/api/collections").then((r) => r.json());
+      setMyGalleries(d.collections ?? []);
+    } catch {
+      /* keep current */
+    }
+  }
+  async function toggleGalleryVisibility(id: string, next: boolean) {
+    setMyGalleries((gs) => gs.map((g) => (g.id === id ? { ...g, inMuseum: next } : g)));
+    try {
+      await fetch(`/api/collections/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ inMuseum: next }),
+      });
+      pieceCache.clear();
+      await reloadMuseum();
+      setGalleryVersion((v) => v + 1);
+    } catch {
+      /* best-effort */
+    }
+  }
+  // Move a gallery into a wing (a named group). "" = Unassigned; "__new__"
+  // prompts for a new wing name.
+  async function reassignWing(id: string, value: string) {
+    let wing: string | null;
+    if (value === "__new__") {
+      const name = window.prompt("New wing name")?.trim();
+      if (!name) return;
+      wing = name;
+    } else {
+      wing = value || null;
+    }
+    setMyGalleries((gs) => gs.map((g) => (g.id === id ? { ...g, wing } : g)));
+    try {
+      await fetch(`/api/collections/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ wing }),
+      });
+      pieceCache.clear();
+      await reloadMuseum();
+      setGalleryVersion((v) => v + 1);
+      refreshGalleries();
+    } catch {
+      /* best-effort */
+    }
+  }
+
+  const layout = useMemo(
+    () => (museum ? buildMuseum(museum, editing) : null),
+    [museum, editing]
+  );
+
+  useEffect(() => {
+    if (!isOwner) return;
+    fetch("/api/collections")
+      .then((r) => r.json())
+      .then((d) => setMyGalleries(d.collections ?? []))
+      .catch(() => {});
+  }, [isOwner]);
+
+  // Label for the wall-art orphan group (art whose wall became a doorway). The
+  // edit panel groups placements by area inline; this is the shared header for
+  // the never-silently-lost bucket.
+  const ORPHAN = "Not on display";
+
+  // Real galleries (published, with art), grouped by wing for the edit panel.
+  const publishedGalleries = myGalleries.filter((g) => g.shareSlug && g.count > 0);
+  const wingNames = Array.from(
+    new Set(publishedGalleries.map((g) => g.wing).filter((w): w is string => !!w))
+  );
+  const galleriesByWing = ((): [string, GalleryVis[]][] => {
+    const m = new Map<string, GalleryVis[]>();
+    for (const g of publishedGalleries) {
+      const key = g.wing || "Unassigned";
+      (m.get(key) ?? m.set(key, []).get(key)!).push(g);
+    }
+    return Array.from(m.entries()).sort(([a], [b]) =>
+      a === "Unassigned" ? 1 : b === "Unassigned" ? -1 : 0
+    );
+  })();
+
+  // Visitor mode = the curated museum (what everyone sees). Curator mode =
+  // editing: the whole museum opens up and the placement tools appear.
+  function setMode(curator: boolean) {
+    // Clear any held movement input — the mode <select> ate the keyup, so W/etc.
+    // would otherwise stay "down" and keep walking after the switch.
+    keysRef.current = {};
+    joyRef.current = { x: 0, y: 0 };
+    setEditing(curator);
+    if (!curator) {
+      setSelectedPlacement(null);
+      setEditTarget(null);
+      setCollectionTarget(null);
+    }
+  }
+
+  // Optimistically clear a slot, then tell the server (RLS enforces ownership).
+  async function removePlacement(slotKey: string) {
+    setPlacements((ps) => ps.filter((p) => p.slotKey !== slotKey));
+    try {
+      await fetch(`/api/museum-placements?slotKey=${encodeURIComponent(slotKey)}`, {
+        method: "DELETE",
+      });
+    } catch {
+      /* best-effort; a reload reconciles */
+    }
+  }
+
+  function resolveHandle(): string | null {
+    return (
+      handle ??
+      (typeof window !== "undefined"
+        ? new URLSearchParams(window.location.search).get("u")
+        : null)
+    );
+  }
+
+  // Refetch the museum so a newly created/curated gallery appears + auto-hangs.
+  async function reloadMuseum() {
+    const h = resolveHandle();
+    if (!h) return;
+    try {
+      const d = await fetch(`/api/museum?u=${encodeURIComponent(h)}`).then((r) => r.json());
+      const m = d.museum as Museum | null;
+      if (m && Array.isArray(m.wings)) setMuseum(m);
+    } catch {
+      /* keep current */
+    }
+  }
+
+  // Create + publish a gallery from inside the museum, then open the picker to
+  // add its first piece (an empty gallery wouldn't render until it has art).
+  async function createGallery() {
+    const name = window.prompt("Name your new gallery")?.trim();
+    if (!name) return;
+    try {
+      const c = await fetch("/api/collections", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name }),
+      }).then((r) => r.json());
+      if (!c?.id) return;
+      await fetch(`/api/collections/${c.id}/share`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ public: true }),
+      });
+      setCollectionTarget({ id: c.id, name });
+    } catch {
+      /* ignore; nothing created client-side to roll back */
+    }
+  }
+
+  // Add the chosen piece to a gallery's collection, then rebuild the museum.
+  async function addToCollection(
+    collectionId: string,
+    art: { source: string; externalId: string }
+  ) {
+    setCollectionTarget(null);
+    try {
+      await fetch("/api/save", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          museum: art.source,
+          objectId: art.externalId,
+          collectionId,
+        }),
+      });
+      pieceCache.clear();
+      await reloadMuseum();
+      setGalleryVersion((v) => v + 1);
+      refreshGalleries();
+    } catch {
+      /* best-effort */
+    }
+  }
+
+  // Nudge a selected placement along its wall (dAlong) or in height (dY), then
+  // persist. Rotation is fixed by the wall; only position moves. The wall axis
+  // comes from the slotKey's side (N/S walls run along X, E/W along Z).
+  function nudgePlacement(slotKey: string, dAlong: number, dY: number) {
+    const anchor = layout?.wallAnchors.find((a) => a.slotKey === slotKey);
+    const pl = placements.find((p) => p.slotKey === slotKey);
+    if (!anchor || !pl) return;
+    const side = slotKey.split(":").at(-2);
+    // "Right" from the viewer facing the wall is +world-axis on the N/E walls but
+    // -world-axis on the S/W walls (you're facing the opposite way), so flip there.
+    const sign = side === "S" || side === "W" ? -1 : 1;
+    const base = pl.pos ?? anchor.position;
+    const np: [number, number, number] = [base[0], base[1], base[2]];
+    // Clamp along the wall (can't slide off into the room) and in height.
+    np[anchor.axis] = Math.max(anchor.lo, Math.min(anchor.hi, base[anchor.axis] + dAlong * sign));
+    np[1] = Math.max(0.8, Math.min(H - 0.8, base[1] + dY));
+    setPlacements((ps) => ps.map((p) => (p.slotKey === slotKey ? { ...p, pos: np } : p)));
+    fetch("/api/museum-placements", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        slotKey,
+        source: pl.source,
+        externalId: pl.externalId,
+        title: pl.piece.title,
+        imageUrl: pl.piece.image,
+        posX: np[0],
+        posY: np[1],
+        posZ: np[2],
+      }),
+    }).catch(() => {});
+  }
+
+  // Open the full info placard for a placed piece. Placements only store title +
+  // image, so we enrich from the full artwork record (covers older placements too).
+  async function openPlacementInfo(pl: WallPlacement) {
+    setSelected({ title: pl.piece.title, image: pl.piece.image, museum: pl.piece.museum });
+    try {
+      const d = await fetch(
+        `/api/artwork?museum=${encodeURIComponent(pl.source)}&objectId=${encodeURIComponent(
+          pl.externalId
+        )}`
+      ).then((r) => r.json());
+      const a = d.artwork;
+      if (a)
+        setSelected({
+          title: a.title || pl.piece.title,
+          artist: a.artist || undefined,
+          dateText: a.dateText || undefined,
+          culture: a.culture || undefined,
+          medium: a.medium || undefined,
+          description: a.description || undefined,
+          museum: pl.piece.museum,
+          sourceUrl: a.sourceUrl || undefined,
+          image: a.image || pl.piece.image,
+        });
+    } catch {
+      /* keep the basic card */
+    }
+  }
+
+  // Place (or replace) a piece at a slot: optimistic render, then POST.
+  async function savePlacement(
+    slotKey: string,
+    art: { source: string; externalId: string; title: string; image: string }
+  ) {
+    setPlacements((ps) => [
+      ...ps.filter((p) => p.slotKey !== slotKey),
+      {
+        slotKind: "wall",
+        slotKey,
+        source: art.source,
+        externalId: art.externalId,
+        rotationY: 0,
+        mount: "pedestal",
+        piece: { title: art.title, image: art.image, museum: art.source },
+      },
+    ]);
+    setEditTarget(null);
+    try {
+      await fetch("/api/museum-placements", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          slotKey,
+          source: art.source,
+          externalId: art.externalId,
+          title: art.title,
+          imageUrl: art.image,
+        }),
+      });
+    } catch {
+      /* best-effort; a reload reconciles */
+    }
+  }
   const [view, setView] = useState<"loading" | "ready" | "empty">("loading");
   const [previews, setPreviews] = useState<Record<string, GalleryPiece | null>>({});
   const [selected, setSelected] = useState<Piece | null>(null);
@@ -1720,6 +2600,13 @@ export default function Museum3D({
     () =>
       typeof window !== "undefined" &&
       ("ontouchstart" in window || navigator.maxTouchPoints > 0)
+  );
+  // ?lite drops the heaviest GPU work (mirror floor + pixel ratio capped to 1)
+  // for weak GPUs / Retina displays that lose the WebGL context under full load.
+  const [lite] = useState(
+    () =>
+      typeof window !== "undefined" &&
+      new URLSearchParams(window.location.search).has("lite")
   );
   // Controls panel starts collapsed on phones (where it crowds the view).
   const [infoOpen, setInfoOpen] = useState(
@@ -1850,6 +2737,9 @@ export default function Museum3D({
   });
   const dragRef = useRef(false);
   const joyRef = useRef({ x: 0, y: 0 });
+  // Held movement keys, lifted so switching Visitor/Curator mode can clear them —
+  // the native mode <select> swallows the keyup, otherwise leaving you drifting.
+  const keysRef = useRef<Record<string, boolean>>({});
   const posRef = useRef({ x: ENTRANCE_SPAWN[0], z: ENTRANCE_SPAWN[2] });
   const audioRef = useRef<HTMLAudioElement>(null);
   const [musicOn, setMusicOn] = useState(false);
@@ -1890,7 +2780,6 @@ export default function Museum3D({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [trackIdx]);
 
-  const layout = useMemo(() => (museum ? buildMuseum(museum) : null), [museum]);
   const constrain: Constrain = useMemo(() => {
     if (!layout) return (nx, nz) => ({ x: nx, z: nz });
     const walk = layout.walk;
@@ -1905,6 +2794,24 @@ export default function Museum3D({
   }, [layout]);
 
   useEffect(() => {
+    // Source museums load a pre-built, cached institution museum instead of a
+    // user's. No placements — everything comes baked into the gallery pieces.
+    if (source) {
+      fetch(`/api/source-museum?m=${encodeURIComponent(source)}`)
+        .then((r) => r.json())
+        .then((d) => {
+          const m = d.museum as Museum | null;
+          if (m && Array.isArray(m.wings) && m.wings.length > 0) {
+            setMuseum(m);
+            setView("ready");
+          } else {
+            setView("empty");
+          }
+        })
+        .catch(() => setView("empty"));
+      return;
+    }
+
     const h = handle ?? new URLSearchParams(window.location.search).get("u");
     if (!h) {
       setView("empty");
@@ -1914,7 +2821,10 @@ export default function Museum3D({
       .then((r) => r.json())
       .then((d) => {
         const m = d.museum as Museum | null;
-        if (m && Array.isArray(m.wings) && m.wings.length > 0) {
+        // The owner can always walk in — even an empty museum (just the atrium) —
+        // so they can create galleries and place art from inside. Visitors only
+        // enter once there's at least one public gallery.
+        if (m && Array.isArray(m.wings) && (m.wings.length > 0 || isOwner)) {
           setMuseum(m);
           setView("ready");
         } else {
@@ -1922,14 +2832,41 @@ export default function Museum3D({
         }
       })
       .catch(() => setView("empty"));
-  }, [handle]);
+
+    // Free-standing wall placements (paintings hung outside the galleries).
+    fetch(`/api/museum-placements?u=${encodeURIComponent(h)}`)
+      .then((r) => r.json())
+      .then((d) => setPlacements((d.placements as WallPlacement[]) ?? []))
+      .catch(() => {});
+  }, [handle, isOwner, source]);
 
   // Load one preview piece per gallery room.
   useEffect(() => {
     if (!layout) return;
     let cancelled = false;
-    const slugs = Array.from(new Set(layout.galleries.map((g) => g.slug)));
-    slugs.forEach((slug) => {
+    // Source galleries carry their pieces inline, so use the first one directly
+    // (proxied for CORS) instead of hitting /api/gallery-pieces, which has no row
+    // for a source slug.
+    const inlinePreviews: Record<string, GalleryPiece> = {};
+    const needFetch: string[] = [];
+    const seen = new Set<string>();
+    layout.galleries.forEach((g) => {
+      if (seen.has(g.slug)) return;
+      seen.add(g.slug);
+      if (g.pieces && g.pieces.length) {
+        const first = g.pieces[0];
+        inlinePreviews[g.slug] = {
+          ...first,
+          image: `/api/img?url=${encodeURIComponent(first.image)}`,
+        };
+      } else {
+        needFetch.push(g.slug);
+      }
+    });
+    if (Object.keys(inlinePreviews).length) {
+      setPreviews((p) => ({ ...p, ...inlinePreviews }));
+    }
+    needFetch.forEach((slug) => {
       fetch(`/api/gallery-pieces?slug=${encodeURIComponent(slug)}`)
         .then((r) => r.json())
         .then((pd) => {
@@ -1964,6 +2901,8 @@ export default function Museum3D({
   useEffect(() => {
     if (!station || denPanel) return;
     const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
       if (e.key === "e" || e.key === "E" || e.key === "Enter") {
         e.preventDefault();
         enterStation();
@@ -2043,7 +2982,7 @@ export default function Museum3D({
       <Canvas
         camera={{ fov: 52, position: tp.spawn }}
         gl={{ toneMappingExposure: 1.08, powerPreference: "high-performance" }}
-        dpr={isTouch ? 1 : [1, 2]}
+        dpr={isTouch || lite ? 1 : [1, 2]}
       >
         <color attach="background" args={["#eceae4"]} />
         <fogExp2 attach="fog" args={["#e6e3dc", 0.014]} />
@@ -2051,8 +2990,20 @@ export default function Museum3D({
           <Scene
             layout={layout}
             previews={previews}
+            placements={placements}
+            editing={editing}
+            onPick={(k) => {
+              if (!dragRef.current) setEditTarget(k);
+            }}
+            onNudgeSelect={(k) => {
+              if (!dragRef.current) setSelectedPlacement(k);
+            }}
+            onSelectPlacement={(pl) => {
+              if (!dragRef.current) openPlacementInfo(pl);
+            }}
+            galleryVersion={galleryVersion}
             hot={hot}
-            reflect={!isTouch}
+            reflect={!isTouch && !lite}
             lowPower={isTouch}
             showDen={isOwner}
             sky={sky}
@@ -2084,6 +3035,7 @@ export default function Museum3D({
             key={tp.k}
             dragRef={dragRef}
             joyRef={joyRef}
+            keysRef={keysRef}
             spawn={tp.spawn}
             spawnYaw={tp.yaw}
             constrain={constrain}
@@ -2100,6 +3052,360 @@ export default function Museum3D({
       )}
 
       {isTouch && view === "ready" && <JoystickPad joyRef={joyRef} />}
+
+      {isOwner && view === "ready" && (
+        <div
+          style={{
+            position: "absolute",
+            top: 14,
+            left: "50%",
+            transform: "translateX(-50%)",
+            zIndex: 22,
+          }}
+        >
+          <select
+            value={editing ? "curator" : "visitor"}
+            onChange={(e) => setMode(e.target.value === "curator")}
+            aria-label="Museum mode"
+            style={{
+              background: editing ? "#e6d3a3" : "rgba(20,17,13,0.92)",
+              color: editing ? "#14110d" : "#e6d3a3",
+              border: `1px solid ${editing ? "#e6d3a3" : "#4a4030"}`,
+              borderRadius: 8,
+              padding: "6px 12px",
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: "pointer",
+            }}
+          >
+            <option value="visitor">Visitor mode</option>
+            <option value="curator">Curator mode</option>
+          </select>
+        </div>
+      )}
+
+      {isOwner && editing && (editTarget || collectionTarget) && view === "ready" && (
+        <ArtPicker
+          title={collectionTarget ? `Add to ${collectionTarget.name}` : undefined}
+          placeLabel={collectionTarget ? `Add to ${collectionTarget.name}` : undefined}
+          onClose={() => {
+            setEditTarget(null);
+            setCollectionTarget(null);
+          }}
+          onPlace={(art) =>
+            collectionTarget
+              ? addToCollection(collectionTarget.id, art)
+              : savePlacement(editTarget as string, art)
+          }
+        />
+      )}
+
+      {isOwner &&
+        editing &&
+        selectedPlacement &&
+        !editTarget &&
+        !collectionTarget &&
+        view === "ready" &&
+        (() => {
+          const pl = placements.find((p) => p.slotKey === selectedPlacement);
+          if (!pl) return null;
+          const nbtn = {
+            width: 34,
+            height: 30,
+            borderRadius: 6,
+            border: "1px solid #6b6157",
+            background: "transparent",
+            color: "#e6d3a3",
+            cursor: "pointer",
+            fontSize: 15,
+          } as const;
+          return (
+            <div
+              style={{
+                position: "absolute",
+                bottom: 96,
+                left: "50%",
+                transform: "translateX(-50%)",
+                background: "rgba(20,17,13,0.95)",
+                border: "1px solid #4a4030",
+                borderRadius: 10,
+                padding: "10px 14px",
+                color: "#ece0c8",
+                zIndex: 25,
+                display: "flex",
+                flexDirection: "column",
+                gap: 8,
+                alignItems: "center",
+              }}
+            >
+              <div style={{ fontSize: 12, opacity: 0.7, maxWidth: 220, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                Move &ldquo;{pl.piece.title}&rdquo;
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 34px)", gap: 4, justifyItems: "center" }}>
+                <span />
+                <button style={nbtn} onClick={() => nudgePlacement(selectedPlacement, 0, 0.2)} aria-label="Up">↑</button>
+                <span />
+                <button style={nbtn} onClick={() => nudgePlacement(selectedPlacement, -0.3, 0)} aria-label="Left">←</button>
+                <button style={nbtn} onClick={() => nudgePlacement(selectedPlacement, 0, -0.2)} aria-label="Down">↓</button>
+                <button style={nbtn} onClick={() => nudgePlacement(selectedPlacement, 0.3, 0)} aria-label="Right">→</button>
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button
+                  onClick={() => {
+                    const k = pl.slotKey;
+                    setSelectedPlacement(null);
+                    removePlacement(k); // clears the slot + its collection membership
+                    setEditTarget(k); // reopen the picker on the same slot
+                  }}
+                  style={{ fontSize: 12, padding: "3px 10px", borderRadius: 6, border: "1px solid #c8a15a", background: "transparent", color: "#e6d3a3", cursor: "pointer" }}
+                >
+                  Replace
+                </button>
+                <button
+                  onClick={() => {
+                    removePlacement(selectedPlacement);
+                    setSelectedPlacement(null);
+                  }}
+                  style={{ fontSize: 12, padding: "3px 10px", borderRadius: 6, border: "1px solid #6b4a4a", background: "transparent", color: "#e0a0a0", cursor: "pointer" }}
+                >
+                  Remove
+                </button>
+                <button
+                  onClick={() => setSelectedPlacement(null)}
+                  style={{ fontSize: 12, padding: "3px 10px", borderRadius: 6, border: "1px solid #6b6157", background: "transparent", color: "#ece0c8", cursor: "pointer" }}
+                >
+                  Done
+                </button>
+              </div>
+            </div>
+          );
+        })()}
+
+      {isOwner && editing && !editTarget && !collectionTarget && view === "ready" && (
+        <div
+          style={{
+            position: "absolute",
+            top: 60,
+            right: 14,
+            width: 260,
+            maxHeight: "60vh",
+            overflowY: "auto",
+            background: "rgba(20,17,13,0.94)",
+            border: "1px solid #4a4030",
+            borderRadius: 10,
+            padding: 12,
+            color: "#ece0c8",
+            zIndex: 20,
+          }}
+        >
+          <div style={{ fontWeight: 600, marginBottom: 4 }}>Editing your museum</div>
+          <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 10 }}>
+            Walk up to a wall and click a ＋ to hang art. Remove pieces you&rsquo;ve
+            hung below.
+          </div>
+          <button
+            onClick={createGallery}
+            style={{
+              width: "100%",
+              marginBottom: 10,
+              padding: "7px 0",
+              borderRadius: 6,
+              border: "1px solid #c8a15a",
+              background: "rgba(200,161,90,0.12)",
+              color: "#e6d3a3",
+              cursor: "pointer",
+              fontSize: 13,
+            }}
+          >
+            ＋ New gallery
+          </button>
+
+          {publishedGalleries.length > 0 && (
+            <div style={{ marginBottom: 10 }}>
+              <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 4 }}>
+                Your galleries{" "}
+                <span style={{ opacity: 0.65 }}>(check to show · up to 9 fit)</span>
+              </div>
+              {galleriesByWing.map(([wing, gals]) => (
+                <div key={wing} style={{ marginTop: 6 }}>
+                  <div style={{ fontSize: 12, color: "#c8a15a", marginBottom: 2 }}>{wing}</div>
+                  {gals.map((c) => (
+                    <div
+                      key={c.id}
+                      style={{ padding: "5px 0", borderTop: "0.5px solid #332c22" }}
+                    >
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <input
+                          type="checkbox"
+                          checked={c.inMuseum}
+                          onChange={() => toggleGalleryVisibility(c.id, !c.inMuseum)}
+                          title={c.inMuseum ? "Shown — uncheck to hide" : "Hidden — check to show"}
+                          style={{ cursor: "pointer", flexShrink: 0 }}
+                        />
+                        <span
+                          style={{
+                            flex: 1,
+                            fontSize: 13,
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            whiteSpace: "nowrap",
+                            opacity: c.inMuseum ? 1 : 0.5,
+                          }}
+                          title={c.name}
+                        >
+                          {c.name}
+                        </span>
+                        <span
+                          style={{
+                            fontSize: 11,
+                            flexShrink: 0,
+                            color: c.count >= GALLERY_CAP ? "#c8a15a" : "#8a8175",
+                          }}
+                        >
+                          {Math.min(c.count, GALLERY_CAP)}/{GALLERY_CAP}
+                        </span>
+                      </div>
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 6,
+                          marginTop: 4,
+                          paddingLeft: 22,
+                        }}
+                      >
+                        <select
+                          value={c.wing ?? ""}
+                          onChange={(e) => reassignWing(c.id, e.target.value)}
+                          aria-label="Wing"
+                          style={{
+                            flex: 1,
+                            fontSize: 12,
+                            padding: "3px 6px",
+                            borderRadius: 6,
+                            border: "1px solid #4a4030",
+                            background: "#0e0b08",
+                            color: "#ece0c8",
+                            cursor: "pointer",
+                          }}
+                        >
+                          <option value="">Unassigned</option>
+                          {wingNames.map((w) => (
+                            <option key={w} value={w}>
+                              {w}
+                            </option>
+                          ))}
+                          <option value="__new__">＋ New wing…</option>
+                        </select>
+                        <button
+                          onClick={() => setCollectionTarget({ id: c.id, name: c.name })}
+                          disabled={c.count >= GALLERY_CAP}
+                          style={{
+                            flexShrink: 0,
+                            fontSize: 12,
+                            padding: "3px 12px",
+                            borderRadius: 6,
+                            border: "1px solid #6b6157",
+                            background: "transparent",
+                            color: c.count >= GALLERY_CAP ? "#6b6157" : "#e6d3a3",
+                            cursor: c.count >= GALLERY_CAP ? "default" : "pointer",
+                          }}
+                        >
+                          {c.count >= GALLERY_CAP ? "Full" : "Add"}
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
+          )}
+          {(() => {
+            const anchored = new Set((layout?.wallAnchors ?? []).map((a) => a.slotKey));
+            const orphans = layout ? placements.filter((p) => !anchored.has(p.slotKey)) : [];
+            const areas = [
+              { prefix: "atrium", label: "Main Room" },
+              { prefix: "wing:N", label: "North Gallery" },
+              { prefix: "wing:W", label: "West Gallery" },
+              { prefix: "wing:E", label: "East Gallery" },
+            ];
+            const row = (pl: WallPlacement) => (
+              <div
+                key={pl.slotKey}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: 8,
+                  padding: "5px 0",
+                  borderTop: "0.5px solid #332c22",
+                }}
+              >
+                <span
+                  style={{
+                    fontSize: 13,
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }}
+                  title={pl.piece.title}
+                >
+                  {pl.piece.title}
+                </span>
+                <button
+                  onClick={() => removePlacement(pl.slotKey)}
+                  style={{
+                    flexShrink: 0,
+                    fontSize: 12,
+                    padding: "3px 8px",
+                    borderRadius: 6,
+                    border: "1px solid #6b4a4a",
+                    background: "transparent",
+                    color: "#e0a0a0",
+                    cursor: "pointer",
+                  }}
+                >
+                  Remove
+                </button>
+              </div>
+            );
+            return (
+              <div style={{ marginTop: 6 }}>
+                <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 4 }}>Wall art by area</div>
+                {orphans.length > 0 && (
+                  <div style={{ marginTop: 8 }}>
+                    <div style={{ fontSize: 12, color: "#e0a0a0", marginBottom: 2 }}>
+                      {ORPHAN} · {orphans.length}
+                    </div>
+                    <div style={{ fontSize: 11, opacity: 0.7, marginBottom: 4 }}>
+                      These lost their wall (it became a doorway). Remove them, or
+                      they&rsquo;ll wait here.
+                    </div>
+                    {orphans.map(row)}
+                  </div>
+                )}
+                {areas.map((area) => {
+                  const cap = (layout?.wallAnchors ?? []).filter((a) =>
+                    a.slotKey.startsWith(area.prefix + ":")
+                  ).length;
+                  if (cap === 0) return null;
+                  const items = placements.filter(
+                    (p) => p.slotKey.startsWith(area.prefix + ":") && anchored.has(p.slotKey)
+                  );
+                  return (
+                    <div key={area.prefix} style={{ marginTop: 8 }}>
+                      <div style={{ fontSize: 12, color: "#c8a15a", marginBottom: 2 }}>
+                        {area.label} · {items.length}/{cap}
+                      </div>
+                      {items.map(row)}
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()}
+        </div>
+      )}
 
       {view === "ready" && (
         <Tour

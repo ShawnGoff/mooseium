@@ -98,6 +98,7 @@ export function Player({
   pausedRef,
   sitRef,
   onSeated,
+  keysRef,
 }: {
   dragRef: React.MutableRefObject<boolean>;
   joyRef: React.MutableRefObject<{ x: number; y: number }>;
@@ -112,19 +113,44 @@ export function Player({
   // arrival) instead of responding to movement.
   sitRef?: React.MutableRefObject<{ x: number; z: number; y: number; yaw: number } | null>;
   onSeated?: () => void;
+  // Optional external held-keys ref so the parent can clear stuck movement keys
+  // (e.g. after a HUD dropdown swallows the keyup). Falls back to internal state.
+  keysRef?: React.MutableRefObject<Record<string, boolean>>;
 }) {
   const { camera, gl } = useThree();
   const yaw = useRef(spawnYaw);
   const pitch = useRef(0);
   const pos = useRef(new THREE.Vector3(spawn[0], EYE_Y, spawn[2]));
   const eyeY = useRef(EYE_Y);
-  const keys = useRef<Record<string, boolean>>({});
+  const internalKeys = useRef<Record<string, boolean>>({});
+  const keys = keysRef ?? internalKeys;
 
   useEffect(() => {
-    const kd = (e: KeyboardEvent) => (keys.current[e.code] = true);
+    // Don't drive the player while the user is typing in a field (e.g. the art
+    // search box) — otherwise "WASD" in a query walks the character around.
+    const typing = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      return (
+        !!t &&
+        (t.tagName === "INPUT" ||
+          t.tagName === "TEXTAREA" ||
+          t.tagName === "SELECT" ||
+          t.isContentEditable)
+      );
+    };
+    const kd = (e: KeyboardEvent) => {
+      if (typing(e)) return;
+      keys.current[e.code] = true;
+    };
     const ku = (e: KeyboardEvent) => (keys.current[e.code] = false);
+    // If the page loses keyboard focus (alt-tab, a HUD control opening) the keyup
+    // can be swallowed, leaving a movement key stuck "down". Clear on blur.
+    const clearKeys = () => {
+      keys.current = {};
+    };
     window.addEventListener("keydown", kd);
     window.addEventListener("keyup", ku);
+    window.addEventListener("blur", clearKeys);
 
     const el = gl.domElement;
     let dragging = false;
@@ -164,6 +190,7 @@ export function Player({
     return () => {
       window.removeEventListener("keydown", kd);
       window.removeEventListener("keyup", ku);
+      window.removeEventListener("blur", clearKeys);
       el.removeEventListener("pointerdown", pd);
       window.removeEventListener("pointermove", pm);
       window.removeEventListener("pointerup", pu);

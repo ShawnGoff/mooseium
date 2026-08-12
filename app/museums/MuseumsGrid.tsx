@@ -83,27 +83,32 @@ export default function MuseumsGrid({ museums }: { museums: Museum[] }) {
   return (
     <div className="museum-card-grid">
       {museums.map((m) => (
-        <Link key={m.slug} href={`/museums/${m.slug}`} className="museum-card">
-          <div
-            className="museum-card-img"
-            style={
-              images[m.slug]
-                ? { backgroundImage: `url(${images[m.slug]})` }
-                : undefined
-            }
-          />
-          <div className="museum-card-body">
-            <span className={`museum-mono mono-${m.slug}`}>
-              {monogramFor(m.slug, m.displayName)}
-            </span>
-            <span className="museum-card-text">
-              <span className="museum-name">{m.displayName}</span>
-              {LOCATIONS[m.slug] && (
-                <span className="museum-card-loc">{LOCATIONS[m.slug]}</span>
-              )}
-            </span>
-          </div>
-        </Link>
+        <div key={m.slug} className="museum-card">
+          <Link href={`/museums/${m.slug}`} className="museum-card-main">
+            <div
+              className="museum-card-img"
+              style={
+                images[m.slug]
+                  ? { backgroundImage: `url(${images[m.slug]})` }
+                  : undefined
+              }
+            />
+            <div className="museum-card-body">
+              <span className={`museum-mono mono-${m.slug}`}>
+                {monogramFor(m.slug, m.displayName)}
+              </span>
+              <span className="museum-card-text">
+                <span className="museum-name">{m.displayName}</span>
+                {LOCATIONS[m.slug] && (
+                  <span className="museum-card-loc">{LOCATIONS[m.slug]}</span>
+                )}
+              </span>
+            </div>
+          </Link>
+          <Link href={`/museum/${m.slug}`} className="museum-card-3d">
+            Walk through in 3D →
+          </Link>
+        </div>
       ))}
     </div>
   );

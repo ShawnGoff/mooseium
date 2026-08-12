@@ -21,6 +21,7 @@ export default function CollectionView({
   initialGuestbookEnabled,
   initialWing,
   initialInMuseum,
+  locationSlot,
   existingWings,
   initialPieces,
 }: {
@@ -31,6 +32,7 @@ export default function CollectionView({
   initialGuestbookEnabled: boolean;
   initialWing: string | null;
   initialInMuseum: boolean;
+  locationSlot: string | null;
   existingWings: string[];
   initialPieces: Piece[];
 }) {
@@ -50,7 +52,7 @@ export default function CollectionView({
 
   const [guestbookOn, setGuestbookOn] = useState(initialGuestbookEnabled);
 
-  // Wing assignment: the collection lives in a named wing of the 3D museum.
+  // Whether this collection gets a room of its own in the 3D museum.
   const [inMuseum, setInMuseum] = useState(initialInMuseum);
   async function toggleInMuseum() {
     const next = !inMuseum;
@@ -67,6 +69,7 @@ export default function CollectionView({
     }
   }
 
+  // Wing assignment: the collection lives in a named wing of the 3D museum.
   const [wing, setWing] = useState<string | null>(initialWing);
   const [wingOptions, setWingOptions] = useState<string[]>(existingWings);
   const [addingWing, setAddingWing] = useState(false);
@@ -395,11 +398,22 @@ export default function CollectionView({
         )}
       </div>
 
-      <label className="guestbook-toggle">
-        <input type="checkbox" checked={inMuseum} onChange={toggleInMuseum} />
-        Show this collection in your 3D museum (up to 9 rooms fit — turn some off to
-        swap others in)
-      </label>
+      {/* A location collection is the 2D home for art hung on one part of the
+          museum, so it has no room of its own to show or hide — its pieces are
+          already on those walls. Offering the toggle here would only invite the
+          curator to turn on a room that duplicates them. */}
+      {locationSlot ? (
+        <p className="wing-note">
+          These pieces hang on your museum walls, so this collection has no room of
+          its own. Rearrange them in the museum editor.
+        </p>
+      ) : (
+        <label className="guestbook-toggle">
+          <input type="checkbox" checked={inMuseum} onChange={toggleInMuseum} />
+          Show this collection in your 3D museum (up to 9 rooms fit — turn some off to
+          swap others in)
+        </label>
+      )}
 
       {error && <p className="status error">{error}</p>}
 

@@ -2429,13 +2429,30 @@ a {
   border-radius: var(--radius);
   overflow: hidden;
   background: var(--surface);
-  text-decoration: none;
   color: var(--text);
   display: flex;
   flex-direction: column;
 }
 .museum-card:hover {
   border-color: var(--accent);
+}
+.museum-card-main {
+  text-decoration: none;
+  color: inherit;
+  display: flex;
+  flex-direction: column;
+}
+.museum-card-3d {
+  border-top: 1px solid var(--border);
+  padding: 10px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent);
+  text-decoration: none;
+  text-align: center;
+}
+.museum-card-3d:hover {
+  background: var(--surface-2);
 }
 .museum-card-img {
   aspect-ratio: 16 / 10;

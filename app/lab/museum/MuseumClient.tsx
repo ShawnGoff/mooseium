@@ -14,9 +14,11 @@ const Museum3D = dynamic(() => import("./Museum3D"), {
 export default function MuseumClient({
   handle,
   isOwner = false,
+  source,
 }: {
   handle?: string;
   isOwner?: boolean;
+  source?: string;
 }) {
-  return <Museum3D handle={handle} isOwner={isOwner} />;
+  return <Museum3D handle={handle} isOwner={isOwner} source={source} />;
 }

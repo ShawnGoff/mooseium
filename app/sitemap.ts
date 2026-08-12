@@ -2,6 +2,7 @@ import type { MetadataRoute } from "next";
 import { isSupabaseConfigured } from "@/lib/supabase/client";
 import { createClient } from "@/lib/supabase/server";
 import { indexableArtworks } from "@/lib/artwork-galleries";
+import { listMuseums } from "@/lib/museums";
 
 const SITE_URL =
   process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "") || "http://localhost:3000";
@@ -26,6 +27,16 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   for (const slug of ["met", "artic", "cleveland", "rijks", "harvard", "smithsonian"]) {
     routes.push({
       url: `${SITE_URL}/museums/${slug}`,
+      changeFrequency: "weekly",
+      priority: 0.6,
+    });
+  }
+
+  // Pre-populated 3D source museums (/museum/[slug]) — only for registered
+  // adapters, since the page 404s for museums that can't be queried.
+  for (const m of listMuseums()) {
+    routes.push({
+      url: `${SITE_URL}/museum/${m.slug}`,
       changeFrequency: "weekly",
       priority: 0.6,
     });

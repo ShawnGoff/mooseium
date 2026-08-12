@@ -2062,7 +2062,6 @@ function StationWatcher({
 
 function Scene({
   layout,
-  previews,
   placements,
   editing,
   onPick,
@@ -2079,7 +2078,6 @@ function Scene({
   onSelect,
 }: {
   layout: Layout;
-  previews: Record<string, GalleryPiece | null>;
   placements: WallPlacement[];
   editing: boolean;
   onPick: (slotKey: string) => void;
@@ -2593,7 +2591,6 @@ export default function Museum3D({
     }
   }
   const [view, setView] = useState<"loading" | "ready" | "empty">("loading");
-  const [previews, setPreviews] = useState<Record<string, GalleryPiece | null>>({});
   const [selected, setSelected] = useState<Piece | null>(null);
   // Hide every HUD overlay (H, or the corner button) for a clean view.
   const [hideUI, setHideUI] = useState(false);
@@ -2841,46 +2838,6 @@ export default function Museum3D({
       .catch(() => {});
   }, [handle, isOwner, source]);
 
-  // Load one preview piece per gallery room.
-  useEffect(() => {
-    if (!layout) return;
-    let cancelled = false;
-    // Source galleries carry their pieces inline, so use the first one directly
-    // (proxied for CORS) instead of hitting /api/gallery-pieces, which has no row
-    // for a source slug.
-    const inlinePreviews: Record<string, GalleryPiece> = {};
-    const needFetch: string[] = [];
-    const seen = new Set<string>();
-    layout.galleries.forEach((g) => {
-      if (seen.has(g.slug)) return;
-      seen.add(g.slug);
-      if (g.pieces && g.pieces.length) {
-        const first = g.pieces[0];
-        inlinePreviews[g.slug] = {
-          ...first,
-          image: `/api/img?url=${encodeURIComponent(first.image)}`,
-        };
-      } else {
-        needFetch.push(g.slug);
-      }
-    });
-    if (Object.keys(inlinePreviews).length) {
-      setPreviews((p) => ({ ...p, ...inlinePreviews }));
-    }
-    needFetch.forEach((slug) => {
-      fetch(`/api/gallery-pieces?slug=${encodeURIComponent(slug)}`)
-        .then((r) => r.json())
-        .then((pd) => {
-          if (cancelled) return;
-          setPreviews((p) => ({ ...p, [slug]: (pd.pieces?.[0] as GalleryPiece) ?? null }));
-        })
-        .catch(() => {});
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [layout]);
-
   const station = DEN_STATIONS.find((s) => s.id === nearStation) ?? null;
   const enterStation = () => {
     if (!station || denPanel || sitPhase.current !== "none") return;
@@ -3007,7 +2964,6 @@ export default function Museum3D({
         {layout && (
           <Scene
             layout={layout}
-            previews={previews}
             placements={placements}
             editing={editing}
             onPick={(k) => {

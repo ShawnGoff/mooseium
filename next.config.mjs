@@ -27,7 +27,17 @@ const securityHeaders = [
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  reactStrictMode: true,
+  // OFF because of the 3D museum. StrictMode double-mounts every component in
+  // DEV: react-three-fiber builds a WebGLRenderer on the first mount, StrictMode
+  // tears it down, and disposing a renderer calls forceContextLoss() on its
+  // canvas — which react-three-fiber then reuses for the second mount, now with a
+  // context that cannot be recovered. The museum comes up blank with
+  // "THREE.WebGLRenderer: Context Lost" and textures/geometries/drawCalls all at
+  // zero, i.e. dead before anything was ever uploaded.
+  //
+  // It never affected production (StrictMode's double-invoke is development-only),
+  // which is exactly why the live site was fine while localhost was unusable.
+  reactStrictMode: false,
   // Don't advertise the framework (Seobility/security nicety).
   poweredByHeader: false,
   images: {

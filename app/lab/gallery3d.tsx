@@ -354,6 +354,14 @@ export function ProxyArtwork({
     lines.forEach((ln, i) => ctx.fillText(ln, 256, startY + i * 38));
     return prep(new THREE.CanvasTexture(c));
   }, [piece.title]);
+  // Every piece builds one of these, and prep() gives it mipmaps — ~1.75MB of
+  // VRAM apiece that used to leak: the artwork texture below is disposed and so
+  // is the nameplate's, but this one never was. With ~38 pieces resident that is
+  // ~66MB abandoned per mount, and it recurs every time a gallery streams in or
+  // out. In dev it is doubled again by StrictMode's second mount and compounded
+  // by every hot reload, which is why the context dies locally while production
+  // survives.
+  useEffect(() => () => fallback.dispose(), [fallback]);
 
   useEffect(() => {
     let cancelled = false;

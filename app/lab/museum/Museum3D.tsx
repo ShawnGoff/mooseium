@@ -1774,6 +1774,16 @@ function DenWindow({
   const dayTex = useMemo(() => skyTexture(seed, "day"), [seed]);
   const rainTex = useMemo(() => skyTexture(seed, "rain"), [seed]);
   const snowTex = useMemo(() => skyTexture(seed, "snow"), [seed]);
+  // All three are built up front so switching weather is instant, which means
+  // all three must be released together on unmount.
+  useEffect(
+    () => () => {
+      dayTex.dispose();
+      rainTex.dispose();
+      snowTex.dispose();
+    },
+    [dayTex, rainTex, snowTex]
+  );
   const paneTex = sky === "rain" ? rainTex : sky === "snow" ? snowTex : dayTex;
   const frameCol = "#2e2117";
   const bar = (args: [number, number, number], pos: [number, number, number]) => (
@@ -1979,6 +1989,14 @@ function Skylight({ sky, lowPower }: { sky: Sky; lowPower: boolean }) {
   const dayTex = useMemo(() => skyTexture(41, "day"), []);
   const rainTex = useMemo(() => skyTexture(53, "rain"), []);
   const snowTex = useMemo(() => skyTexture(61, "snow"), []);
+  useEffect(
+    () => () => {
+      dayTex.dispose();
+      rainTex.dispose();
+      snowTex.dispose();
+    },
+    [dayTex, rainTex, snowTex]
+  );
   return (
     <group>
       <SkylightFrame />

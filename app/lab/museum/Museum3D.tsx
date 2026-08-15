@@ -81,6 +81,7 @@ const WING_COLL_CORR = 3; // wing→gallery corridor length
 const VEST_HALF = 6; // entrance vestibule / Den half-width
 const VEST_LEN = 14; // entrance vestibule / Den depth
 const ENTR_HALF = 2; // entrance doorway half-width
+const SIGN_MARGIN = 0.4; // breathing room a sign leaves at each end of its band
 const EPS = 0.03; // wall inset so shared walls don't z-fight
 const INSET = 0.4; // walkable inset from walls
 const BRIDGE = 0.75; // half-depth of a doorway's walkable bridge
@@ -88,7 +89,18 @@ const BRIDGE = 0.75; // half-depth of a doorway's walkable bridge
 type Side = "N" | "S" | "E" | "W"; // N=-z, S=+z, E=+x, W=-x
 type AABB = { x0: number; x1: number; z0: number; z1: number };
 type Room = { rect: AABB; gaps: { side: Side; lo: number; hi: number }[] };
-type LabelSpec = { text: string; pos: [number, number, number]; rot: [number, number, number]; size: number };
+// maxW is the width of the surface the sign is actually painted on. That is NOT
+// the room's wall: a sign sits over a doorway, and the corridor beyond protrudes
+// as a raised band roughly the corridor's own width. A long collection name is
+// wider than that band and overhangs it on both sides, which is what made
+// "Henri de Toulouse-Lautrec" look like it was falling off the wall.
+type LabelSpec = {
+  text: string;
+  pos: [number, number, number];
+  rot: [number, number, number];
+  size: number;
+  maxW: number;
+};
 // A gallery room: its slug, the room rectangle, which wall is the doorway
 // (entrySide) and which is the far/feature wall, plus where the single preview
 // piece hangs when the full collection isn't loaded.
@@ -654,6 +666,7 @@ function buildMuseum(m: Museum, editing = false): Layout {
     pos: [0, DOORH + 0.5, A + 0.06],
     rot: [0, 0, 0],
     size: 0.4,
+    maxW: ENTR_HALF * 2 - SIGN_MARGIN, // the entrance opening it sits over
   });
 
   // Placement: the CENTRE door fills first, so the first wing is straight ahead
@@ -734,7 +747,13 @@ function buildMuseum(m: Museum, editing = false): Layout {
         ? { pos: [0, DOORH + 0.4, -A + LO] as [number, number, number], rot: [0, 0, 0] as [number, number, number] }
         : { pos: [A - LO, DOORH + 0.4, 0] as [number, number, number], rot: [0, -Math.PI / 2, 0] as [number, number, number] };
     if (wing.name)
-      labels.push({ text: wing.name.toUpperCase(), pos: wl.pos, rot: wl.rot, size: 0.34 });
+      labels.push({
+        text: wing.name.toUpperCase(),
+        pos: wl.pos,
+        rot: wl.rot,
+        size: 0.34,
+        maxW: CORR_HALF * 2 - SIGN_MARGIN, // the atrium-to-wing corridor mouth
+      });
 
     const cSides = collectionSides(side);
     wing.collections.forEach((coll, j) => {
@@ -758,14 +777,16 @@ function buildMuseum(m: Museum, editing = false): Layout {
       // Same 0.45 clearance as wing labels: past this wall's thickness and the
       // gallery corridor wall that protrudes into the wing at the doorway.
       const GLO = 0.45;
+      // The wing-to-gallery corridor mouth is the band this sign is painted on.
+      const gW = CORR_HALF * 2 - SIGN_MARGIN;
       const gl: LabelSpec =
         cs === "N"
-          ? { text: coll.name, pos: [ctrX(wr), DOORH + 0.3, wr.z0 + GLO], rot: [0, 0, 0], size: 0.28 }
+          ? { text: coll.name, pos: [ctrX(wr), DOORH + 0.3, wr.z0 + GLO], rot: [0, 0, 0], size: 0.28, maxW: gW }
           : cs === "S"
-          ? { text: coll.name, pos: [ctrX(wr), DOORH + 0.3, wr.z1 - GLO], rot: [0, Math.PI, 0], size: 0.28 }
+          ? { text: coll.name, pos: [ctrX(wr), DOORH + 0.3, wr.z1 - GLO], rot: [0, Math.PI, 0], size: 0.28, maxW: gW }
           : cs === "W"
-          ? { text: coll.name, pos: [wr.x0 + GLO, DOORH + 0.3, ctrZ(wr)], rot: [0, Math.PI / 2, 0], size: 0.28 }
-          : { text: coll.name, pos: [wr.x1 - GLO, DOORH + 0.3, ctrZ(wr)], rot: [0, -Math.PI / 2, 0], size: 0.28 };
+          ? { text: coll.name, pos: [wr.x0 + GLO, DOORH + 0.3, ctrZ(wr)], rot: [0, Math.PI / 2, 0], size: 0.28, maxW: gW }
+          : { text: coll.name, pos: [wr.x1 - GLO, DOORH + 0.3, ctrZ(wr)], rot: [0, -Math.PI / 2, 0], size: 0.28, maxW: gW };
       labels.push(gl);
 
       // preview artwork on the gallery's far wall (shown until the full
@@ -1185,6 +1206,42 @@ function RoomMesh({ room }: { room: Room }) {
 }
 
 // A wall placard on an unopened wing wall, nudging the curator to create a wing.
+// A wall sign that never overhangs the band it is painted on.
+//
+// Scales the MESH after troika reports its layout, and does so by mutating the
+// object directly — no React state. An earlier attempt called setState from
+// onSync, which re-entered rendering and took the whole museum down with it.
+// Mutation is safe here because fontSize never changes, so blockBounds is stable
+// and this converges on the first sync rather than feeding back into itself.
+function FitLabel({ label }: { label: LabelSpec }) {
+  const onSync = useCallback(
+    (mesh: THREE.Object3D & { textRenderInfo?: { blockBounds?: number[] } }) => {
+      const b = mesh.textRenderInfo?.blockBounds;
+      if (!b) return;
+      const width = b[2] - b[0];
+      if (!(width > 0)) return;
+      mesh.scale.setScalar(width > label.maxW ? label.maxW / width : 1);
+    },
+    [label.maxW]
+  );
+  return (
+    <Text
+      font={MUSEUM_FONT}
+      position={label.pos}
+      rotation={label.rot}
+      fontSize={label.size}
+      color="#2a2320"
+      anchorX="center"
+      anchorY="middle"
+      textAlign="center"
+      letterSpacing={0.04}
+      onSync={onSync}
+    >
+      {label.text}
+    </Text>
+  );
+}
+
 function HintSign({ pos, rot }: Hint) {
   return (
     <group position={pos} rotation={rot}>
@@ -2236,21 +2293,7 @@ function Scene({
       ))}
 
       {layout.labels.map((l, i) => (
-        <Text
-          key={i}
-          font={MUSEUM_FONT}
-          position={l.pos}
-          rotation={l.rot}
-          fontSize={l.size}
-          color="#2a2320"
-          anchorX="center"
-          anchorY="middle"
-          maxWidth={6}
-          textAlign="center"
-          letterSpacing={0.04}
-        >
-          {l.text}
-        </Text>
+        <FitLabel key={i} label={l} />
       ))}
 
       {layout.galleries.map((g) =>

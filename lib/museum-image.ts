@@ -14,6 +14,20 @@ const ALLOWED_DOMAINS = [
   "vam.ac.uk",
 ];
 
+// Our own Supabase host, so the proxy will also serve images we've cached into
+// the artwork-images bucket (see 0030_artwork_image_cache.sql). Derived from the
+// configured project URL rather than hardcoding "supabase.co", which would let
+// the proxy fetch from ANY Supabase project, not just ours.
+function cacheHost(): string | null {
+  const raw = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  if (!raw) return null;
+  try {
+    return new URL(raw).hostname.toLowerCase();
+  } catch {
+    return null;
+  }
+}
+
 export function isAllowedMuseumImage(url: string): boolean {
   let u: URL;
   try {
@@ -23,5 +37,6 @@ export function isAllowedMuseumImage(url: string): boolean {
   }
   if (u.protocol !== "https:") return false;
   const host = u.hostname.toLowerCase();
+  if (host === cacheHost()) return true;
   return ALLOWED_DOMAINS.some((d) => host === d || host.endsWith("." + d));
 }

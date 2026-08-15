@@ -72,7 +72,28 @@ export async function GET(req: NextRequest) {
     )
     .eq("user_id", profile.id);
 
-  const placements = ((data as Row[] | null) ?? []).map((r) => ({
+  const rows = (data as Row[] | null) ?? [];
+
+  // Prefer our cached copy of each image over the museum's own URL. The stored
+  // image_url is denormalized onto the placement, so the cache lives one hop away
+  // in artworks — worth the extra read, because several museum CDNs refuse
+  // Vercel's IPs and 502 in production (see 0030_artwork_image_cache.sql).
+  const cached = new Map<string, string>();
+  const ids = [...new Set(rows.map((r) => r.external_id))];
+  if (ids.length) {
+    const { data: arts } = await supabase
+      .from("artworks")
+      .select("source_museum, museum_object_id, image_cached_url")
+      .in("museum_object_id", ids)
+      .not("image_cached_url", "is", null);
+    for (const a of (arts as
+      | { source_museum: string; museum_object_id: string; image_cached_url: string }[]
+      | null) ?? []) {
+      cached.set(`${a.source_museum}:${a.museum_object_id}`, a.image_cached_url);
+    }
+  }
+
+  const placements = rows.map((r) => ({
     slotKind: r.slot_kind,
     slotKey: r.slot_key,
     source: r.source,
@@ -85,7 +106,7 @@ export async function GET(req: NextRequest) {
         : null,
     piece: {
       title: r.title ?? "Untitled",
-      image: r.image_url ?? "",
+      image: cached.get(`${r.source}:${r.external_id}`) ?? r.image_url ?? "",
       museum: r.source,
       realW: r.real_w ?? undefined,
       realH: r.real_h ?? undefined,

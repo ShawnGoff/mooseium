@@ -27,6 +27,7 @@ import {
   type Constrain,
 } from "../gallery3d";
 import Tour, { type TourStep } from "@/app/components/Tour";
+import { parseDims } from "@/lib/artwork-dimensions";
 
 const MUSEUM_TOUR_STEPS: TourStep[] = [
   {
@@ -284,6 +285,9 @@ type FullArt = {
   artist?: string;
   dateText?: string;
   medium?: string;
+  // Free text from the museum ("H 45 × W 30 cm"); parseDims turns it into the
+  // real-world size the wall uses to scale the piece.
+  dimensions?: string;
   description?: string;
   sourceUrl?: string;
 };
@@ -294,7 +298,14 @@ function ArtPicker({
   placeLabel = "Place on this wall",
 }: {
   onClose: () => void;
-  onPlace: (art: { source: string; externalId: string; title: string; image: string }) => void;
+  onPlace: (art: {
+    source: string;
+    externalId: string;
+    title: string;
+    image: string;
+    realW?: number;
+    realH?: number;
+  }) => void;
   title?: string;
   placeLabel?: string;
 }) {
@@ -351,11 +362,17 @@ function ArtPicker({
   function placePreview() {
     if (!preview) return;
     const c = preview.card;
+    // The full record is the only place the museum's dimensions appear, so parse
+    // them here — the wall has no other way to learn a piece's real size, and
+    // without them everything hangs at the same fallback height.
+    const dims = parseDims(preview.full?.dimensions);
     onPlace({
       source: c.sourceMuseum,
       externalId: c.museumObjectId,
       title: c.title,
       image: preview.full?.image || c.thumbnailUrl,
+      realW: dims?.w,
+      realH: dims?.h,
     });
   }
 
@@ -2521,6 +2538,11 @@ export default function Museum3D({
         externalId: pl.externalId,
         title: pl.piece.title,
         imageUrl: pl.piece.image,
+        // Resend the size: this POST upserts the whole row, so omitting these
+        // wrote NULL back and a piece lost its real-world scale the moment it
+        // was nudged.
+        realW: pl.piece.realW,
+        realH: pl.piece.realH,
         posX: np[0],
         posY: np[1],
         posZ: np[2],
@@ -2559,7 +2581,14 @@ export default function Museum3D({
   // Place (or replace) a piece at a slot: optimistic render, then POST.
   async function savePlacement(
     slotKey: string,
-    art: { source: string; externalId: string; title: string; image: string }
+    art: {
+      source: string;
+      externalId: string;
+      title: string;
+      image: string;
+      realW?: number;
+      realH?: number;
+    }
   ) {
     setPlacements((ps) => [
       ...ps.filter((p) => p.slotKey !== slotKey),
@@ -2570,7 +2599,13 @@ export default function Museum3D({
         externalId: art.externalId,
         rotationY: 0,
         mount: "pedestal",
-        piece: { title: art.title, image: art.image, museum: art.source },
+        piece: {
+          title: art.title,
+          image: art.image,
+          museum: art.source,
+          realW: art.realW,
+          realH: art.realH,
+        },
       },
     ]);
     setEditTarget(null);
@@ -2584,6 +2619,8 @@ export default function Museum3D({
           externalId: art.externalId,
           title: art.title,
           imageUrl: art.image,
+          realW: art.realW,
+          realH: art.realH,
         }),
       });
     } catch {

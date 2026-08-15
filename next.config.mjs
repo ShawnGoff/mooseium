@@ -64,5 +64,12 @@ export default withSentryConfig(nextConfig, {
   authToken: process.env.SENTRY_AUTH_TOKEN,
   sourcemaps: { disable: !process.env.SENTRY_AUTH_TOKEN },
   silent: true,
+  // Proxy browser error reports through our OWN origin instead of sending them
+  // straight to ingest.sentry.io. Ad blockers and Edge's tracking prevention
+  // (on by default) block that hostname outright — every client-side report was
+  // dying as ERR_BLOCKED_BY_CLIENT, so browser errors never reached the
+  // dashboard for a large share of real visitors. A same-origin request isn't
+  // blocked. Costs one serverless invocation per event.
+  tunnelRoute: "/monitoring",
   webpack: { treeshake: { removeDebugLogging: true } },
 });

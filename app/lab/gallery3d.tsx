@@ -364,7 +364,14 @@ export function ProxyArtwork({
     img.crossOrigin = "anonymous";
     img.onload = () => {
       if (cancelled) return;
-      const maxDim = IS_TOUCH ? 1024 : 1600;
+      // Texture budget, not image quality: each of these becomes a GPU texture
+      // with mipmaps, so 1600px cost ~13.6MB of VRAM apiece. The museum can hold
+      // ~38 at once (2 streamed galleries x 11 pieces, plus wall placements),
+      // which ran to roughly half a gigabyte and lost the WebGL context outright
+      // on modest GPUs — the canvas dies with "THREE.WebGLRenderer: Context Lost"
+      // and takes the whole museum with it. 1024 costs ~5.6MB instead, a ~60%
+      // saving, and a painting on a wall a few metres away has no visible loss.
+      const maxDim = 1024;
       const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
       const cw = Math.max(1, Math.round(img.width * scale));
       const ch = Math.max(1, Math.round(img.height * scale));

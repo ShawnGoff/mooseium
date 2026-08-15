@@ -27,6 +27,7 @@ import {
   type Constrain,
 } from "../gallery3d";
 import Tour, { type TourStep } from "@/app/components/Tour";
+import * as Sentry from "@sentry/nextjs";
 import { parseDims } from "@/lib/artwork-dimensions";
 
 const MUSEUM_TOUR_STEPS: TourStep[] = [
@@ -2631,6 +2632,8 @@ export default function Museum3D({
   const [selected, setSelected] = useState<Piece | null>(null);
   // Hide every HUD overlay (H, or the corner button) for a clean view.
   const [hideUI, setHideUI] = useState(false);
+  // The GPU dropped the WebGL context — the museum is frozen and needs a reload.
+  const [glLost, setGlLost] = useState(false);
   const [isTouch] = useState(
     () =>
       typeof window !== "undefined" &&
@@ -2994,7 +2997,39 @@ export default function Museum3D({
       <Canvas
         camera={{ fov: 52, position: tp.spawn }}
         gl={{ toneMappingExposure: 1.08, powerPreference: "high-performance" }}
-        dpr={isTouch || lite ? 1 : [1, 2]}
+        // Cap at 1.5x rather than 2x: the framebuffer is the other big GPU
+        // allocation besides the textures, and it scales with the SQUARE of dpr —
+        // 2x costs 78% more than 1.5x for a difference few people can see.
+        dpr={isTouch || lite ? 1 : [1, 1.5]}
+        onCreated={({ gl }) => {
+          // Without this the museum just stops: losing the context is not a JS
+          // exception, so nothing throws, nothing reports, and the canvas freezes
+          // with no clue why. Tell the user, and tell Sentry.
+          const canvas = gl.domElement;
+          canvas.addEventListener(
+            "webglcontextlost",
+            (e) => {
+              // Preventing the default lets the browser attempt a restore.
+              e.preventDefault();
+              setGlLost(true);
+              // three.js already counts what is resident on the GPU, which is
+              // exactly what we need to know: a loss with hundreds of textures
+              // live means we overran the budget, not that a driver hiccuped.
+              Sentry.captureMessage("WebGL context lost in the 3D museum", {
+                level: "error",
+                extra: {
+                  textures: gl.info.memory.textures,
+                  geometries: gl.info.memory.geometries,
+                  drawCalls: gl.info.render.calls,
+                  lite,
+                  dpr: typeof window !== "undefined" ? window.devicePixelRatio : null,
+                },
+              });
+            },
+            { passive: false }
+          );
+          canvas.addEventListener("webglcontextrestored", () => setGlLost(false));
+        }}
       >
         <color attach="background" args={["#eceae4"]} />
         <fogExp2 attach="fog" args={["#e6e3dc", 0.014]} />
@@ -3563,6 +3598,33 @@ export default function Museum3D({
         </div>
       )}
       {view === "loading" && <div style={centerStyle}>Loading the museum…</div>}
+
+      {/* The GPU dropped the context. Previously this just froze with no
+          explanation; say so, and offer the lighter renderer as the way out. */}
+      {glLost && (
+        <div style={{ ...centerStyle, maxWidth: 420, lineHeight: 1.6 }}>
+          <strong>The museum ran out of graphics memory.</strong>
+          <div style={{ opacity: 0.85, marginTop: 8, fontSize: 13 }}>
+            Your browser dropped the 3D view. Reloading usually fixes it; the lighter
+            renderer uses noticeably less memory if it keeps happening.
+          </div>
+          <div style={{ display: "flex", gap: 8, justifyContent: "center", marginTop: 14 }}>
+            <button onClick={() => window.location.reload()} style={musicBtnStyle}>
+              Reload
+            </button>
+            <button
+              onClick={() => {
+                const u = new URL(window.location.href);
+                u.searchParams.set("lite", "1");
+                window.location.href = u.toString();
+              }}
+              style={musicBtnStyle}
+            >
+              Use lighter mode
+            </button>
+          </div>
+        </div>
+      )}
 
       {selected && (
         <div

@@ -31,7 +31,18 @@ const nextConfig = {
   // Don't advertise the framework (Seobility/security nicety).
   poweredByHeader: false,
   images: {
-    // Museum image CDNs we load thumbnails from directly (before we cache our own).
+    // CURRENTLY INERT — nothing in the app imports next/image, so the Image
+    // Optimization API this allowlist guards is never invoked. Museum thumbnails
+    // go through plain <img> and our own /api/img proxy (lib/museum-image.ts
+    // holds the allowlist that actually enforces anything), and the OG routes
+    // render via next/og's satori pipeline. Kept because it costs nothing and is
+    // the right list the day we do adopt next/image — but don't read it as an
+    // active control, and note it has drifted: /api/img allows eight museum
+    // domains, this allows three.
+    //
+    // Side effect worth knowing: no next/image also means sharp is unreachable
+    // here, which is why we left its libvips advisory unpatched rather than take
+    // a breaking next 16 upgrade for it.
     remotePatterns: [
       { protocol: "https", hostname: "images.metmuseum.org" },
       { protocol: "https", hostname: "www.artic.edu" },

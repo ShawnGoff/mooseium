@@ -6,7 +6,7 @@
 // — defaults to Groq's free endpoint but works with any such provider via env:
 //   LLM_API_KEY   (required)   — provider key
 //   LLM_API_URL   (optional)   — chat/completions URL (default: Groq)
-//   LLM_MODEL     (optional)   — model id (default: llama-3.3-70b-versatile)
+//   LLM_MODEL     (optional)   — model id (default: openai/gpt-oss-120b)
 //   CRON_SECRET   (required)   — shared secret authorizing this route
 //   SUPABASE_SERVICE_ROLE_KEY  — lets the writer bypass RLS
 
@@ -96,7 +96,14 @@ async function generateThemes(prompt: string): Promise<ShelfDef[]> {
   if (!key) throw new Error("LLM_API_KEY not set");
   const url =
     process.env.LLM_API_URL || "https://api.groq.com/openai/v1/chat/completions";
-  const model = process.env.LLM_MODEL || "llama-3.3-70b-versatile";
+  // llama-3.3-70b-versatile is being retired by Groq. gpt-oss-120b is the
+  // replacement: same 131k context, and it held up over repeated runs of both
+  // prompts (6/6 library shelves, 3/3 museum names with the subjects echoed back
+  // verbatim, which museumThemes relies on to pair a name with its query).
+  // It is a reasoning model — it returns a `reasoning` field alongside `content`
+  // — which is harmless here because we send no max_tokens, so reasoning can't
+  // starve the answer. Don't add one without re-testing.
+  const model = process.env.LLM_MODEL || "openai/gpt-oss-120b";
 
   // Retry a few times: a single transient LLM hiccup (rate-limit, 5xx, or a
   // response we couldn't parse) shouldn't waste the whole daily run.

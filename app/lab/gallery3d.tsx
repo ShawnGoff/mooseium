@@ -364,13 +364,18 @@ export function ProxyArtwork({
     img.crossOrigin = "anonymous";
     img.onload = () => {
       if (cancelled) return;
-      // Texture budget, not image quality: each of these becomes a GPU texture
-      // with mipmaps, so 1600px cost ~13.6MB of VRAM apiece. The museum can hold
-      // ~38 at once (2 streamed galleries x 11 pieces, plus wall placements),
-      // which ran to roughly half a gigabyte and lost the WebGL context outright
-      // on modest GPUs — the canvas dies with "THREE.WebGLRenderer: Context Lost"
-      // and takes the whole museum with it. 1024 costs ~5.6MB instead, a ~60%
-      // saving, and a painting on a wall a few metres away has no visible loss.
+      // Each of these becomes a mipmapped GPU texture: ~13.6MB of VRAM at 1600px
+      // versus ~5.6MB at 1024, and the museum keeps ~38 resident at once (2
+      // streamed galleries x 11 pieces, plus wall placements). At 1600 that is
+      // ~515MB and the WebGL context dies — "THREE.WebGLRenderer: Context Lost"
+      // — taking the whole museum with it.
+      //
+      // The evidence is a controlled pair on one machine: production at 1024 is
+      // stable, the same museum at 1600 crashes within a second of loading. Dev
+      // makes it worse still, because StrictMode mounts everything twice.
+      //
+      // So this is a budget, not a quality knob. Raise it only with the numbers
+      // from the context-loss report in Museum3D in hand.
       const maxDim = 1024;
       const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
       const cw = Math.max(1, Math.round(img.width * scale));

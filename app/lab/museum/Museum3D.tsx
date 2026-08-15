@@ -2997,9 +2997,10 @@ export default function Museum3D({
       <Canvas
         camera={{ fov: 52, position: tp.spawn }}
         gl={{ toneMappingExposure: 1.08, powerPreference: "high-performance" }}
-        // Cap at 1.5x rather than 2x: the framebuffer is the other big GPU
-        // allocation besides the textures, and it scales with the SQUARE of dpr —
-        // 2x costs 78% more than 1.5x for a difference few people can see.
+        // 1.5x, not 2x: the framebuffer is the other large GPU allocation beside
+        // the textures and it scales with the SQUARE of dpr, so 2x costs 78% more
+        // for a difference few people can see. Part of the same budget that keeps
+        // the context alive — see maxDim in gallery3d.
         dpr={isTouch || lite ? 1 : [1, 1.5]}
         onCreated={({ gl }) => {
           // Without this the museum just stops: losing the context is not a JS
@@ -3012,6 +3013,17 @@ export default function Museum3D({
               // Preventing the default lets the browser attempt a restore.
               e.preventDefault();
               setGlLost(true);
+              // Also to the console: Sentry is easy to miss locally, and these
+              // counts are what distinguish an exhausted budget from a driver
+              // fault. e.statusMessage carries the driver's own reason, if any.
+              console.warn("[museum] WebGL context lost", {
+                reason: (e as WebGLContextEvent).statusMessage || "(none given)",
+                textures: gl.info.memory.textures,
+                geometries: gl.info.memory.geometries,
+                drawCalls: gl.info.render.calls,
+                dpr: window.devicePixelRatio,
+                canvas: [canvas.width, canvas.height],
+              });
               // three.js already counts what is resident on the GPU, which is
               // exactly what we need to know: a loss with hundreds of textures
               // live means we overran the budget, not that a driver hiccuped.

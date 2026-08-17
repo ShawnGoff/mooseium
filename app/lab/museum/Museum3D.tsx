@@ -2693,6 +2693,11 @@ export default function Museum3D({
   const [selected, setSelected] = useState<Piece | null>(null);
   // Hide every HUD overlay (H, or the corner button) for a clean view.
   const [hideUI, setHideUI] = useState(false);
+  // The HUD steps back for the placard as well as for the hide-interface button.
+  // Once the scrim dims and blurs the room, chrome left at full brightness on top
+  // of it breaks the effect — half the screen recedes and half does not — and the
+  // placard is a modal moment anyway, so nothing behind it should compete.
+  const chromeHidden = hideUI || selected !== null;
   // The GPU dropped the WebGL context — the museum is frozen and needs a reload.
   const [glLost, setGlLost] = useState(false);
   const [isTouch] = useState(
@@ -3180,9 +3185,9 @@ export default function Museum3D({
 
       {/* The joystick goes too — it's the loudest thing on a phone screen, and
           drag-to-look still works while hidden. The corner button brings it back. */}
-      {isTouch && view === "ready" && !hideUI && <JoystickPad joyRef={joyRef} />}
+      {isTouch && view === "ready" && !chromeHidden && <JoystickPad joyRef={joyRef} />}
 
-      {isOwner && view === "ready" && !hideUI && (
+      {isOwner && view === "ready" && !chromeHidden && (
         <div
           style={{
             position: "absolute",
@@ -3553,7 +3558,7 @@ export default function Museum3D({
         />
       )}
 
-      {view === "ready" && station && !hideUI && (
+      {view === "ready" && station && !chromeHidden && (
         <button onClick={enterStation} style={stationPromptStyle}>
           {station.label}
           <span style={{ opacity: 0.6, marginLeft: 10, fontSize: 12 }}>
@@ -3566,7 +3571,7 @@ export default function Museum3D({
       <audio ref={audioRef} loop preload="none" src={MUSIC_TRACKS[trackIdx].src} />
       {/* Rain loop uses Web Audio (see the rain effect above) from public/rain.mp3 */}
 
-      {view === "ready" && !hideUI && (
+      {view === "ready" && !chromeHidden && (
         <div
           data-tour="music"
           style={{
@@ -3618,7 +3623,7 @@ export default function Museum3D({
 
       {/* Desktop: weather bottom-left, lifted to align with the middle of the
           music control stack on the right. */}
-      {view === "ready" && !isTouch && !hideUI && (
+      {view === "ready" && !isTouch && !chromeHidden && (
         <div
           data-tour="weather"
           style={{ ...skyToggleStyle, position: "absolute", bottom: 44, left: 14 }}
@@ -3627,7 +3632,7 @@ export default function Museum3D({
         </div>
       )}
 
-      {!hideUI && (
+      {!chromeHidden && (
       <div style={panelStyle}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           {view === "ready" && (
@@ -3653,7 +3658,9 @@ export default function Museum3D({
       )}
 
       {/* Always reachable, in a fixed corner, so hidden UI is never a dead end. */}
-      {view === "ready" && (
+      {/* Stays put when the HUD is hidden — that is the way back — but steps
+          aside for the placard, which has its own ways out. */}
+      {view === "ready" && !selected && (
         <button
           onClick={() => setHideUI((h) => !h)}
           style={hideUIBtnStyle}
@@ -3665,7 +3672,7 @@ export default function Museum3D({
         </button>
       )}
 
-      {view === "ready" && layout && layout.nav.length > 0 && !hideUI && (
+      {view === "ready" && layout && layout.nav.length > 0 && !chromeHidden && (
         <Directory
           nav={layout.nav}
           onPick={(i) => teleport(layout.nav[i].spawn, layout.nav[i].yaw)}

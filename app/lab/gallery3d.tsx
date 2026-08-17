@@ -28,6 +28,9 @@ export type Piece = {
   museum?: string;
   sourceUrl?: string;
   image?: string;
+  // Full-resolution copy for the zoom lightbox. `image` is capped around 800px
+  // so the placard loads fast, which is too soft once it fills the screen.
+  imageFull?: string;
 };
 export type GalleryPiece = {
   title: string;
@@ -41,6 +44,7 @@ export type GalleryPiece = {
   realW?: number; // real width in meters (from museum dimensions)
   realH?: number; // real height in meters
   image: string;
+  imageFull?: string; // biggest stored copy, for the zoom lightbox
   imageThumb?: string; // fallback if the main image fails to load
   feature?: boolean;
 };
@@ -454,6 +458,7 @@ export function ProxyArtwork({
           museum: piece.museum,
           sourceUrl: piece.sourceUrl,
           image: piece.image,
+          imageFull: piece.imageFull,
         }}
         onSelect={onSelect}
       />

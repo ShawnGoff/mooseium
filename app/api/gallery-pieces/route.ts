@@ -81,6 +81,12 @@ export async function GET(req: NextRequest) {
         realW: dims?.w,
         realH: dims?.h,
         image,
+        // Biggest stored copy, for the zoom lightbox. Deliberately prefers the
+        // museum's large original over our cached copy (which is only ~medium):
+        // zoom is the one place the extra pixels are the whole point. If that
+        // URL is one a CDN refuses to serve us, the lightbox falls back to
+        // `image`, which is already on screen and known good.
+        imageFull: a?.image_large_url || undefined,
         imageThumb: a?.image_thumb_url || undefined,
         feature: r.section === "feature",
       };

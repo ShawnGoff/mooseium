@@ -2634,6 +2634,8 @@ export default function Museum3D({
           museum: pl.piece.museum,
           sourceUrl: a.sourceUrl || undefined,
           image: a.image || pl.piece.image,
+          // /api/artwork already resolves a 2048px copy for exactly this.
+          imageFull: a.imageFull || undefined,
         });
     } catch {
       /* keep the basic card */
@@ -2693,6 +2695,9 @@ export default function Museum3D({
   const [selected, setSelected] = useState<Piece | null>(null);
   // Hide every HUD overlay (H, or the corner button) for a clean view.
   const [hideUI, setHideUI] = useState(false);
+  // Full-screen view of the selected artwork. Separate from `selected` so closing
+  // the zoom returns you to the placard rather than dumping you back in the room.
+  const [zoomed, setZoomed] = useState(false);
   // The HUD steps back for the placard as well as for the hide-interface button.
   // Once the scrim dims and blurs the room, chrome left at full brightness on top
   // of it breaks the effect — half the screen recedes and half does not — and the
@@ -2983,10 +2988,19 @@ export default function Museum3D({
   useEffect(() => {
     if (!selected) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setSelected(null);
+      if (e.key !== "Escape") return;
+      // Peel one layer at a time: zoom first, then the placard. Closing both at
+      // once would throw you back into the room from a single keypress.
+      if (zoomed) setZoomed(false);
+      else setSelected(null);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
+  }, [selected, zoomed]);
+
+  // A new selection always starts un-zoomed.
+  useEffect(() => {
+    if (!selected) setZoomed(false);
   }, [selected]);
 
   // H hides every overlay for an unobstructed look at the room (and for clean
@@ -3766,6 +3780,8 @@ export default function Museum3D({
                   el.src = selected.image;
                 }
               }}
+              onClick={() => setZoomed(true)}
+              title="Click to enlarge"
               style={{
                 width: "100%",
                 maxHeight: isTouch ? "34vh" : "48vh",
@@ -3773,6 +3789,7 @@ export default function Museum3D({
                 borderRadius: 8,
                 background: "#0d0b09",
                 marginBottom: 12,
+                cursor: "zoom-in",
               }}
             />
           )}
@@ -3813,6 +3830,60 @@ export default function Museum3D({
               </a>
             )}
           </div>
+        </div>
+      )}
+
+      {/* Zoom: the placard image is capped so the card stays readable, which is
+          no way to look at a painting. Sits above the placard rather than
+          replacing it, so closing the zoom returns you to the details. */}
+      {selected && zoomed && (selected.imageFull || selected.image) && (
+        <div
+          onClick={() => setZoomed(false)}
+          style={{
+            position: "absolute",
+            inset: 0,
+            zIndex: 30,
+            background: "rgba(8,7,6,0.94)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 24,
+            cursor: "zoom-out",
+          }}
+        >
+          <button
+            onClick={() => setZoomed(false)}
+            aria-label="Close enlarged view"
+            style={{ ...cardCloseXStyle, position: "absolute", top: 16, right: 16 }}
+          >
+            ✕
+          </button>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={`/api/img?url=${encodeURIComponent(selected.imageFull || selected.image!)}`}
+            alt={selected.title}
+            onError={(e) => {
+              // Three rungs, cheapest first: the proxied full-res, then the
+              // museum direct (some CDNs refuse our server but serve visitors),
+              // then the display image — which is already on screen behind this
+              // overlay, so it is guaranteed to load.
+              const el = e.currentTarget;
+              const full = selected.imageFull || selected.image!;
+              if (!el.dataset.step) {
+                el.dataset.step = "direct";
+                el.src = full;
+              } else if (el.dataset.step === "direct" && selected.image && selected.image !== full) {
+                el.dataset.step = "display";
+                el.src = `/api/img?url=${encodeURIComponent(selected.image)}`;
+              }
+            }}
+            style={{
+              maxWidth: "100%",
+              maxHeight: "100%",
+              objectFit: "contain",
+              borderRadius: 4,
+            }}
+          />
         </div>
       )}
     </div>

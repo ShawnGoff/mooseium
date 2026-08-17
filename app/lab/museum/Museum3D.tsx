@@ -2844,6 +2844,9 @@ export default function Museum3D({
     yaw: 0,
     k: 0,
   });
+  // Latest yaw, readable from effects without making them depend on `tp`.
+  const tpYawRef = useRef(0);
+  tpYawRef.current = tp.yaw;
   const dragRef = useRef(false);
   const joyRef = useRef({ x: 0, y: 0 });
   // Held movement keys, lifted so switching Visitor/Curator mode can clear them —
@@ -3039,6 +3042,36 @@ export default function Museum3D({
     posRef.current = { x: spawn[0], z: spawn[2] };
     setTp((t) => ({ spawn, yaw, k: t.k + 1 }));
   };
+
+  // Curator mode opens rooms that visitors never see, so switching back can
+  // leave you standing where the museum no longer is — outside the building,
+  // looking at its shell. `constrain` cannot rescue you: it only clamps MOVEMENT,
+  // and its fallback is the previous position, which is just as outside. So when
+  // the layout changes under us, check the floor is still there and step to the
+  // nearest point that is — the doorway you came through, usually, rather than
+  // the entrance, so you keep your bearings.
+  useEffect(() => {
+    if (!layout) return;
+    const { x, z } = posRef.current;
+    const inside = layout.walk.some((a) => x > a.x0 && x < a.x1 && z > a.z0 && z < a.z1);
+    if (inside) return;
+    const M = 0.15; // land inside the rect, not exactly on its edge
+    let best: [number, number] | null = null;
+    let bestD = Infinity;
+    for (const a of layout.walk) {
+      const cx = Math.min(Math.max(x, a.x0 + M), a.x1 - M);
+      const cz = Math.min(Math.max(z, a.z0 + M), a.z1 - M);
+      const d = (cx - x) ** 2 + (cz - z) ** 2;
+      if (d < bestD) {
+        bestD = d;
+        best = [cx, cz];
+      }
+    }
+    // Keep the last known facing rather than snapping to north — being moved is
+    // disorienting enough without also being spun round.
+    if (best) teleport([best[0], EYE_Y, best[1]], tpYawRef.current);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [layout]);
 
   // Weather + light controls, rendered bottom-left on desktop but grouped into
   // the bottom-right control column on phones.

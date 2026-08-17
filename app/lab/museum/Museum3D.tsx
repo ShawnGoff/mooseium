@@ -2972,6 +2972,18 @@ export default function Museum3D({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [station, denPanel]);
 
+  // Escape closes the placard. Now that a scrim dims the room behind it, the
+  // card reads as modal, and a modal you can only leave by hitting a small ✕ is
+  // a trap — clicking the scrim closes it too.
+  useEffect(() => {
+    if (!selected) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setSelected(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [selected]);
+
   // H hides every overlay for an unobstructed look at the room (and for clean
   // screenshots). The restore button stays put so the way back is always in the
   // same corner. Skipped while a panel owns the keyboard, and while typing.
@@ -3695,12 +3707,31 @@ export default function Museum3D({
         </div>
       )}
 
+      {/* Scrim behind the placard. The gallery walls are bright, so a dark card
+          laid straight on them has to carry all the contrast itself. The blur is
+          what does the real work — it reads as the room falling out of focus
+          while the placard holds it, rather than as a web modal. Skipped in lite
+          mode: backdrop-filter over a live WebGL canvas forces a framebuffer
+          readback every frame, which is exactly what lite exists to avoid. */}
+      {selected && (
+        <div
+          onClick={() => setSelected(null)}
+          style={{
+            position: "absolute",
+            inset: 0,
+            zIndex: 20,
+            background: "rgba(12,10,8,0.5)",
+            ...(lite ? null : { backdropFilter: "blur(3px)" }),
+          }}
+        />
+      )}
+
       {selected && (
         <div
           style={
             isTouch
-              ? { ...cardStyle, bottom: 150, maxHeight: "58vh", width: "92vw" }
-              : cardStyle
+              ? { ...cardStyle, zIndex: 21, bottom: 150, maxHeight: "58vh", width: "92vw" }
+              : { ...cardStyle, zIndex: 21 }
           }
         >
           {/* Always-visible close: sticks to the top of the card while the body

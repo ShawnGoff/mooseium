@@ -3058,11 +3058,7 @@ export default function Museum3D({
       <Canvas
         camera={{ fov: 52, position: tp.spawn }}
         gl={{ toneMappingExposure: 1.08, powerPreference: "high-performance" }}
-        // 1.5x, not 2x: the framebuffer is the other large GPU allocation beside
-        // the textures and it scales with the SQUARE of dpr, so 2x costs 78% more
-        // for a difference few people can see. Part of the same budget that keeps
-        // the context alive — see maxDim in gallery3d.
-        dpr={isTouch || lite ? 1 : [1, 1.5]}
+        dpr={isTouch || lite ? 1 : [1, 2]}
         onCreated={({ gl }) => {
           // Without this the museum just stops: losing the context is not a JS
           // exception, so nothing throws, nothing reports, and the canvas freezes

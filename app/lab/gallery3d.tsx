@@ -372,19 +372,18 @@ export function ProxyArtwork({
     img.crossOrigin = "anonymous";
     img.onload = () => {
       if (cancelled) return;
-      // Each of these becomes a mipmapped GPU texture: ~13.6MB of VRAM at 1600px
-      // versus ~5.6MB at 1024, and the museum keeps ~38 resident at once (2
-      // streamed galleries x 11 pieces, plus wall placements). At 1600 that is
-      // ~515MB and the WebGL context dies — "THREE.WebGLRenderer: Context Lost"
-      // — taking the whole museum with it.
+      // Each of these becomes a mipmapped GPU texture — ~13.6MB of VRAM at 1600px
+      // versus ~5.6MB at 1024 — and the museum keeps ~38 resident at once (2
+      // streamed galleries x 11 pieces, plus wall placements). That is a real
+      // budget worth remembering, but it is NOT what caused the "Context Lost"
+      // crash: that one died with textures: 0, geometries: 0, drawCalls: 0, before
+      // anything reached the GPU, and turned out to be StrictMode tearing down the
+      // renderer in dev. Capping here was treating the wrong cause.
       //
-      // The evidence is a controlled pair on one machine: production at 1024 is
-      // stable, the same museum at 1600 crashes within a second of loading. Dev
-      // makes it worse still, because StrictMode mounts everything twice.
-      //
-      // So this is a budget, not a quality knob. Raise it only with the numbers
-      // from the context-loss report in Museum3D in hand.
-      const maxDim = 1024;
+      // So keep the resolution — the paintings are the product. If a real device
+      // ever does run out, the context-loss report in Museum3D now arrives with a
+      // texture count, which is what a cap should be chosen from.
+      const maxDim = IS_TOUCH ? 1024 : 1600;
       const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
       const cw = Math.max(1, Math.round(img.width * scale));
       const ch = Math.max(1, Math.round(img.height * scale));

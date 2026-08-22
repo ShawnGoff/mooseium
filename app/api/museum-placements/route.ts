@@ -155,14 +155,30 @@ export async function POST(req: NextRequest) {
     pos_z: typeof body.posZ === "number" ? body.posZ : null,
   };
 
+  // Was this slot already holding this same piece? Dragging and nudging re-POST
+  // the whole row, and the collection sync below calls the museum's API — so
+  // without this check every arrow-key press costs an external round-trip to
+  // re-add art the collection already has. Read it before the upsert overwrites
+  // the answer; one indexed local read is far cheaper than that fetch.
+  const { data: prior } = await supabase
+    .from("museum_placements")
+    .select("source, external_id")
+    .eq("user_id", user.id)
+    .eq("slot_kind", row.slot_kind)
+    .eq("slot_key", row.slot_key)
+    .maybeSingle();
+  const p = prior as { source: string; external_id: string } | null;
+  const samePiece = !!p && p.source === row.source && p.external_id === row.external_id;
+
   const { error } = await supabase
     .from("museum_placements")
     .upsert(row, { onConflict: "user_id,slot_kind,slot_key" });
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
 
   // Also add the piece to its lazy per-location 2D collection (best-effort; the
-  // placement itself already succeeded).
-  const loc = locationFor(row.slot_key);
+  // placement itself already succeeded). Skipped for a move — the piece is
+  // already in the collection, and moving it on the wall does not change that.
+  const loc = samePiece ? null : locationFor(row.slot_key);
   if (loc) {
     try {
       const { data: found } = await supabase
@@ -283,7 +299,25 @@ export async function DELETE(req: NextRequest) {
         .maybeSingle();
       const galleryId = (gal as { id: string } | null)?.id;
       const artworkId = (art as { id: string } | null)?.id;
+
+      // A zone spans several walls — all four atrium walls share "Main Room" —
+      // so the same piece can hang more than once in it. Only unlink it from the
+      // 2D collection once the LAST copy is gone, or removing one of a pair
+      // would strip it from the collection while it is still on the wall.
+      let stillHanging = false;
       if (galleryId && artworkId) {
+        const { data: rest } = await supabase
+          .from("museum_placements")
+          .select("slot_key")
+          .eq("user_id", user.id)
+          .eq("source", ex.source)
+          .eq("external_id", ex.external_id);
+        stillHanging = ((rest as { slot_key: string }[] | null) ?? []).some(
+          (r) => locationFor(r.slot_key)?.slot === loc.slot
+        );
+      }
+
+      if (galleryId && artworkId && !stillHanging) {
         await supabase
           .from("placed_artworks")
           .delete()

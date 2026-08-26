@@ -9,6 +9,8 @@ import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/client";
 import { getAdapter } from "@/lib/museums";
 import { decodeEntities } from "@/lib/util/text";
+import { publicCache } from "@/lib/http-cache";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 // Free-placed art also lives in a lazy per-location 2D collection. These are
 // marked in_museum=false so /api/museum never turns them into 3D rooms — they're
@@ -50,6 +52,9 @@ type Row = {
 };
 
 export async function GET(req: NextRequest) {
+  const limited = await checkRateLimit(req, "museum-placements", 120, 60_000);
+  if (limited) return limited;
+
   if (!isSupabaseConfigured()) return NextResponse.json({ placements: [] });
 
   const handle = (req.nextUrl.searchParams.get("u") || "").replace(/^@/, "").toLowerCase();
@@ -113,7 +118,9 @@ export async function GET(req: NextRequest) {
     },
   }));
 
-  return NextResponse.json({ placements });
+  // Matches /api/museum: the two load together, so a mismatched TTL would let
+  // the walls and the rooms disagree for a while.
+  return NextResponse.json({ placements }, { headers: publicCache(30) });
 }
 
 // POST /api/museum-placements — create or replace the piece at a slot.

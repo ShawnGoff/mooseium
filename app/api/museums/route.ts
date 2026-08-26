@@ -3,7 +3,9 @@
 
 import { NextResponse } from "next/server";
 import { listMuseums } from "@/lib/museums";
+import { publicCache } from "@/lib/http-cache";
 
 export function GET() {
-  return NextResponse.json({ museums: listMuseums() });
+  // Which museums are wired up changes only on deploy.
+  return NextResponse.json({ museums: listMuseums() }, { headers: publicCache(600) });
 }

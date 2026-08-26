@@ -8,6 +8,8 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/client";
+import { publicCache } from "@/lib/http-cache";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 type GalRow = {
   name: string;
@@ -31,7 +33,10 @@ type ProfileRow = {
   museum_name: string | null;
 };
 
-export async function GET() {
+export async function GET(req: Request) {
+  const limited = await checkRateLimit(req, "discover-museums", 60, 60_000);
+  if (limited) return limited;
+
   if (!isSupabaseConfigured()) {
     return NextResponse.json({ museums: [] });
   }
@@ -109,5 +114,7 @@ export async function GET() {
     .filter((m): m is NonNullable<typeof m> => m !== null)
     .slice(0, 12);
 
-  return NextResponse.json({ museums });
+  // Homepage row, and the heaviest of these: it joins placed_artworks and
+  // artworks across every public gallery. Worth a long edge cache.
+  return NextResponse.json({ museums }, { headers: publicCache(300) });
 }

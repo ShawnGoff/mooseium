@@ -8,6 +8,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/client";
+import { publicCache } from "@/lib/http-cache";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 type ProfileRow = {
   id: string;
@@ -31,6 +33,11 @@ type Collection = { id: string; name: string; slug: string; count: number };
 type Wing = { name: string; collections: Collection[]; isDefault?: boolean };
 
 export async function GET(req: NextRequest) {
+  // Only bites on cache MISSES — a CDN hit never reaches this function — so it
+  // throttles someone walking many handles, not ordinary museum traffic.
+  const limited = await checkRateLimit(req, "museum", 120, 60_000);
+  if (limited) return limited;
+
   if (!isSupabaseConfigured()) {
     return NextResponse.json({ museum: null });
   }
@@ -94,12 +101,17 @@ export async function GET(req: NextRequest) {
   const curator = profile.display_name || `@${profile.username}`;
   const museumName = profile.museum_name || `${curator}'s Museum`;
 
-  return NextResponse.json({
-    museum: {
-      name: museumName,
-      curator,
-      handle: profile.username,
-      wings,
+  return NextResponse.json(
+    {
+      museum: {
+        name: museumName,
+        curator,
+        handle: profile.username,
+        wings,
+      },
     },
-  });
+    // Short window: a curator publishing a gallery wants visitors to see it
+    // soon, and their own reload cache-busts past this anyway.
+    { headers: publicCache(30) }
+  );
 }

@@ -40,3 +40,19 @@ export function isAllowedMuseumImage(url: string): boolean {
   if (host === cacheHost()) return true;
   return ALLOWED_DOMAINS.some((d) => host === d || host.endsWith("." + d));
 }
+
+// Museums whose images CANNOT reach a visitor unless we have cached a copy.
+//
+// Two things have to fail for a piece to render blank. /api/img runs on Vercel,
+// and some museum CDNs refuse datacenter IPs — measured against production:
+//
+//   met 200 · cleveland 200 · smithsonian 200 · harvard 502 · artic 502
+//
+// Harvard 502s too, but sends CORS headers, so ProxyArtwork's direct-from-museum
+// fallback rescues it in the browser. The Art Institute refuses that path as
+// well, leaving no route at all — those pieces fall back to a title card.
+//
+// So this list is "blocked at BOTH hops", not "blocked at the proxy". Anything
+// here must be cached by scripts/cache-artwork-images.mjs (run from a normal
+// connection — Vercel is the blocked party) or it will not display.
+export const MUSEUMS_NEEDING_CACHE = ["artic"];

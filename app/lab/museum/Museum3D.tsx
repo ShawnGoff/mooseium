@@ -29,6 +29,7 @@ import {
 import Tour, { type TourStep } from "@/app/components/Tour";
 import * as Sentry from "@sentry/nextjs";
 import { parseDims } from "@/lib/artwork-dimensions";
+import { cacheBust } from "@/lib/http-cache";
 
 const MUSEUM_TOUR_STEPS: TourStep[] = [
   {
@@ -2518,7 +2519,12 @@ export default function Museum3D({
     const h = resolveHandle();
     if (!h) return;
     try {
-      const d = await fetch(`/api/museum?u=${encodeURIComponent(h)}`).then((r) => r.json());
+      // Always bust the edge cache here. This only runs after the curator has
+      // just changed something, and serving them a 30s-old museum would look
+      // like the edit failed.
+      const d = await fetch(
+        `/api/museum?u=${encodeURIComponent(h)}&${cacheBust()}`
+      ).then((r) => r.json());
       const m = d.museum as Museum | null;
       if (m && Array.isArray(m.wings)) setMuseum(m);
     } catch {
@@ -2929,7 +2935,10 @@ export default function Museum3D({
       setView("empty");
       return;
     }
-    fetch(`/api/museum?u=${encodeURIComponent(h)}`)
+    // Owners skip the edge cache on first load too: they arrive straight from
+    // editing more often than not, and a stale museum reads as lost work.
+    // Visitors take the cached copy, which is the whole point.
+    fetch(`/api/museum?u=${encodeURIComponent(h)}${isOwner ? `&${cacheBust()}` : ""}`)
       .then((r) => r.json())
       .then((d) => {
         const m = d.museum as Museum | null;
@@ -2946,7 +2955,7 @@ export default function Museum3D({
       .catch(() => setView("empty"));
 
     // Free-standing wall placements (paintings hung outside the galleries).
-    fetch(`/api/museum-placements?u=${encodeURIComponent(h)}`)
+    fetch(`/api/museum-placements?u=${encodeURIComponent(h)}${isOwner ? `&${cacheBust()}` : ""}`)
       .then((r) => r.json())
       .then((d) => setPlacements((d.placements as WallPlacement[]) ?? []))
       .catch(() => {});

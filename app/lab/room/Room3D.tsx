@@ -113,6 +113,10 @@ function Player({
     let startX = 0;
     let startY = 0;
     const pd = (e: PointerEvent) => {
+      // Primary button only — see the matching guard in gallery3d's Player. A
+      // right-click started a look-drag whose pointerup the context menu then
+      // ate, stranding the camera in a permanent spin.
+      if (e.button !== 0) return;
       dragging = true;
       lastX = startX = e.clientX;
       lastY = startY = e.clientY;
@@ -133,9 +137,19 @@ function Player({
       dragging = false;
       window.setTimeout(() => (dragRef.current = false), 0);
     };
+    const endDrag = () => {
+      if (!dragging) return;
+      dragging = false;
+      window.setTimeout(() => (dragRef.current = false), 0);
+    };
+    const ctx = (e: MouseEvent) => e.preventDefault();
+
     el.addEventListener("pointerdown", pd);
     window.addEventListener("pointermove", pm);
     window.addEventListener("pointerup", pu);
+    window.addEventListener("pointercancel", endDrag);
+    window.addEventListener("blur", endDrag);
+    el.addEventListener("contextmenu", ctx);
 
     return () => {
       window.removeEventListener("keydown", kd);
@@ -143,6 +157,9 @@ function Player({
       el.removeEventListener("pointerdown", pd);
       window.removeEventListener("pointermove", pm);
       window.removeEventListener("pointerup", pu);
+      window.removeEventListener("pointercancel", endDrag);
+      window.removeEventListener("blur", endDrag);
+      el.removeEventListener("contextmenu", ctx);
     };
   }, [gl, dragRef]);
 
@@ -204,6 +221,7 @@ function Frame({
       <mesh
         position={[0, 0, 0.02]}
         onClick={(e: ThreeEvent<MouseEvent>) => {
+          if (e.nativeEvent.button !== 0) return; // primary button only
           e.stopPropagation();
           onSelect(piece);
         }}

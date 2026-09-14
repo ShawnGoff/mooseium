@@ -265,6 +265,7 @@ function Hotspot({ anchor, onPick }: { anchor: WallAnchor; onPick: (k: string) =
     <group position={anchor.position} rotation={anchor.rotation}>
       <mesh
         onClick={(e) => {
+          if (e.nativeEvent.button !== 0) return; // primary button only
           e.stopPropagation();
           onPick(anchor.slotKey);
         }}

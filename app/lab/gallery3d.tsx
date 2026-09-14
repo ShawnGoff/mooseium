@@ -165,6 +165,12 @@ export function Player({
     let startY = 0;
     const pd = (e: PointerEvent) => {
       if (dragging || pausedRef?.current) return;
+      // Primary button only. Right- and middle-click used to start a look-drag
+      // too, and the browser then opened its context menu, which swallowed the
+      // pointerup that ends the drag — leaving `dragging` stuck true so the
+      // camera kept spinning with every later mouse move. Touch and pen both
+      // report button 0 on contact, so this does not affect them.
+      if (e.button !== 0) return;
       dragging = true;
       activeId = e.pointerId;
       lastX = startX = e.clientX;
@@ -188,9 +194,26 @@ export function Player({
       activeId = -1;
       window.setTimeout(() => (dragRef.current = false), 0);
     };
+    // Belt and braces for the same failure: if a pointerup is ever lost — the
+    // pointer is cancelled, or focus leaves mid-drag — drop the drag rather than
+    // leave the camera following the mouse forever.
+    const endDrag = () => {
+      if (!dragging) return;
+      dragging = false;
+      activeId = -1;
+      window.setTimeout(() => (dragRef.current = false), 0);
+    };
+    // The browser context menu is useless over a 3D viewport and it is what eats
+    // the pointerup. Suppress it on the canvas only, so right-click elsewhere on
+    // the page (links, the HUD, text) behaves normally.
+    const ctx = (e: MouseEvent) => e.preventDefault();
+
     el.addEventListener("pointerdown", pd);
     window.addEventListener("pointermove", pm);
     window.addEventListener("pointerup", pu);
+    window.addEventListener("pointercancel", endDrag);
+    window.addEventListener("blur", endDrag);
+    el.addEventListener("contextmenu", ctx);
     return () => {
       window.removeEventListener("keydown", kd);
       window.removeEventListener("keyup", ku);
@@ -198,6 +221,9 @@ export function Player({
       el.removeEventListener("pointerdown", pd);
       window.removeEventListener("pointermove", pm);
       window.removeEventListener("pointerup", pu);
+      window.removeEventListener("pointercancel", endDrag);
+      window.removeEventListener("blur", endDrag);
+      el.removeEventListener("contextmenu", ctx);
     };
   }, [gl, dragRef]);
 
@@ -305,6 +331,11 @@ export function Frame({
       <mesh
         position={[0, 0, 0.02]}
         onClick={(e: ThreeEvent<MouseEvent>) => {
+          // r3f synthesises onClick from pointer events and does not filter by
+          // button, so without this a right-click opens the placard — which now
+          // that the canvas suppresses the context menu would be the only thing
+          // right-click did.
+          if (e.nativeEvent.button !== 0) return;
           e.stopPropagation();
           onSelect(piece);
         }}

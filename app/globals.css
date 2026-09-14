@@ -2656,12 +2656,23 @@ a {
   padding: 8px 2px 14px;
   scroll-snap-type: x proximity;
 }
-.cat-row::-webkit-scrollbar {
-  height: 8px;
+/* Horizontal shelves: hide the scrollbar, keep the scrolling.
+   The bar draws a grey rail under every row — permanently, for anyone whose macOS
+   is set to "always show scrollbars" rather than overlay them — and stacked three
+   or four shelves deep that reads as chrome rather than content. The affordance
+   survives without it: each row deliberately cuts the last card off at the edge,
+   which is what tells you there is more. Wheel, trackpad, drag and keyboard
+   scrolling are all unaffected; only the painted bar goes. */
+.art-shelf-row,
+.cat-row,
+.den-shelf-row {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* legacy Edge */
 }
-.cat-row::-webkit-scrollbar-thumb {
-  background: var(--border-2);
-  border-radius: 8px;
+.art-shelf-row::-webkit-scrollbar,
+.cat-row::-webkit-scrollbar,
+.den-shelf-row::-webkit-scrollbar {
+  display: none; /* WebKit / Blink */
 }
 .cat-card {
   flex: 0 0 190px;

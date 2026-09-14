@@ -2394,6 +2394,12 @@ export default function Museum3D({
   // The owner's real galleries with visibility + wing. Hidden ones drop out of
   // /api/museum, so the toggles/grouping list them from here instead.
   const [myGalleries, setMyGalleries] = useState<GalleryVis[]>([]);
+  // Pieces that will hang as blank title cards for visitors: some museum CDNs
+  // refuse Vercel's IPs, and for those museums the browser's direct fallback is
+  // refused too, so a piece with no cached copy has no route to a visitor at all.
+  // Caching is a manual step run from a normal connection, so without this the
+  // curator only finds out by walking past an empty frame.
+  const [uncached, setUncached] = useState<{ count: number; fix: string } | null>(null);
   async function refreshGalleries() {
     if (!isOwner) return;
     try {
@@ -2456,7 +2462,13 @@ export default function Museum3D({
       .then((r) => r.json())
       .then((d) => setMyGalleries(d.collections ?? []))
       .catch(() => {});
-  }, [isOwner]);
+    // Re-checked whenever the museum reloads, so caching a batch makes the
+    // warning disappear rather than lingering until a full refresh.
+    fetch("/api/uncached-art")
+      .then((r) => r.json())
+      .then((d) => setUncached(d?.count > 0 ? { count: d.count, fix: d.fix } : null))
+      .catch(() => {});
+  }, [isOwner, galleryVersion]);
 
   // Label for the wall-art orphan group (art whose wall became a doorway). The
   // edit panel groups placements by area inline; this is the shared header for
@@ -3397,6 +3409,45 @@ export default function Museum3D({
             Walk up to a wall and click a ＋ to hang art. Remove pieces you&rsquo;ve
             hung below.
           </div>
+
+          {/* Only the curator can act on this, and only outside the browser, so
+              it names the exact command rather than offering a button that
+              could not work from here. */}
+          {uncached && (
+            <div
+              style={{
+                marginBottom: 10,
+                padding: "8px 10px",
+                borderRadius: 6,
+                border: "1px solid #7a5c2e",
+                background: "rgba(200,161,90,0.10)",
+                fontSize: 12,
+                lineHeight: 1.5,
+              }}
+            >
+              <div style={{ color: "#e6d3a3", fontWeight: 600 }}>
+                {uncached.count} piece{uncached.count === 1 ? "" : "s"} will look blank
+              </div>
+              <div style={{ opacity: 0.8, marginTop: 2 }}>
+                Their museum blocks our server, so visitors see a title card. Cache
+                them from your own machine:
+              </div>
+              <code
+                style={{
+                  display: "block",
+                  marginTop: 6,
+                  padding: "5px 6px",
+                  borderRadius: 4,
+                  background: "rgba(0,0,0,0.35)",
+                  color: "#d8bd85",
+                  fontSize: 11,
+                  wordBreak: "break-all",
+                }}
+              >
+                {uncached.fix}
+              </code>
+            </div>
+          )}
           <button
             onClick={createGallery}
             style={{

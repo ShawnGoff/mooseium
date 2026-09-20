@@ -930,7 +930,15 @@ function hangRoom(
   const cx = (room.x0 + room.x1) / 2;
   const cz = (room.z0 + room.z1) / 2;
   const wallHalf = (horiz ? room.x1 - room.x0 : room.z1 - room.z0) / 2;
-  for (let i = mainCount; i < pieces.length; i++) {
+  // Two slots only — one each side of the doorway. Anything beyond that has
+  // nowhere to go, and silently stacking it produced two paintings sharing a
+  // point: z-fighting rendered them as an interleaved checkerboard of both
+  // images. `sign` only ever distinguished idx 0, so every surplus piece landed
+  // on the same spot. Callers cap at GALLERY_CAP; this guard makes the limit
+  // structural rather than a convention a caller can forget — which is exactly
+  // how the source museums slipped past it.
+  const entrySlots = Math.min(pieces.length - mainCount, 2);
+  for (let i = mainCount; i < mainCount + entrySlots; i++) {
     const idx = i - mainCount;
     const sign = idx === 0 ? -1 : 1;
     const w = sizeOf(pieces[i]).w;
@@ -963,12 +971,15 @@ function GalleryFull({
   onSelect: (p: Piece) => void;
 }) {
   const [pieces, setPieces] = useState<GalleryPiece[] | null>(
-    gallery.pieces ?? pieceCache.get(gallery.slug) ?? null
+    gallery.pieces?.slice(0, GALLERY_CAP) ?? pieceCache.get(gallery.slug) ?? null
   );
   useEffect(() => {
-    // Source-museum showcases carry their pieces inline — no fetch.
+    // Source-museum showcases carry their pieces inline — no fetch. Cap them the
+    // same way the fetched path does: skipping it sent all 11 into hangRoom,
+    // which has room for 8, and the surplus stacked on one point of the entry
+    // wall (see the sign/slot fix there).
     if (gallery.pieces) {
-      setPieces(gallery.pieces);
+      setPieces(gallery.pieces.slice(0, GALLERY_CAP));
       return;
     }
     if (pieceCache.has(gallery.slug)) {
@@ -999,15 +1010,20 @@ function GalleryFull({
   // Pre-wrapping here double-proxied them into a 400 and a blank title card.
   return (
     <>
-      {pieces.map((p, i) => (
-        <ProxyArtwork
-          key={i}
-          piece={p}
-          position={spots[i].position}
-          rotation={spots[i].rotation}
-          onSelect={onSelect}
-        />
-      ))}
+      {pieces.map((p, i) =>
+        // hangRoom only hands out as many slots as the room has. A piece with no
+        // slot is not hung — better an absent painting than one stacked on top of
+        // another, and better than reading .position off undefined.
+        spots[i] ? (
+          <ProxyArtwork
+            key={i}
+            piece={p}
+            position={spots[i].position}
+            rotation={spots[i].rotation}
+            onSelect={onSelect}
+          />
+        ) : null
+      )}
     </>
   );
 }

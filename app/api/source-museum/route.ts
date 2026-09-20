@@ -178,7 +178,12 @@ export async function GET(req: NextRequest) {
   // keeps us off the museum APIs on every visit.
   const museum = await unstable_cache(
     () => buildSourceMuseum(slug),
-    ["source-museum", slug],
+    // The version segment is part of the cache KEY. Without bumping it, a change
+    // to what this route builds stays invisible for up to a week — the entry
+    // already cached keeps being served, so real dimensions would not reach a
+    // museum anyone had already visited. Bump this whenever the shape or content
+    // of a piece changes. v2: pieces carry realW/realH, cap dropped 11 -> 8.
+    ["source-museum", "v2", slug],
     { revalidate: 60 * 60 * 24 * 7 }
   )();
   return NextResponse.json({ museum });

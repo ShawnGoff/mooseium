@@ -75,7 +75,22 @@ const DOORH = 3.6; // doorway height
 const CORR_HALF = 1.8; // corridor half-width
 const DOOR_HALF = 1.5; // doorway half-width
 const WING_HALF = 5; // wing room half-size
-const GALLERY_CAP = 11; // max pieces a gallery displays (3 walls + entry wall)
+// Max pieces a gallery displays: 2 on each of the 3 solid walls, plus 2 flanking
+// the entry doorway.
+//
+// It was 11, which never fitted. A gallery room is 9m square and the corner
+// margin leaves 6.8m of usable wall, but 11 put 3 pieces per wall — an 8.2m run
+// on a 6.8m wall. The spacing maths could not save it either: the gap is clamped
+// to a 0.8m floor, so when pieces are already too wide the run grows WIDER
+// rather than tightening, and centring then spills it off both corners. Measured
+// across the four source museums, 35 of 36 galleries overflowed by 1.4m — about
+// 0.7m hanging past each corner.
+//
+// 8 is the largest value where nothing overflows anywhere (verified against the
+// same 36 galleries). Deliberately fixed rather than derived from room size: the
+// floor plan is load-bearing for corridors, doorways and wall anchors, and is
+// not worth disturbing for this.
+const GALLERY_CAP = 8;
 const COLL_HALF = 4.5; // gallery room half-size
 const ATR_WING_CORR = 10; // atrium→wing corridor length (spaces the wings out)
 const WING_COLL_CORR = 3; // wing→gallery corridor length

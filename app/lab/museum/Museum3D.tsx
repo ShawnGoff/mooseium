@@ -911,8 +911,13 @@ function hangRoom(
     const n = bin.items.length;
     const widths = bin.items.map((i) => sizeOf(pieces[i]).w);
     const sumW = widths.reduce((s, w) => s + w, 0);
-    // Even spacing: share the leftover wall width between pieces, clamped so they
-    // never touch and never drift too far apart — regardless of size mix.
+    // Even spacing, bounded at both ends: pieces must never touch, and must not
+    // drift so far apart that a wall of small works reads as two stamps in a
+    // field. Letting the gap grow to fill the wall was tried and looked worse —
+    // Cleveland's landscapes are genuinely 0.25-0.5m, and spreading them corner
+    // to corner made the room look abandoned. The bare wall that prompted this
+    // came from every piece rendering at the same 1.7m fallback height, which
+    // real dimensions fix at the source.
     const gap = n > 1 ? Math.max(0.8, Math.min(2.4, (bin.len - sumW) / (n - 1))) : 0;
     let cursor = (bin.a + bin.b) / 2 - (sumW + gap * (n - 1)) / 2;
     bin.items.forEach((i, k) => {

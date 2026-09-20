@@ -23,6 +23,24 @@ if (dsn) {
       "ResizeObserver loop",
       "AbortError",
       "Non-Error promise rejection captured",
+      // A blocked third-party script rejects with a DOM Event rather than an
+      // Error, and Sentry words that case differently from the line above, so it
+      // slipped through. Ad blockers and Edge's tracking prevention (on by
+      // default) block the Vercel analytics scripts for a large share of real
+      // visitors, so this fires on ordinary pageviews — not just the bot traffic
+      // that made us notice it. Nothing here is actionable: the app has no
+      // promise that rejects with an Event.
+      "captured as promise rejection",
+      "Object captured as promise rejection",
+      // Deliberately NOT filtering "Failed to fetch" and friends here, tempting
+      // though it is: that is the generic message for ANY network failure,
+      // including our own API calls, so suppressing it would hide real breakage
+      // to silence some ad-blocker noise. denyUrls below is the targeted way to
+      // drop the third-party version without losing ours.
     ],
+    // Belt and braces: drop anything whose stack sits in third-party analytics
+    // rather than our own bundle. ignoreErrors matches on message, which shifts
+    // between browsers and SDK versions; this matches on origin, which does not.
+    denyUrls: [/\/_vercel\/(insights|speed-insights)\//, /vitals\.vercel-insights\.com/],
   });
 }

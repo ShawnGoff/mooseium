@@ -18,6 +18,17 @@ import type {
 } from "./types";
 
 const MET_BASE = "https://collectionapi.metmuseum.org/public/collection/v1";
+// Search moved to v1.1 when the Met retired /v1/search on 2026-10-01 — the old
+// path now answers 410 Gone, which broke every Met search: the museum's own
+// search, its source-museum rooms, the homepage theme cards, and the Met share
+// of the daily discovery shelves. Object lookups stay on v1, which is untouched.
+//
+// The difference that matters: /v1/search was Solr-backed and returned EVERY
+// matching id in one response, so paging was a local slice. v1.1 is Elastic and
+// pages server-side via offset/limit, reporting `total` itself — so we ask for
+// the page we want instead of asking for everything and cutting it up.
+const MET_SEARCH_BASE =
+  "https://collectionapi.metmuseum.org/public/collection/v1.1";
 const SMALL_MAX_WIDTH = 800; // Met's primaryImageSmall ("web-large") is roughly this wide
 
 interface MetObject {
@@ -178,19 +189,35 @@ export const metAdapter: MuseumAdapter = {
       }
     }
 
-    const search = await fetchJson<MetSearchResponse>(`${MET_BASE}/search?${qs}`);
-    const allIds = search.objectIDs ?? [];
-    const total = allIds.length;
+    // Ask for exactly this page. The old endpoint handed back the entire result
+    // set — tens of thousands of ids for a broad term like "landscape" — and we
+    // sliced it; v1.1 does that server-side.
+    // Ask for MORE ids than the page needs. Plenty of matches are dropped during
+    // hydration — not open access, or no usable image — and the Met counts them
+    // as matches anyway, so a page of ids can hydrate to nothing. "flowers"
+    // returned six ids and zero usable cards, which is why that theme card was
+    // blank while its neighbours were fine. Each page consumes a whole window, so
+    // windows never overlap and pages stay distinct.
+    const OVERFETCH = 3;
+    const windowSize = pageSize * OVERFETCH;
+    const start = (page - 1) * windowSize;
+    qs.set("limit", String(windowSize));
+    qs.set("offset", String(start));
 
-    const start = (page - 1) * pageSize;
-    const pageIds = allIds.slice(start, start + pageSize);
+    const search = await fetchJson<MetSearchResponse>(
+      `${MET_SEARCH_BASE}/search?${qs}`
+    );
+    const windowIds = search.objectIDs ?? [];
+    // `total` is now the match count the Met reports, not the length of what it
+    // returned — those were the same thing before and are not any more.
+    const total = search.total ?? windowIds.length;
 
     // The Met has no classification search param, so filter type on our side.
     const wantType = filters.objectType
       ? String(filters.objectType).toLowerCase()
       : null;
 
-    const hydrated = await mapLimit(pageIds, 6, async (id) => {
+    const hydrateOne = async (id: number) => {
       try {
         const obj = await fetchJson<MetObject>(`${MET_BASE}/objects/${id}`);
         const art = normalize(obj);
@@ -205,11 +232,27 @@ export const metAdapter: MuseumAdapter = {
       } catch {
         return null; // skip individual failures rather than failing the page
       }
-    });
+    };
 
-    const cards = hydrated.filter((c): c is ArtworkCard => c !== null);
+    // Hydrate a chunk at a time and stop as soon as the page is full, so the
+    // common case still costs pageSize lookups rather than three times that.
+    const cards: ArtworkCard[] = [];
+    for (let i = 0; i < windowIds.length && cards.length < pageSize; i += pageSize) {
+      const hydrated = await mapLimit(windowIds.slice(i, i + pageSize), 6, hydrateOne);
+      for (const c of hydrated) if (c) cards.push(c);
+    }
+    cards.length = Math.min(cards.length, pageSize);
 
-    return { cards, page, pageSize, total, hasMore: start + pageSize < total };
+    // Measure "is there another page" against what the Met actually returned,
+    // not against pageSize: on the last page it returns fewer ids than asked,
+    // and start + pageSize could otherwise claim a page that does not exist.
+    return {
+      cards,
+      page,
+      pageSize,
+      total,
+      hasMore: start + windowIds.length < total,
+    };
   },
 
   async getObject(museumObjectId: string): Promise<NormalizedArtwork> {

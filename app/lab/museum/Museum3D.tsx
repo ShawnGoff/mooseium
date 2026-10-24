@@ -70,8 +70,8 @@ type Museum = { name: string; curator: string; handle: string; wings: Wing[] };
 
 // ---- dimensions (metres) ----
 const A = 7; // atrium half-size
-const H = 6; // wall height
-const DOORH = 3.6; // doorway height
+const H = 4; // wall height
+const DOORH = 2.6; // doorway height
 const CORR_HALF = 1.8; // corridor half-width
 const DOOR_HALF = 1.5; // doorway half-width
 const WING_HALF = 5; // wing room half-size
@@ -860,7 +860,7 @@ function hangRoom(
   const REN_MAX_W = 5.5;
   const sizeOf = (p: GalleryPiece) =>
     p.realW && p.realH
-      ? { w: Math.min(REN_MAX_W, Math.max(1.2, p.realW)), h: Math.min(3.8, Math.max(0.35, p.realH)) }
+      ? { w: Math.min(REN_MAX_W, Math.max(1.2, p.realW)), h: Math.min(2.8, Math.max(0.35, p.realH)) }
       : // No real dimensions: reserve a MODERATE width. (Reserving the renderer's
         // 3.2 worst case made two such pieces overflow a short wall and get shoved
         // into the corners. Most no-dimension pieces render ~1.3–2.2 wide.)

@@ -50,7 +50,7 @@ export type GalleryPiece = {
 };
 
 const MAX_W = 5.5;
-const MAX_H = 4.4;
+const MAX_H = 2.8;
 
 export const MUSEUM_LABEL: Record<string, string> = {
   met: "The Met",

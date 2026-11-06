@@ -70,12 +70,27 @@ type Museum = { name: string; curator: string; handle: string; wings: Wing[] };
 
 // ---- dimensions (metres) ----
 const A = 7; // atrium half-size
-const H = 6; // wall height
-const DOORH = 3.6; // doorway height
+const H = 4; // wall height
+const DOORH = 2.6; // doorway height
 const CORR_HALF = 1.8; // corridor half-width
 const DOOR_HALF = 1.5; // doorway half-width
 const WING_HALF = 5; // wing room half-size
-const GALLERY_CAP = 11; // max pieces a gallery displays (3 walls + entry wall)
+// Max pieces a gallery displays: 2 on each of the 3 solid walls, plus 2 flanking
+// the entry doorway.
+//
+// It was 11, which never fitted. A gallery room is 9m square and the corner
+// margin leaves 6.8m of usable wall, but 11 put 3 pieces per wall — an 8.2m run
+// on a 6.8m wall. The spacing maths could not save it either: the gap is clamped
+// to a 0.8m floor, so when pieces are already too wide the run grows WIDER
+// rather than tightening, and centring then spills it off both corners. Measured
+// across the four source museums, 35 of 36 galleries overflowed by 1.4m — about
+// 0.7m hanging past each corner.
+//
+// 8 is the largest value where nothing overflows anywhere (verified against the
+// same 36 galleries). Deliberately fixed rather than derived from room size: the
+// floor plan is load-bearing for corridors, doorways and wall anchors, and is
+// not worth disturbing for this.
+const GALLERY_CAP = 8;
 const COLL_HALF = 4.5; // gallery room half-size
 const ATR_WING_CORR = 10; // atrium→wing corridor length (spaces the wings out)
 const WING_COLL_CORR = 3; // wing→gallery corridor length
@@ -845,7 +860,7 @@ function hangRoom(
   const REN_MAX_W = 5.5;
   const sizeOf = (p: GalleryPiece) =>
     p.realW && p.realH
-      ? { w: Math.min(REN_MAX_W, Math.max(1.2, p.realW)), h: Math.min(3.8, Math.max(0.35, p.realH)) }
+      ? { w: Math.min(REN_MAX_W, Math.max(1.2, p.realW)), h: Math.min(2.8, Math.max(0.35, p.realH)) }
       : // No real dimensions: reserve a MODERATE width. (Reserving the renderer's
         // 3.2 worst case made two such pieces overflow a short wall and get shoved
         // into the corners. Most no-dimension pieces render ~1.3–2.2 wide.)
@@ -896,8 +911,13 @@ function hangRoom(
     const n = bin.items.length;
     const widths = bin.items.map((i) => sizeOf(pieces[i]).w);
     const sumW = widths.reduce((s, w) => s + w, 0);
-    // Even spacing: share the leftover wall width between pieces, clamped so they
-    // never touch and never drift too far apart — regardless of size mix.
+    // Even spacing, bounded at both ends: pieces must never touch, and must not
+    // drift so far apart that a wall of small works reads as two stamps in a
+    // field. Letting the gap grow to fill the wall was tried and looked worse —
+    // Cleveland's landscapes are genuinely 0.25-0.5m, and spreading them corner
+    // to corner made the room look abandoned. The bare wall that prompted this
+    // came from every piece rendering at the same 1.7m fallback height, which
+    // real dimensions fix at the source.
     const gap = n > 1 ? Math.max(0.8, Math.min(2.4, (bin.len - sumW) / (n - 1))) : 0;
     let cursor = (bin.a + bin.b) / 2 - (sumW + gap * (n - 1)) / 2;
     bin.items.forEach((i, k) => {
@@ -915,7 +935,15 @@ function hangRoom(
   const cx = (room.x0 + room.x1) / 2;
   const cz = (room.z0 + room.z1) / 2;
   const wallHalf = (horiz ? room.x1 - room.x0 : room.z1 - room.z0) / 2;
-  for (let i = mainCount; i < pieces.length; i++) {
+  // Two slots only — one each side of the doorway. Anything beyond that has
+  // nowhere to go, and silently stacking it produced two paintings sharing a
+  // point: z-fighting rendered them as an interleaved checkerboard of both
+  // images. `sign` only ever distinguished idx 0, so every surplus piece landed
+  // on the same spot. Callers cap at GALLERY_CAP; this guard makes the limit
+  // structural rather than a convention a caller can forget — which is exactly
+  // how the source museums slipped past it.
+  const entrySlots = Math.min(pieces.length - mainCount, 2);
+  for (let i = mainCount; i < mainCount + entrySlots; i++) {
     const idx = i - mainCount;
     const sign = idx === 0 ? -1 : 1;
     const w = sizeOf(pieces[i]).w;
@@ -948,12 +976,15 @@ function GalleryFull({
   onSelect: (p: Piece) => void;
 }) {
   const [pieces, setPieces] = useState<GalleryPiece[] | null>(
-    gallery.pieces ?? pieceCache.get(gallery.slug) ?? null
+    gallery.pieces?.slice(0, GALLERY_CAP) ?? pieceCache.get(gallery.slug) ?? null
   );
   useEffect(() => {
-    // Source-museum showcases carry their pieces inline — no fetch.
+    // Source-museum showcases carry their pieces inline — no fetch. Cap them the
+    // same way the fetched path does: skipping it sent all 11 into hangRoom,
+    // which has room for 8, and the surplus stacked on one point of the entry
+    // wall (see the sign/slot fix there).
     if (gallery.pieces) {
-      setPieces(gallery.pieces);
+      setPieces(gallery.pieces.slice(0, GALLERY_CAP));
       return;
     }
     if (pieceCache.has(gallery.slug)) {
@@ -984,15 +1015,20 @@ function GalleryFull({
   // Pre-wrapping here double-proxied them into a 400 and a blank title card.
   return (
     <>
-      {pieces.map((p, i) => (
-        <ProxyArtwork
-          key={i}
-          piece={p}
-          position={spots[i].position}
-          rotation={spots[i].rotation}
-          onSelect={onSelect}
-        />
-      ))}
+      {pieces.map((p, i) =>
+        // hangRoom only hands out as many slots as the room has. A piece with no
+        // slot is not hung — better an absent painting than one stacked on top of
+        // another, and better than reading .position off undefined.
+        spots[i] ? (
+          <ProxyArtwork
+            key={i}
+            piece={p}
+            position={spots[i].position}
+            rotation={spots[i].rotation}
+            onSelect={onSelect}
+          />
+        ) : null
+      )}
     </>
   );
 }

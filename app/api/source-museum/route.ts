@@ -9,6 +9,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { unstable_cache } from "next/cache";
 import { getAdapter } from "@/lib/museums";
+import { parseDims } from "@/lib/artwork-dimensions";
 
 const MUSEUM_NAMES: Record<string, string> = {
   met: "The Metropolitan Museum of Art",
@@ -49,7 +50,16 @@ const WINGS: { name: string; galleries: { name: string; query: string }[] }[] = 
   },
 ];
 
-type SourcePiece = { title: string; artist?: string; image: string; museum: string };
+type SourcePiece = {
+  title: string;
+  artist?: string;
+  image: string;
+  museum: string;
+  // Real-world size in metres, when the museum states it. Drives both how large
+  // the piece hangs and how much wall the layout reserves for it.
+  realW?: number;
+  realH?: number;
+};
 type SourceCollection = {
   id: string;
   name: string;
@@ -59,7 +69,49 @@ type SourceCollection = {
 };
 type SourceWing = { name: string; collections: SourceCollection[] };
 
-const GALLERY_CAP = 11;
+// Matches the 3D museum's own cap. It was 11, which sent three more pieces than
+// a gallery room can hang — the surplus stacked on the entry wall and z-fought.
+// The client caps too, but building three extra pieces per gallery also meant
+// three needless getObject calls apiece.
+const GALLERY_CAP = 8;
+
+// Search results carry no dimensions, so every piece used to fall back to a
+// fixed 1.7m height and a 2.2m width reservation: a miniature and a large canvas
+// rendered identically, and the layout spaced everything around a phantom width
+// nearly double the real one. The full record has the museum's own dimensions
+// text, so resolve it per piece and parse it — the same treatment gallery pieces
+// already get. This is what lets a big canvas claim a wall to itself.
+//
+// Costs one extra museum call per piece, which is affordable only because this
+// route is cached for a week. Bounded concurrency keeps the burst off the
+// museums' rate limits, and a failure just leaves that piece undimensioned
+// rather than failing the gallery.
+async function withDimensions(
+  adapter: ReturnType<typeof getAdapter>,
+  pieces: SourcePiece[],
+  ids: string[]
+): Promise<SourcePiece[]> {
+  if (!adapter) return pieces;
+  const LIMIT = 6;
+  let cursor = 0;
+  async function worker() {
+    while (cursor < pieces.length) {
+      const i = cursor++;
+      try {
+        const art = await adapter!.getObject(ids[i]);
+        const dims = parseDims(art.dimensions);
+        if (dims) {
+          pieces[i].realW = dims.w;
+          pieces[i].realH = dims.h;
+        }
+      } catch {
+        /* leave this piece undimensioned; it renders at the fallback size */
+      }
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(LIMIT, pieces.length) }, worker));
+  return pieces;
+}
 
 async function resolveGallery(
   slug: string,
@@ -77,16 +129,19 @@ async function resolveGallery(
       hasImage: true,
       openAccessOnly: true,
     });
-    const pieces: SourcePiece[] = res.cards
-      .filter((c) => c.thumbnailUrl)
-      .slice(0, GALLERY_CAP)
-      .map((c) => ({
-        title: c.title,
-        artist: c.artist,
-        image: c.thumbnailUrl,
-        museum: slug,
-      }));
+    const cards = res.cards.filter((c) => c.thumbnailUrl).slice(0, GALLERY_CAP);
+    const pieces: SourcePiece[] = cards.map((c) => ({
+      title: c.title,
+      artist: c.artist,
+      image: c.thumbnailUrl,
+      museum: slug,
+    }));
     if (pieces.length === 0) return null;
+    await withDimensions(
+      adapter,
+      pieces,
+      cards.map((c) => c.museumObjectId)
+    );
     return {
       id: `src:${slug}:${name}`,
       name,
@@ -123,7 +178,12 @@ export async function GET(req: NextRequest) {
   // keeps us off the museum APIs on every visit.
   const museum = await unstable_cache(
     () => buildSourceMuseum(slug),
-    ["source-museum", slug],
+    // The version segment is part of the cache KEY. Without bumping it, a change
+    // to what this route builds stays invisible for up to a week — the entry
+    // already cached keeps being served, so real dimensions would not reach a
+    // museum anyone had already visited. Bump this whenever the shape or content
+    // of a piece changes. v2: pieces carry realW/realH, cap dropped 11 -> 8.
+    ["source-museum", "v2", slug],
     { revalidate: 60 * 60 * 24 * 7 }
   )();
   return NextResponse.json({ museum });

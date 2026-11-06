@@ -43,6 +43,9 @@ export async function POST(req: Request) {
 }
 
 export async function DELETE(req: NextRequest) {
+  const limited = await checkRateLimit(req, "save-gallery-delete", 40, 60_000);
+  if (limited) return limited;
+
   if (!isSupabaseConfigured()) {
     return NextResponse.json({ error: "Supabase is not configured." }, { status: 500 });
   }

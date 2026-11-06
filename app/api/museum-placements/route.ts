@@ -128,6 +128,14 @@ export async function GET(req: NextRequest) {
 // session. Upserts on (user_id, slot_kind, slot_key) so re-assigning a slot
 // swaps the piece rather than erroring.
 export async function POST(req: NextRequest) {
+  // Deliberately generous. Both write paths are discrete clicks — picking a
+  // piece to hang, or tapping a nudge arrow — and each nudge re-POSTs the whole
+  // row undebounced, so repositioning a painting is a burst of small writes.
+  // Ten clicks a second sustained for a minute is not a person, which is the
+  // only thing this needs to exclude.
+  const limited = await checkRateLimit(req, "museum-placements-write", 600, 60_000);
+  if (limited) return limited;
+
   if (!isSupabaseConfigured()) {
     return NextResponse.json({ error: "Not configured." }, { status: 503 });
   }
@@ -185,7 +193,19 @@ export async function POST(req: NextRequest) {
   // Also add the piece to its lazy per-location 2D collection (best-effort; the
   // placement itself already succeeded). Skipped for a move — the piece is
   // already in the collection, and moving it on the wall does not change that.
-  const loc = samePiece ? null : locationFor(row.slot_key);
+  // Second, much tighter bound, because this block is the expensive one: it
+  // calls the museum's own API via adapter.getObject. The samePiece check
+  // already skips it for moves, but a script posting varying externalIds would
+  // otherwise turn one authenticated session into hundreds of outbound requests
+  // per minute from our Vercel IPs — and museums blocking those IPs is not
+  // hypothetical here, it is why MUSEUMS_NEEDING_CACHE exists.
+  //
+  // Placing genuinely new pieces is a deliberate, slow action, so 60/min is far
+  // above real use. Over the limit we skip the sync rather than failing the
+  // request: the placement itself has already succeeded, and this block was
+  // best-effort before this change too.
+  const syncLimited = await checkRateLimit(req, "museum-placements-sync", 60, 60_000);
+  const loc = samePiece || syncLimited ? null : locationFor(row.slot_key);
   if (loc) {
     try {
       const { data: found } = await supabase
@@ -253,6 +273,11 @@ export async function POST(req: NextRequest) {
 
 // DELETE /api/museum-placements?slotKey=...&slotKind=wall — clear a slot.
 export async function DELETE(req: NextRequest) {
+  // Several indexed reads plus two deletes per call, so worth bounding even
+  // though every one of them is scoped to the caller's own rows.
+  const limited = await checkRateLimit(req, "museum-placements-delete", 120, 60_000);
+  if (limited) return limited;
+
   if (!isSupabaseConfigured()) {
     return NextResponse.json({ error: "Not configured." }, { status: 503 });
   }

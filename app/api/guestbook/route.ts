@@ -57,6 +57,9 @@ export async function POST(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
+  const limited = await checkRateLimit(req, "guestbook-delete", 30, 60_000);
+  if (limited) return limited;
+
   if (!isSupabaseConfigured()) {
     return NextResponse.json({ error: "Supabase is not configured." }, { status: 500 });
   }

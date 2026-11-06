@@ -3,6 +3,13 @@
   "version": "0.1.0",
   "private": true,
   "description": "A virtual art gallery you curate from museum collections around the world.",
+  "license": "PolyForm-Noncommercial-1.0.0",
+  "author": "Shawn Goff",
+  "homepage": "https://www.mooseium.com",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ShawnGoff/mooseium.git"
+  },
   "engines": {
     "node": ">=22.0.0"
   },

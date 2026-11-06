@@ -1,138 +1,136 @@
 # Mooseium
 
-Curate your own art gallery from the collections of museums around the world, then
-share a link so anyone can browse it. This repo is the v1 starter: a Next.js app
-with a working per-museum search against The Metropolitan Museum of Art.
+Curate your own art gallery from the open-access collections of seven museums —
+then walk through it in 3D and share the link.
 
-See the design docs (`virtual-gallery-spec.md`, `virtual-gallery-data-model.md`)
-for the full plan. Short version: build the whole product in 2D first, add the
-immersive 3D gallery later, and multi-user after that.
+**Live at [mooseium.com](https://www.mooseium.com)**
 
-## What works right now
+Search the Met, the Art Institute of Chicago, Cleveland, the Rijksmuseum,
+Harvard, the Smithsonian and the V&A; save pieces into named collections;
+publish a collection and it becomes a room in a first-person 3D museum that
+anyone can wander.
 
-- A search page with a museum dropdown and a search box.
-- Live per-museum search via a backend proxy (`/api/search`) across The Met, the
-  Art Institute of Chicago, and the Cleveland Museum of Art — returning
-  open-access works that have images, as a results grid.
-- The museum-adapter foundation (`lib/museums`) that every future museum plugs into.
-- Sign in with Google or an email magic link (Supabase auth).
-- Create named collections and save any search result into a chosen collection.
-- Browse your collections at `/collections` and each one at `/collections/[id]`.
-- The full Supabase schema (`supabase/migrations/`), ready to run.
+## What it does
 
-Sign-in and saving require connecting Supabase (see below). Search works without it.
+**Search and collect.** One search box across seven museums, each behind an
+adapter that normalises its API into a common shape. Only open-access works with
+usable images. Save anything into a collection.
 
-Note: saved pieces currently display via the museums' own image URLs. The
-save-time image-caching pipeline (copying images to our own CDN) is the next
-backend step; the `artworks` table and save flow already have slots for it.
+**A 3D museum.** Published collections become rooms, grouped into wings off a
+central atrium. Walk it with WASD, drag to look, click a painting for its full
+placard, click again to see it full screen. Art hangs at its real size where the
+museum states dimensions, so a large canvas takes a wall to itself.
 
-Not built yet (next steps): the image-caching worker, galleries, placards, and sharing.
+**An in-museum editor.** Owners can hang art directly on wing and atrium walls,
+drag it along the wall, and assign collections to wings — from inside the museum.
 
-## Run it locally
+**The Den.** A private library alongside the galleries: search and read
+public-domain books from Project Gutenberg, keep notes, and organise both into
+folders.
 
-Requires Node 18.18+ (Node 20+ recommended).
+**Source museums.** Each museum also has a prebuilt 3D showcase, themed into
+wings and galleries, so there is something to walk through before you have
+curated anything.
+
+## Running it locally
+
+Requires Node 22 (see `.nvmrc`).
 
 ```bash
 npm install
 npm run dev
 ```
 
-Then open http://localhost:3000 and search (try "sunflowers"). No API key needed —
-the Met, Art Institute, and Cleveland APIs are all key-free.
+Search works immediately with no configuration — the Met, Art Institute,
+Cleveland and Rijksmuseum APIs are all key-free. Sign-in, saving and the 3D
+museum need Supabase.
 
-## Project structure
+### Connecting Supabase
+
+1. Create a project at [supabase.com](https://supabase.com).
+2. In the SQL editor, run every file in `supabase/migrations/` **in filename
+   order**. There is no migration CLI wired up — they are applied by hand, so the
+   folder is the recipe rather than a record of what has run.
+3. Copy `.env.example` to `.env.local` and fill in `NEXT_PUBLIC_SUPABASE_URL`,
+   `NEXT_PUBLIC_SUPABASE_ANON_KEY` and `SUPABASE_SERVICE_ROLE_KEY` from Project
+   Settings → API.
+4. Restart the dev server.
+
+Email magic links work immediately. For Google sign-in, enable it under
+Authentication → Providers with an OAuth client whose redirect URI is
+`https://<project-ref>.supabase.co/auth/v1/callback`, and add
+`http://localhost:3000/**` to the allowed redirect URLs.
+
+### Optional keys
+
+Everything below is optional; each feature stays switched off without its key.
+
+| Variable | Enables |
+| --- | --- |
+| `HARVARD_API_KEY` | Harvard Art Museums ([free key](https://harvardartmuseums.org/collections/api)) |
+| `SMITHSONIAN_API_KEY` | Smithsonian ([free key](https://api.data.gov/signup/)) |
+| `LLM_API_KEY` + `CRON_SECRET` | Daily AI-curated discovery shelves |
+| `UPSTASH_REDIS_REST_URL` + `_TOKEN` | Rate limiting shared across instances |
+| `NEXT_PUBLIC_SENTRY_DSN` | Error reporting |
+
+Without Upstash the rate limiter falls back to per-instance in-memory counting,
+which is fine locally but bypassable across serverless instances in production.
+
+## How it fits together
 
 ```
 app/
-  page.tsx              Search UI (dropdown + search box + results grid)
-  layout.tsx            Root layout (+ header)
-  globals.css           Styling
-  components/
-    Header.tsx          Auth-aware header (signed-in email / sign-in link)
-  login/page.tsx        Sign in with Google or an email magic link
-  auth/
-    callback/route.ts   OAuth / magic-link code exchange
-    signout/route.ts    Ends the session
-  api/
-    museums/route.ts    GET /api/museums  — museum list for the dropdown
-    search/route.ts     GET /api/search   — per-museum search proxy
+  api/            Route handlers — search, save, collections, museum, placements
+  lab/museum/     The 3D museum: layout, rendering, the in-museum editor
+  lab/gallery3d.tsx  Shared 3D primitives (player, framed artwork, textures)
+  den/            The library
+  [handle]/       Public curator profiles and their 3D museum
 lib/
-  museums/
-    types.ts            The MuseumAdapter contract + shared types
-    met.ts, artic.ts, cleveland.ts   The three museum adapters
-    index.ts            Adapter registry — add new museums here
-  supabase/
-    client.ts           Browser Supabase client
-    server.ts           Server Supabase client (cookies)
-middleware.ts           Refreshes the auth session per request
-supabase/
-  migrations/
-    0001_init.sql       Database schema + row-level security + museum seed
-    0002_profiles_trigger.sql   Auto-create a profile row on signup
+  museums/        One adapter per museum behind a shared MuseumAdapter contract
+  supabase/       Browser, server and service-role clients
+supabase/migrations/   Schema, row-level security, and seed data
+scripts/          Maintenance run from a developer machine, not from the server
 ```
 
-## Connecting Supabase (enables sign-in)
+A few decisions worth knowing before reading the code:
 
-1. Create a project at https://supabase.com.
-2. In the SQL editor, run the migrations in order:
-   `0001_init.sql`, `0002_profiles_trigger.sql`, `0003_save_artwork.sql`,
-   `0004_collections.sql`, `0006_popular_artworks.sql`, then
-   `0007_more_museums.sql`. (`0005` is superseded — skip it.)
-3. Copy `.env.example` to `.env.local` and fill in:
-   - `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-     (Project Settings → API).
-   - `SUPABASE_SERVICE_ROLE_KEY` (same page) — used later by the server-side
-     save/image pipeline; not needed just for sign-in.
-4. Restart `npm run dev`. The header will show a "Sign in" link.
+**Everything is enforced in the database.** Row-level security covers every
+table; ownership and public-visibility are DB policies rather than application
+checks. Every `SECURITY DEFINER` function pins its `search_path`.
 
-### Email magic link
+**Museum images go through `/api/img`.** Several museum CDNs send no CORS
+headers, which taints a WebGL texture, and some refuse datacenter IPs outright.
+The proxy validates the host against an allowlist by parsing the URL — not by
+matching the string — and passes through only image responses.
 
-Works out of the box once Supabase is connected — no extra setup. Enter an
-email on `/login` and open the link Supabase sends.
+**Some museums will not serve a server.** The Art Institute answers requests
+from a laptop but refuses them from deployed infrastructure, so those images are
+copied into our own storage bucket by `scripts/cache-artwork-images.mjs`, which
+has to run from a normal connection. This is why that script exists and why it
+is not a cron job.
 
-### Google sign-in
+**Adding a museum** means writing an adapter in `lib/museums/` against the
+`MuseumAdapter` contract (`met.ts` is the clearest example) and registering it in
+`index.ts`. Search, filters, saving and the 3D museum pick it up with no other
+changes.
 
-Google is an OAuth provider you enable in Supabase:
+## Scripts
 
-1. In Google Cloud Console, create an OAuth 2.0 Client ID (type: Web
-   application). Add this authorized redirect URI:
-   `https://<your-project-ref>.supabase.co/auth/v1/callback`.
-2. In the Supabase dashboard → Authentication → Providers → Google, paste the
-   Client ID and Client Secret and enable it.
-3. In Authentication → URL Configuration, add `http://localhost:3000/**` (and
-   later your production URL) to the allowed redirect URLs.
+| Command | |
+| --- | --- |
+| `npm run dev` | Development server |
+| `npm run build` | Production build |
+| `npm run typecheck` | TypeScript, no emit |
+| `npm run smoke` | Hit every important page and API, report what is broken |
 
-The app redirects through `/auth/callback`, which exchanges the code for a
-session. A `profiles` row is created automatically on first sign-in by the
-trigger in `0002_profiles_trigger.sql`.
+## Credits
 
-Saving, galleries, and the image pipeline build on top of this.
+All artwork comes from the participating museums' open-access programmes and
+remains theirs. Mooseium is not affiliated with or endorsed by any of them.
+Books come from [Project Gutenberg](https://www.gutenberg.org) via
+[Gutendex](https://gutendex.com).
 
-## Key-based museums (Harvard, Smithsonian)
+## Licence
 
-These appear in the search dropdown only when their key is set in `.env.local`.
-
-- **Harvard Art Museums** — request a free key at
-  https://harvardartmuseums.org/collections/api and set `HARVARD_API_KEY`.
-  Rate limited to ~2,500 calls/day.
-- **Smithsonian Open Access** — request a free api.data.gov key at
-  https://api.data.gov/signup/ and set `SMITHSONIAN_API_KEY`.
-
-Run `0007_more_museums.sql` (registers them so saves work) and restart the dev
-server after adding keys.
-
-## Rijksmuseum (no key needed)
-
-Rijksmuseum uses its new keyless Search API (`data.rijksmuseum.nl/search/collection`)
-plus EDM resolution for metadata and a directly usable IIIF image
-(`iiif.micr.io/<id>/full/<w>,/0/default.jpg`). It's always available — no key —
-but note it resolves each result individually (like the Met), so search is a bit
-slower than the no-resolve museums. Free-text search maps to the `description`
-field; era chips map full centuries to `creationDate` wildcards (e.g. `16??`).
-It still needs its `museums` row, so run `0007_more_museums.sql`.
-
-## Adding another museum
-
-Write an adapter in `lib/museums/` that implements `MuseumAdapter` (see `met.ts`),
-then register it in `lib/museums/index.ts`. Nothing else in the app changes — the
-dropdown, search, and (later) save flow pick it up automatically.
+[PolyForm Noncommercial 1.0.0](LICENSE) — free to use, modify and share for any
+purpose other than a commercial one.

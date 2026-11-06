@@ -5,7 +5,7 @@
 import { ImageResponse } from "next/og";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/client";
-import { isAllowedMuseumImage } from "@/lib/museum-image";
+import { toDataUrl } from "@/lib/og-image";
 
 export const alt = "A curator on Mooseium";
 export const size = { width: 1200, height: 630 };
@@ -14,28 +14,6 @@ export const revalidate = 3600;
 
 const CINZEL_WOFF =
   "https://cdn.jsdelivr.net/npm/@fontsource/cinzel@5.2.8/files/cinzel-latin-600-normal.woff";
-
-async function toDataUrl(url: string): Promise<string | null> {
-  if (!isAllowedMuseumImage(url)) return null;
-  try {
-    const origin = new URL(url).origin;
-    const r = await fetch(url, {
-      headers: {
-        "User-Agent":
-          "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
-        Accept: "image/avif,image/webp,image/*,*/*;q=0.8",
-        Referer: `${origin}/`,
-      },
-    });
-    if (!r.ok) return null;
-    const ct = r.headers.get("content-type") || "image/jpeg";
-    if (!ct.startsWith("image/")) return null;
-    const buf = Buffer.from(await r.arrayBuffer());
-    return `data:${ct};base64,${buf.toString("base64")}`;
-  } catch {
-    return null;
-  }
-}
 
 type GalRow = {
   placed_artworks: {

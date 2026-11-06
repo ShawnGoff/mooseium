@@ -4,6 +4,7 @@
 
 import Link from "next/link";
 import { useEffect } from "react";
+import * as Sentry from "@sentry/nextjs";
 
 export default function Error({
   error,
@@ -13,7 +14,13 @@ export default function Error({
   reset: () => void;
 }) {
   useEffect(() => {
-    // Surface the error for debugging (a monitoring service can hook in later).
+    // Report to Sentry, not just the console. Sentry's Next.js SDK does NOT
+    // capture errors caught by an App Router error boundary — the boundary
+    // handles them, so nothing reaches the global handler and the error never
+    // leaves the browser. This boundary logged to the console for months while
+    // Sentry was installed and configured, which is why the 3D museum crashes
+    // had to be diagnosed from pasted console output instead of from Sentry.
+    Sentry.captureException(error);
     console.error(error);
   }, [error]);
 

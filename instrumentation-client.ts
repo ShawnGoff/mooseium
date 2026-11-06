@@ -1,5 +1,9 @@
 // Sentry — browser. Only initialises when a DSN is configured, so local dev and
 // any deploy without the env var behave exactly as before.
+//
+// Was sentry.client.config.ts. Renamed because that filename is deprecated and
+// stops working under Turbopack; instrumentation-client.ts is the convention
+// Next picks up from 15.3 on. Same contents, same behaviour.
 
 import * as Sentry from "@sentry/nextjs";
 
@@ -44,3 +48,8 @@ if (dsn) {
     denyUrls: [/\/_vercel\/(insights|speed-insights)\//, /vitals\.vercel-insights\.com/],
   });
 }
+
+// Ties client-side route changes into Sentry's tracing, so a slow or failing
+// navigation is attributed to the route it came from rather than appearing as a
+// bare pageload. Next looks for this export by name in this file.
+export const onRouterTransitionStart = Sentry.captureRouterTransitionStart;

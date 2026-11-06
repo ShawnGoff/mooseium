@@ -1,4 +1,6 @@
-import { withSentryConfig } from "@sentry/nextjs";
+// From "@sentry/nextjs/config", not "@sentry/nextjs": the bare import is
+// deprecated and stops working in v11.
+import { withSentryConfig } from "@sentry/nextjs/config";
 
 // Security response headers. These are safe defaults that don't break the app.
 // The Content-Security-Policy here is the "safe subset": it hardens against
@@ -38,6 +40,11 @@ const nextConfig = {
   // It never affected production (StrictMode's double-invoke is development-only),
   // which is exactly why the live site was fine while localhost was unusable.
   reactStrictMode: false,
+  // Pin the workspace root. There is a stray package-lock.json in the home
+  // directory above this project, so Next inferred the root as ~ and warned
+  // that it might be wrong — it was. Left unpinned, output file tracing walks
+  // the wrong tree when deciding what to bundle into each serverless function.
+  outputFileTracingRoot: import.meta.dirname,
   // Don't advertise the framework (Seobility/security nicety).
   poweredByHeader: false,
   images: {
@@ -51,8 +58,9 @@ const nextConfig = {
     // domains, this allows three.
     //
     // Side effect worth knowing: no next/image also means sharp is unreachable
-    // here, which is why we left its libvips advisory unpatched rather than take
-    // a breaking next 16 upgrade for it.
+    // here, so its libvips advisories were never actually exploitable in this
+    // app. They are patched now anyway — it turned out to be an in-range bump,
+    // not the breaking next 16 upgrade we thought it would cost.
     remotePatterns: [
       { protocol: "https", hostname: "images.metmuseum.org" },
       { protocol: "https", hostname: "www.artic.edu" },

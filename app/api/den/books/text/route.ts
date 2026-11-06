@@ -4,25 +4,16 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { GUTENDEX_HEADERS } from "@/lib/gutendex";
+import { GUTENDEX_HEADERS, isGutenbergUrl, fetchGutenberg } from "@/lib/gutendex";
 
 type GutendexBook = {
   title: string;
   formats: Record<string, string>;
 };
 
-// Defense-in-depth: the text URL from Gutendex must be an https Gutenberg host.
-function isGutenbergUrl(u: string): boolean {
-  try {
-    const url = new URL(u);
-    return (
-      url.protocol === "https:" &&
-      (url.hostname === "gutenberg.org" || url.hostname.endsWith(".gutenberg.org"))
-    );
-  } catch {
-    return false;
-  }
-}
+// isGutenbergUrl keeps the defense-in-depth check on the text URL Gutendex
+// hands back. It now lives in lib/gutendex.ts beside fetchGutenberg, which
+// applies the same test to every redirect hop.
 
 function stripBoilerplate(text: string): string {
   const startRe = /\*\*\*\s*START OF (THE|THIS) PROJECT GUTENBERG.*?\*\*\*/i;
@@ -61,8 +52,9 @@ export async function GET(req: NextRequest) {
   let raw: string | null = null;
   for (const url of direct) {
     try {
-      const r = await fetch(url, { redirect: "follow", next: { revalidate: 86400 } });
-      if (!r.ok) continue;
+      const got = await fetchGutenberg(url);
+      if (!got || !got.res.ok) continue;
+      const r = got.res;
       const type = r.headers.get("content-type") || "";
       const m = /charset=([\w-]+)/i.exec(type);
       const charset = (m?.[1] || "utf-8").toLowerCase();

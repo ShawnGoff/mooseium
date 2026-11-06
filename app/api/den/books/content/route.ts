@@ -5,34 +5,24 @@
 import { NextRequest, NextResponse } from "next/server";
 import sanitizeHtml from "sanitize-html";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { GUTENDEX_HEADERS } from "@/lib/gutendex";
+import { GUTENDEX_HEADERS, isGutenbergUrl, fetchGutenberg } from "@/lib/gutendex";
 
 type GutendexBook = {
   title: string;
   formats: Record<string, string>;
 };
 
-// Defense-in-depth: even the second-hop URL (from Gutendex's response) must be
-// an https Gutenberg host, so a poisoned response can't steer our fetch.
-function isGutenbergUrl(u: string): boolean {
-  try {
-    const url = new URL(u);
-    return (
-      url.protocol === "https:" &&
-      (url.hostname === "gutenberg.org" || url.hostname.endsWith(".gutenberg.org"))
-    );
-  } catch {
-    return false;
-  }
-}
-
+// isGutenbergUrl keeps the defense-in-depth check on the second-hop URL from
+// Gutendex's response, so a poisoned response can't steer our fetch. It now
+// lives in lib/gutendex.ts, where fetchGutenberg applies the same test to each
+// redirect — the hop that used to go unchecked.
 async function tryFetch(url: string): Promise<{ raw: string; finalUrl: string } | null> {
+  const got = await fetchGutenberg(url);
+  if (!got || !got.res.ok) return null;
   try {
-    const r = await fetch(url, { redirect: "follow", next: { revalidate: 86400 } });
-    if (!r.ok) return null;
-    const raw = await r.text();
+    const raw = await got.res.text();
     if (!raw || raw.length < 200) return null;
-    return { raw, finalUrl: r.url || url };
+    return { raw, finalUrl: got.finalUrl };
   } catch {
     return null;
   }

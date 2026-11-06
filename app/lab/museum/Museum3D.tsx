@@ -2759,7 +2759,10 @@ export default function Museum3D({
   // placard is a modal moment anyway, so nothing behind it should compete.
   const chromeHidden = hideUI || selected !== null;
   // The GPU dropped the WebGL context — the museum is frozen and needs a reload.
-  const [glLost, setGlLost] = useState(false);
+  // null when fine, otherwise why the context went away. The two causes need
+  // different advice: lighter mode genuinely helps an exhausted budget and does
+  // nothing at all for a driver reset.
+  const [glLost, setGlLost] = useState<"memory" | "driver" | null>(null);
   const [isTouch] = useState(
     () =>
       typeof window !== "undefined" &&
@@ -3191,35 +3194,53 @@ export default function Museum3D({
             (e) => {
               // Preventing the default lets the browser attempt a restore.
               e.preventDefault();
-              setGlLost(true);
-              // Also to the console: Sentry is easy to miss locally, and these
-              // counts are what distinguish an exhausted budget from a driver
-              // fault. e.statusMessage carries the driver's own reason, if any.
+              const reason =
+                (e as WebGLContextEvent).statusMessage || "(none given)";
+              const textures = gl.info.memory.textures;
+              const geometries = gl.info.memory.geometries;
+              // Resident textures are what separate the two causes. They are
+              // the megabyte-scale objects: an exhausted budget loses the
+              // context with hundreds live, a driver reset or browser reclaim
+              // loses it with almost none. The one production event we have
+              // detail on reported 6.
+              //
+              // Geometry count is deliberately NOT part of this. A perfectly
+              // healthy museum measures 413 geometries and 35 textures —
+              // walls, frames and furniture are hundreds of tiny meshes that
+              // cost almost no memory — so testing geometries would file every
+              // driver reset as an out-of-memory crash. Measured, not guessed;
+              // the first version of this check used 150 geometries and was
+              // wrong for that reason.
+              const exhausted = textures > 200;
+              setGlLost(exhausted ? "memory" : "driver");
               console.warn("[museum] WebGL context lost", {
-                reason: (e as WebGLContextEvent).statusMessage || "(none given)",
-                textures: gl.info.memory.textures,
-                geometries: gl.info.memory.geometries,
+                reason,
+                textures,
+                geometries,
                 drawCalls: gl.info.render.calls,
                 dpr: window.devicePixelRatio,
                 canvas: [canvas.width, canvas.height],
               });
-              // three.js already counts what is resident on the GPU, which is
-              // exactly what we need to know: a loss with hundreds of textures
-              // live means we overran the budget, not that a driver hiccuped.
               Sentry.captureMessage("WebGL context lost in the 3D museum", {
                 level: "error",
                 extra: {
-                  textures: gl.info.memory.textures,
-                  geometries: gl.info.memory.geometries,
+                  // The driver's own words. This was going to the console only,
+                  // so the one field most likely to name the cause was missing
+                  // from every report we could actually read.
+                  reason,
+                  textures,
+                  geometries,
                   drawCalls: gl.info.render.calls,
+                  likelyCause: exhausted ? "memory budget" : "driver or browser reclaim",
                   lite,
                   dpr: typeof window !== "undefined" ? window.devicePixelRatio : null,
+                  canvas: [canvas.width, canvas.height],
                 },
               });
             },
             { passive: false }
           );
-          canvas.addEventListener("webglcontextrestored", () => setGlLost(false));
+          canvas.addEventListener("webglcontextrestored", () => setGlLost(null));
         }}
       >
         <color attach="background" args={["#eceae4"]} />
@@ -3835,25 +3856,32 @@ export default function Museum3D({
           explanation; say so, and offer the lighter renderer as the way out. */}
       {glLost && (
         <div style={{ ...centerStyle, maxWidth: 420, lineHeight: 1.6 }}>
-          <strong>The museum ran out of graphics memory.</strong>
+          <strong>The 3D view stopped.</strong>
           <div style={{ opacity: 0.85, marginTop: 8, fontSize: 13 }}>
-            Your browser dropped the 3D view. Reloading usually fixes it; the lighter
-            renderer uses noticeably less memory if it keeps happening.
+            {glLost === "memory"
+              ? "The museum ran out of graphics memory. Reloading usually fixes it, and the lighter renderer uses noticeably less."
+              : "Your browser handed back the 3D view — usually a graphics driver hiccup rather than anything you did. Reloading almost always brings it back."}
           </div>
           <div style={{ display: "flex", gap: 8, justifyContent: "center", marginTop: 14 }}>
             <button onClick={() => window.location.reload()} style={musicBtnStyle}>
               Reload
             </button>
-            <button
-              onClick={() => {
-                const u = new URL(window.location.href);
-                u.searchParams.set("lite", "1");
-                window.location.href = u.toString();
-              }}
-              style={musicBtnStyle}
-            >
-              Use lighter mode
-            </button>
+            {/* Offered only when it would actually help. Lighter mode reduces
+                what we ask of the GPU, which is no answer to a driver reset,
+                and sending someone to a degraded renderer that cannot fix
+                their problem is worse than not offering it. */}
+            {glLost === "memory" && (
+              <button
+                onClick={() => {
+                  const u = new URL(window.location.href);
+                  u.searchParams.set("lite", "1");
+                  window.location.href = u.toString();
+                }}
+                style={musicBtnStyle}
+              >
+                Use lighter mode
+              </button>
+            )}
           </div>
         </div>
       )}

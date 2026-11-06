@@ -41,6 +41,67 @@ export function isAllowedMuseumImage(url: string): boolean {
   return ALLOWED_DOMAINS.some((d) => host === d || host.endsWith("." + d));
 }
 
+// Fetch an image, checking the allowlist at EVERY hop rather than only the
+// first one.
+//
+// Validating only the URL handed in is not enough once redirects are followed.
+// The allowlist admits whole domain suffixes — any *.harvard.edu, for one — and
+// a single open redirect anywhere on an institution that size turns this into a
+// proxy for arbitrary hosts. The caller checks the first URL; without this, the
+// museum's own CDN chooses the rest.
+//
+// Refusing redirects outright would be simpler and would break real images:
+// nrs.harvard.edu is a persistent-identifier resolver whose job is to redirect,
+// and CDNs hop within their own domains. So we follow them, and apply the same
+// test to each destination. That also means the broad suffixes stay safe: a
+// redirect from harvard.edu to another Harvard host is fine, one to anywhere
+// else fails the check.
+//
+// Returns null when a hop leaves the allowlist, when the chain is too long, or
+// on a network error, so callers fall through to whatever fallback they have.
+export async function fetchAllowedImage(
+  url: string,
+  headers: Record<string, string>,
+  revalidate?: number
+): Promise<Response | null> {
+  if (!isAllowedMuseumImage(url)) return null;
+
+  let current = url;
+  // Four is generous for a resolver plus a CDN hop or two, and bounds a
+  // redirect loop that would otherwise tie up a serverless invocation.
+  for (let hop = 0; hop < 4; hop++) {
+    let res: Response;
+    try {
+      res = await fetch(current, {
+        headers,
+        // The point of the whole function: take the redirect ourselves instead
+        // of letting fetch follow it unchecked.
+        redirect: "manual",
+        ...(revalidate === undefined ? {} : { next: { revalidate } }),
+      });
+    } catch {
+      return null;
+    }
+
+    if (res.status < 300 || res.status > 399) return res;
+
+    const location = res.headers.get("location");
+    if (!location) return res;
+
+    // Resolve against the current URL: redirects are allowed to be relative,
+    // and a relative hop stays on a host we have already cleared.
+    let next: string;
+    try {
+      next = new URL(location, current).toString();
+    } catch {
+      return null;
+    }
+    if (!isAllowedMuseumImage(next)) return null; // the case this exists for
+    current = next;
+  }
+  return null; // too many hops
+}
+
 // Museums whose images CANNOT reach a visitor unless we have cached a copy.
 //
 // Two things have to fail for a piece to render blank. /api/img runs on Vercel,

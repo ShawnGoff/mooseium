@@ -5,7 +5,7 @@
 // through actual image responses. Cached a day.
 
 import { NextRequest, NextResponse } from "next/server";
-import { isAllowedMuseumImage } from "@/lib/museum-image";
+import { isAllowedMuseumImage, fetchAllowedImage } from "@/lib/museum-image";
 import { checkRateLimit } from "@/lib/rate-limit";
 
 export async function GET(req: NextRequest) {
@@ -33,17 +33,19 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Bad url." }, { status: 400 });
   }
 
+  // Redirects are re-checked against the allowlist at every hop — the museum's
+  // CDN does not get to pick the final host. See fetchAllowedImage.
   const load = (u: string, withReferer: boolean) =>
-    fetch(u, {
-      headers: {
+    fetchAllowedImage(
+      u,
+      {
         "User-Agent":
           "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
         Accept: "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
         ...(withReferer ? { Referer: `${origin}/` } : {}),
       },
-      redirect: "follow",
-      next: { revalidate: 86400 },
-    });
+      86400
+    );
 
   // Museum image URLs fail in a few predictable ways, so try progressively
   // looser variants rather than giving up on the first error:
@@ -71,7 +73,8 @@ export async function GET(req: NextRequest) {
   for (const a of attempts) {
     try {
       const res = await load(a.url, a.referer);
-      if (res.ok && (res.headers.get("content-type") || "").startsWith("image/")) {
+      // null means the chain left the allowlist, ran too long, or failed.
+      if (res && res.ok && (res.headers.get("content-type") || "").startsWith("image/")) {
         upstream = res;
         break;
       }

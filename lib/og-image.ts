@@ -16,7 +16,7 @@
 // mislabel a response (or hand back an HTML error page as "image/jpeg", which
 // the Art Institute's datacenter-IP blocking does).
 
-import { isAllowedMuseumImage } from "@/lib/museum-image";
+import { fetchAllowedImage } from "@/lib/museum-image";
 
 // Only what satori can actually decode. Deliberately no avif/webp.
 const OG_ACCEPT = "image/jpeg,image/png,image/gif;q=0.9,*/*;q=0.1";
@@ -58,19 +58,24 @@ function sniffImageType(buf: Buffer): "image/jpeg" | "image/png" | "image/gif" |
  * which is far better than a 500 and no preview at all.
  */
 export async function toDataUrl(url: string): Promise<string | null> {
-  if (!isAllowedMuseumImage(url)) return null;
+  let origin: string;
   try {
-    const origin = new URL(url).origin;
-    const r = await fetch(url, {
-      headers: {
-        // Some museum CDNs refuse requests without a browser-shaped UA.
-        "User-Agent":
-          "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
-        Accept: OG_ACCEPT,
-        Referer: `${origin}/`,
-      },
+    origin = new URL(url).origin;
+  } catch {
+    return null;
+  }
+  try {
+    // fetchAllowedImage checks the allowlist on the way in and again at every
+    // redirect. Plain fetch follows redirects unchecked, which would let a
+    // museum CDN point this at any host it liked.
+    const r = await fetchAllowedImage(url, {
+      // Some museum CDNs refuse requests without a browser-shaped UA.
+      "User-Agent":
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
+      Accept: OG_ACCEPT,
+      Referer: `${origin}/`,
     });
-    if (!r.ok) return null;
+    if (!r || !r.ok) return null;
 
     // Cheap rejection before reading the body, when the CDN declares a length.
     const declared = Number(r.headers.get("content-length") || 0);

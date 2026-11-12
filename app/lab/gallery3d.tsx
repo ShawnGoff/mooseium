@@ -12,8 +12,9 @@ const IS_TOUCH =
   typeof window !== "undefined" &&
   ("ontouchstart" in window || navigator.maxTouchPoints > 0);
 
-export const EYE_Y = 1.8; // player standing eye height
-export const ART_Y = 1.5; // artwork centerline (museum standard ~145–150cm)
+import { EYE_Y, ART_Y } from "./constants";
+import { displaySize, fitImage } from "./art-size";
+export { EYE_Y, ART_Y };
 const FRAME_W = 1.6;
 const FRAME_H = 2;
 
@@ -48,9 +49,6 @@ export type GalleryPiece = {
   imageThumb?: string; // fallback if the main image fails to load
   feature?: boolean;
 };
-
-const MAX_W = 5.5;
-const MAX_H = 2.8;
 
 export const MUSEUM_LABEL: Record<string, string> = {
   met: "The Met",
@@ -353,15 +351,26 @@ export function ProxyArtwork({
   piece,
   position,
   rotation,
+  scale = 1,
   onSelect,
 }: {
   piece: GalleryPiece;
   position: [number, number, number];
   rotation?: [number, number, number];
+  // How much the layout shrank this piece to fit its wall (1 = real size).
+  scale?: number;
   onSelect: (p: Piece) => void;
 }) {
   const [tex, setTex] = useState<THREE.Texture | null>(null);
-  const [dims, setDims] = useState<{ w: number; h: number }>({ w: FRAME_W, h: FRAME_H });
+  // The box the layout kept clear for this piece. Whatever is drawn — the title
+  // card while loading, then the image at its own aspect — is fitted inside it,
+  // so a piece can never be wider than the wall space reserved for it.
+  const box = useMemo(() => {
+    const full = displaySize({ realW: piece.realW, realH: piece.realH });
+    return { w: full.w * scale, h: full.h * scale };
+  }, [piece.realW, piece.realH, scale]);
+  const [aspect, setAspect] = useState<number | null>(null);
+  const dims = fitImage(box, aspect ?? 512 / 640); // the title card is 512×640
   // While loading (or if an image fails), show the title instead of black.
   const fallback = useMemo(() => {
     const c = document.createElement("canvas");
@@ -428,24 +437,9 @@ export function ProxyArtwork({
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
       ctx.drawImage(img, 0, 0, cw, ch);
-      // Frame SHAPE comes from the image aspect (never distort); real dimensions
-      // only set the SCALE (height), so the Night Watch is huge and a diptych
-      // keeps its wide shape.
-      const aspect = cw / ch;
-      let h: number;
-      let w: number;
-      if (piece.realH) {
-        h = Math.min(MAX_H, Math.max(0.35, piece.realH));
-        w = h * aspect;
-        if (w > MAX_W) {
-          w = MAX_W;
-          h = w / aspect;
-        }
-      } else {
-        h = 1.7;
-        w = Math.min(3.2, Math.max(0.7, h * aspect));
-      }
-      setDims({ w, h });
+      // Frame SHAPE comes from the image aspect (never distort); the stated
+      // dimensions set the box it is fitted into (see art-size.ts).
+      setAspect(cw / ch);
       created = prep(new THREE.CanvasTexture(canvas));
       setTex(created);
     };
@@ -470,7 +464,7 @@ export function ProxyArtwork({
       cancelled = true;
       if (created) created.dispose(); // free VRAM when the piece/wing changes
     };
-  }, [piece.image, piece.imageThumb, piece.realH]);
+  }, [piece.image, piece.imageThumb]);
 
   return (
     <group position={position} rotation={rotation}>
@@ -585,89 +579,6 @@ function Nameplate({ title, artist, y }: { title: string; artist?: string; y: nu
       <meshBasicMaterial map={tex} toneMapped={false} />
     </mesh>
   );
-}
-
-// Distribute up to 12 pieces across the back + two side walls of a wing.
-export function placements(
-  n: number
-): { position: [number, number, number]; rotation: [number, number, number] }[] {
-  const per = [0, 0, 0];
-  for (let i = 0; i < n; i++) per[i % 3]++;
-  const idx = [0, 0, 0];
-  const out: { position: [number, number, number]; rotation: [number, number, number] }[] = [];
-  for (let i = 0; i < n; i++) {
-    const w = i % 3;
-    const c = per[w];
-    const j = idx[w]++;
-    const f = c <= 1 ? 0.5 : j / (c - 1);
-    if (w === 0) out.push({ position: [-6 + 12 * f, ART_Y, -5.85], rotation: [0, 0, 0] });
-    else if (w === 1)
-      out.push({ position: [-8.85, ART_Y, -6 + 8 * f], rotation: [0, Math.PI / 2, 0] });
-    else out.push({ position: [8.85, ART_Y, -6 + 8 * f], rotation: [0, -Math.PI / 2, 0] });
-  }
-  return out;
-}
-
-// Lay out a wing's pieces across the back + two side walls, spacing by each
-// piece's real width so nothing overlaps or sits in a corner. Tall paintings
-// are lifted so their bottom clears the floor.
-export function layoutWing(
-  pieces: GalleryPiece[]
-): { position: [number, number, number]; rotation: [number, number, number] }[] {
-  const GAP = 1.3;
-  const BACK_LEN = 13;
-  const SIDE_LEN = 9;
-  const sizeOf = (p: GalleryPiece) =>
-    p.realW && p.realH
-      ? {
-          w: Math.min(MAX_W, Math.max(0.35, p.realW)),
-          h: Math.min(MAX_H, Math.max(0.35, p.realH)),
-        }
-      : { w: 2.2, h: 1.7 };
-
-  const walls = [
-    { len: BACK_LEN, items: [] as number[], used: 0 },
-    { len: SIDE_LEN, items: [] as number[], used: 0 },
-    { len: SIDE_LEN, items: [] as number[], used: 0 },
-  ];
-  pieces.forEach((p, i) => {
-    const w = sizeOf(p).w;
-    let best = 0;
-    let bestScore = Infinity;
-    for (let k = 0; k < 3; k++) {
-      const need = walls[k].used + (walls[k].items.length ? GAP : 0) + w;
-      const score = need / walls[k].len;
-      if (score < bestScore) {
-        bestScore = score;
-        best = k;
-      }
-    }
-    walls[best].used += (walls[best].items.length ? GAP : 0) + w;
-    walls[best].items.push(i);
-  });
-
-  const out: {
-    position: [number, number, number];
-    rotation: [number, number, number];
-  }[] = new Array(pieces.length);
-  for (let k = 0; k < 3; k++) {
-    const items = walls[k].items;
-    const total =
-      items.reduce((s, i) => s + sizeOf(pieces[i]).w, 0) +
-      GAP * Math.max(0, items.length - 1);
-    let cursor = -total / 2;
-    for (const i of items) {
-      const { w, h } = sizeOf(pieces[i]);
-      const c = cursor + w / 2;
-      cursor += w + GAP;
-      const y = Math.max(ART_Y, h / 2 + 0.3);
-      if (k === 0) out[i] = { position: [c, y, -5.85], rotation: [0, 0, 0] };
-      else if (k === 1)
-        out[i] = { position: [-8.85, y, -0.5 + c], rotation: [0, Math.PI / 2, 0] };
-      else out[i] = { position: [8.85, y, -0.5 + c], rotation: [0, -Math.PI / 2, 0] };
-    }
-  }
-  return out;
 }
 
 // A standard rectangular wing room (light Modern look).

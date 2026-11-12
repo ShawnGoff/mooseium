@@ -26,6 +26,29 @@ import {
   type GalleryPiece,
   type Constrain,
 } from "../gallery3d";
+import {
+  A,
+  H,
+  DOORH,
+  EPS,
+  GALLERY_CAP,
+  VEST_HALF,
+  VEST_LEN,
+  buildMuseum,
+  hangRoom,
+  ctrX,
+  ctrZ,
+  inset,
+  type GalleryBuild,
+  type Hint,
+  type LabelSpec,
+  type Layout,
+  type Museum,
+  type Nav,
+  type Room,
+  type Side,
+  type WallAnchor,
+} from "./museum-layout";
 import Tour, { type TourStep } from "@/app/components/Tour";
 import * as Sentry from "@sentry/nextjs";
 import { parseDims } from "@/lib/artwork-dimensions";
@@ -57,105 +80,6 @@ const MUSEUM_TOUR_STEPS: TourStep[] = [
   },
 ];
 
-type Collection = {
-  id: string;
-  name: string;
-  slug: string;
-  count: number;
-  // Source-museum showcases carry their pieces inline (no /api/gallery-pieces).
-  pieces?: GalleryPiece[];
-};
-type Wing = { name: string; collections: Collection[]; isDefault?: boolean };
-type Museum = { name: string; curator: string; handle: string; wings: Wing[] };
-
-// ---- dimensions (metres) ----
-const A = 7; // atrium half-size
-const H = 4; // wall height
-const DOORH = 2.6; // doorway height
-const CORR_HALF = 1.8; // corridor half-width
-const DOOR_HALF = 1.5; // doorway half-width
-const WING_HALF = 5; // wing room half-size
-// Max pieces a gallery displays: 2 on each of the 3 solid walls, plus 2 flanking
-// the entry doorway.
-//
-// It was 11, which never fitted. A gallery room is 9m square and the corner
-// margin leaves 6.8m of usable wall, but 11 put 3 pieces per wall — an 8.2m run
-// on a 6.8m wall. The spacing maths could not save it either: the gap is clamped
-// to a 0.8m floor, so when pieces are already too wide the run grows WIDER
-// rather than tightening, and centring then spills it off both corners. Measured
-// across the four source museums, 35 of 36 galleries overflowed by 1.4m — about
-// 0.7m hanging past each corner.
-//
-// 8 is the largest value where nothing overflows anywhere (verified against the
-// same 36 galleries). Deliberately fixed rather than derived from room size: the
-// floor plan is load-bearing for corridors, doorways and wall anchors, and is
-// not worth disturbing for this.
-const GALLERY_CAP = 8;
-const COLL_HALF = 4.5; // gallery room half-size
-const ATR_WING_CORR = 10; // atrium→wing corridor length (spaces the wings out)
-const WING_COLL_CORR = 3; // wing→gallery corridor length
-const VEST_HALF = 6; // entrance vestibule / Den half-width
-const VEST_LEN = 14; // entrance vestibule / Den depth
-const ENTR_HALF = 2; // entrance doorway half-width
-const SIGN_MARGIN = 0.4; // breathing room a sign leaves at each end of its band
-const EPS = 0.03; // wall inset so shared walls don't z-fight
-const INSET = 0.4; // walkable inset from walls
-const BRIDGE = 0.75; // half-depth of a doorway's walkable bridge
-
-type Side = "N" | "S" | "E" | "W"; // N=-z, S=+z, E=+x, W=-x
-type AABB = { x0: number; x1: number; z0: number; z1: number };
-type Room = { rect: AABB; gaps: { side: Side; lo: number; hi: number }[] };
-// maxW is the width of the surface the sign is actually painted on. That is NOT
-// the room's wall: a sign sits over a doorway, and the corridor beyond protrudes
-// as a raised band roughly the corridor's own width. A long collection name is
-// wider than that band and overhangs it on both sides, which is what made
-// "Henri de Toulouse-Lautrec" look like it was falling off the wall.
-type LabelSpec = {
-  text: string;
-  pos: [number, number, number];
-  rot: [number, number, number];
-  size: number;
-  maxW: number;
-};
-// A gallery room: its slug, the room rectangle, which wall is the doorway
-// (entrySide) and which is the far/feature wall, plus where the single preview
-// piece hangs when the full collection isn't loaded.
-type GalleryBuild = {
-  slug: string;
-  name: string;
-  room: AABB;
-  entrySide: Side;
-  previewPos: [number, number, number];
-  previewRot: [number, number, number];
-  // Source-museum showcases pass pieces inline instead of fetching by slug.
-  pieces?: GalleryPiece[];
-};
-type Nav = { wing: string; name: string; spawn: [number, number, number]; yaw: number };
-type Hint = { pos: [number, number, number]; rot: [number, number, number] };
-// A stable spot a curator can hang a free-standing painting (in-museum editor):
-// atrium walls + every wing's walls. Generated from room geometry so the DB only
-// ever stores an opaque slotKey, never coordinates.
-type WallAnchor = {
-  slotKey: string;
-  position: [number, number, number];
-  rotation: [number, number, number];
-  // The coordinate that slides along this wall (0 = x, 2 = z) and its clamp
-  // range, so nudging can't push a piece off the wall into open room.
-  axis: 0 | 2;
-  lo: number;
-  hi: number;
-};
-type Layout = {
-  rooms: Room[];
-  walk: AABB[];
-  labels: LabelSpec[];
-  galleries: GalleryBuild[];
-  lights: [number, number][];
-  nav: Nav[];
-  hints: Hint[];
-  wallAnchors: WallAnchor[];
-};
-
 // Roman inscriptional serif for the signage — the lettering carved over real
 // museum entrances. troika loads this .woff at runtime (falls back gracefully).
 const MUSEUM_FONT =
@@ -174,76 +98,6 @@ const MUSIC_TRACKS: { name: string; src: string }[] = [
   { name: "Lo-Fi 1", src: "/Lofi%201.mp3" },
   { name: "Lo-Fi 2", src: "/Lofi%202.mp3" },
 ];
-
-const rect = (x0: number, x1: number, z0: number, z1: number): AABB => ({ x0, x1, z0, z1 });
-const inset = (a: AABB, d: number): AABB => rect(a.x0 + d, a.x1 - d, a.z0 + d, a.z1 - d);
-const ctrX = (a: AABB) => (a.x0 + a.x1) / 2;
-const ctrZ = (a: AABB) => (a.z0 + a.z1) / 2;
-const opp = (s: Side): Side => (s === "N" ? "S" : s === "S" ? "N" : s === "W" ? "E" : "W");
-
-function neighbor(from: AABB, side: Side, len: number, half: number): AABB {
-  const mx = ctrX(from);
-  const mz = ctrZ(from);
-  if (side === "N") return rect(mx - half, mx + half, from.z0 - len, from.z0);
-  if (side === "S") return rect(mx - half, mx + half, from.z1, from.z1 + len);
-  if (side === "W") return rect(from.x0 - len, from.x0, mz - half, mz + half);
-  return rect(from.x1, from.x1 + len, mz - half, mz + half); // E
-}
-
-// Cut a doorway between two adjacent rooms and add a walkable bridge across it.
-function open(a: Room, b: Room, side: Side, half: number, walk: AABB[]) {
-  if (side === "N" || side === "S") {
-    const c = (Math.max(a.rect.x0, b.rect.x0) + Math.min(a.rect.x1, b.rect.x1)) / 2;
-    const boundary = side === "N" ? a.rect.z0 : a.rect.z1;
-    a.gaps.push({ side, lo: c - half, hi: c + half });
-    b.gaps.push({ side: opp(side), lo: c - half, hi: c + half });
-    walk.push(rect(c - (half - 0.2), c + (half - 0.2), boundary - BRIDGE, boundary + BRIDGE));
-  } else {
-    const c = (Math.max(a.rect.z0, b.rect.z0) + Math.min(a.rect.z1, b.rect.z1)) / 2;
-    const boundary = side === "W" ? a.rect.x0 : a.rect.x1;
-    a.gaps.push({ side, lo: c - half, hi: c + half });
-    b.gaps.push({ side: opp(side), lo: c - half, hi: c + half });
-    walk.push(rect(boundary - BRIDGE, boundary + BRIDGE, c - (half - 0.2), c + (half - 0.2)));
-  }
-}
-
-// A corridor poking out of `from`, opening into a room. Returns the room.
-function connect(
-  rooms: Room[],
-  walk: AABB[],
-  from: Room,
-  side: Side,
-  corrLen: number,
-  roomHalf: number
-): Room {
-  const corr: Room = { rect: neighbor(from.rect, side, corrLen, CORR_HALF), gaps: [] };
-  const room: Room = { rect: neighbor(corr.rect, side, 2 * roomHalf, roomHalf), gaps: [] };
-  rooms.push(corr, room);
-  open(from, corr, side, DOOR_HALF, walk);
-  open(corr, room, side, DOOR_HALF, walk);
-  walk.push(inset(corr.rect, 0.4));
-  walk.push(inset(room.rect, INSET));
-  return room;
-}
-
-// Which outward walls of a wing hold galleries (never the wall facing the atrium).
-function collectionSides(wingSide: Side): Side[] {
-  if (wingSide === "W") return ["W", "N", "S"];
-  if (wingSide === "N") return ["N", "W", "E"];
-  return ["E", "N", "S"]; // E
-}
-
-const faceRot = (side: Side): [number, number, number] =>
-  side === "N"
-    ? [0, 0, 0]
-    : side === "S"
-    ? [0, Math.PI, 0]
-    : side === "W"
-    ? [0, Math.PI / 2, 0]
-    : [0, -Math.PI / 2, 0];
-
-const outwardYaw = (side: Side) =>
-  side === "N" ? 0 : side === "S" ? Math.PI : side === "W" ? Math.PI / 2 : -Math.PI / 2;
 
 // A free-standing painting the curator hung directly on a wall (in-museum
 // editor), outside the gallery collections. Denormalized so the 3D can hang it.
@@ -267,11 +121,6 @@ type WallPlacement = {
   pos?: [number, number, number] | null;
   piece: GalleryPiece;
 };
-
-// Two flanking painting spots per wall (they clear the centred doorway). Anchor
-// positions are computed from room geometry in buildLayout and carried on the
-// layout; the DB only ever stores the opaque slotKey.
-const WALL_ART_OFFSETS = [-3.2, 3.2];
 
 // A clickable "+" marker at an empty wall anchor. Owner-only (only rendered
 // while editing). Clicking opens the art picker for that slot.
@@ -659,312 +508,6 @@ function ArtPicker({
   );
 }
 
-function buildMuseum(m: Museum, editing = false): Layout {
-  const rooms: Room[] = [];
-  const walk: AABB[] = [];
-  const labels: LabelSpec[] = [];
-  const galleries: GalleryBuild[] = [];
-  const lights: [number, number][] = [[0, 0]];
-  const nav: Nav[] = [];
-
-  const atrium: Room = { rect: rect(-A, A, -A, A), gaps: [] };
-  rooms.push(atrium);
-  walk.push(inset(atrium.rect, INSET));
-
-  // entrance vestibule (south)
-  const vest: Room = { rect: neighbor(atrium.rect, "S", VEST_LEN, VEST_HALF), gaps: [] };
-  rooms.push(vest);
-  open(atrium, vest, "S", ENTR_HALF, walk);
-  walk.push(inset(vest.rect, INSET));
-
-  // museum name above the entrance, facing the arriving visitor
-  labels.push({
-    text: m.name.toUpperCase(),
-    pos: [0, DOORH + 0.5, A + 0.06],
-    rot: [0, 0, 0],
-    size: 0.4,
-    maxW: ENTR_HALF * 2 - SIGN_MARGIN, // the entrance opening it sits over
-  });
-
-  // Placement: the CENTRE door fills first, so the first wing is straight ahead
-  // as you walk in; left and right open up as more wings are added. The default
-  // "unfiled" wing takes the centre when it exists; otherwise the first wing the
-  // curator created does. (A 4th+ wing spills into the Directory.)
-  const defaultWing = m.wings.find((w) => w.isDefault) ?? null;
-  const namedWings = m.wings.filter((w) => !w.isDefault);
-  const ordered = defaultWing ? [defaultWing, ...namedWings] : namedWings;
-  // In edit mode the whole museum is open: pad to three walkable wings so the
-  // owner can walk in and place art (or, later, create galleries) on any wing
-  // wall. Visitors only ever get the wings that actually have content.
-  if (editing) {
-    while (ordered.length < 3) ordered.push({ name: "", collections: [] });
-  }
-  const CENTER_FIRST: Side[] = ["N", "W", "E"];
-  const placements: { wing: Wing; side: Side }[] = ordered
-    .slice(0, 3)
-    .map((wing, i) => ({ wing, side: CENTER_FIRST[i] }));
-
-  // A placard on each atrium wall that isn't a wing yet, guiding the curator to
-  // open it by creating another wing.
-  const hints: Hint[] = [];
-  const usedSides = new Set<Side>(placements.map((p) => p.side));
-  (["W", "N", "E"] as Side[]).forEach((side) => {
-    if (usedSides.has(side)) return;
-    const y = 2.35;
-    if (side === "W") hints.push({ pos: [-A + 0.06, y, 0], rot: [0, Math.PI / 2, 0] });
-    else if (side === "N") hints.push({ pos: [0, y, -A + 0.06], rot: [0, 0, 0] });
-    else hints.push({ pos: [A - 0.06, y, 0], rot: [0, -Math.PI / 2, 0] });
-  });
-
-  // Editor wall anchors: two flanking spots on each wall of the atrium and of
-  // every wing. Keyed by a stable prefix so placements survive across sessions.
-  const wallAnchors: WallAnchor[] = [];
-  const addWallAnchors = (prefix: string, rect: AABB, s: Side) => {
-    const cx = ctrX(rect);
-    const cz = ctrZ(rect);
-    const horiz = s === "N" || s === "S"; // slides along x on N/S walls, z on E/W
-    const axis: 0 | 2 = horiz ? 0 : 2;
-    const M = 1.1; // keep art off the corners
-    const lo = horiz ? rect.x0 + M : rect.z0 + M;
-    const hi = horiz ? rect.x1 - M : rect.z1 - M;
-    WALL_ART_OFFSETS.forEach((off, i) => {
-      const position: [number, number, number] =
-        s === "N"
-          ? [cx + off, ART_Y, rect.z0 + 0.12]
-          : s === "S"
-          ? [cx + off, ART_Y, rect.z1 - 0.12]
-          : s === "W"
-          ? [rect.x0 + 0.12, ART_Y, cz + off]
-          : [rect.x1 - 0.12, ART_Y, cz + off];
-      wallAnchors.push({ slotKey: `${prefix}:${s}:${i}`, position, rotation: faceRot(s), axis, lo, hi });
-    });
-  };
-  (["N", "S", "E", "W"] as Side[]).forEach((s) => addWallAnchors("atrium", atrium.rect, s));
-
-  placements.forEach(({ wing, side }) => {
-    const wingRoom = connect(rooms, walk, atrium, side, ATR_WING_CORR, WING_HALF);
-    lights.push([ctrX(wingRoom.rect), ctrZ(wingRoom.rect)]);
-
-    // Wing walls get anchors too, keyed by the wing's ATRIUM SIDE (stable for
-    // empty/placeholder wings and collision-free, unlike a name slug).
-    (["N", "S", "E", "W"] as Side[]).forEach((s) =>
-      addWallAnchors(`wing:${side}`, wingRoom.rect, s)
-    );
-
-    // A NAMED wing gets its name over its atrium doorway; an unnamed/placeholder
-    // (compass-only) wing stays unlabeled — no "West Wing" plastered over a room.
-    // Offset past the wall thickness (0.3) + the abutting corridor wall that
-    // pokes into this room at the doorway, so the sign floats clear in the room
-    // rather than getting buried inside that protruding wall.
-    const LO = 0.45;
-    const wl =
-      side === "W"
-        ? { pos: [-A + LO, DOORH + 0.4, 0] as [number, number, number], rot: [0, Math.PI / 2, 0] as [number, number, number] }
-        : side === "N"
-        ? { pos: [0, DOORH + 0.4, -A + LO] as [number, number, number], rot: [0, 0, 0] as [number, number, number] }
-        : { pos: [A - LO, DOORH + 0.4, 0] as [number, number, number], rot: [0, -Math.PI / 2, 0] as [number, number, number] };
-    if (wing.name)
-      labels.push({
-        text: wing.name.toUpperCase(),
-        pos: wl.pos,
-        rot: wl.rot,
-        size: 0.34,
-        maxW: CORR_HALF * 2 - SIGN_MARGIN, // the atrium-to-wing corridor mouth
-      });
-
-    const cSides = collectionSides(side);
-    wing.collections.forEach((coll, j) => {
-      if (j >= 3) {
-        // overflow: teleport to the wing itself
-        nav.push({
-          wing: wing.name,
-          name: coll.name,
-          spawn: [ctrX(wingRoom.rect), EYE_Y, ctrZ(wingRoom.rect)],
-          yaw: outwardYaw(side),
-        });
-        return;
-      }
-      const cs = cSides[j];
-      const room = connect(rooms, walk, wingRoom, cs, WING_COLL_CORR, COLL_HALF);
-      lights.push([ctrX(room.rect), ctrZ(room.rect)]);
-      const r = room.rect;
-
-      // gallery name on the wing wall, over the doorway, facing into the wing
-      const wr = wingRoom.rect;
-      // Same 0.45 clearance as wing labels: past this wall's thickness and the
-      // gallery corridor wall that protrudes into the wing at the doorway.
-      const GLO = 0.45;
-      // The wing-to-gallery corridor mouth is the band this sign is painted on.
-      const gW = CORR_HALF * 2 - SIGN_MARGIN;
-      const gl: LabelSpec =
-        cs === "N"
-          ? { text: coll.name, pos: [ctrX(wr), DOORH + 0.3, wr.z0 + GLO], rot: [0, 0, 0], size: 0.28, maxW: gW }
-          : cs === "S"
-          ? { text: coll.name, pos: [ctrX(wr), DOORH + 0.3, wr.z1 - GLO], rot: [0, Math.PI, 0], size: 0.28, maxW: gW }
-          : cs === "W"
-          ? { text: coll.name, pos: [wr.x0 + GLO, DOORH + 0.3, ctrZ(wr)], rot: [0, Math.PI / 2, 0], size: 0.28, maxW: gW }
-          : { text: coll.name, pos: [wr.x1 - GLO, DOORH + 0.3, ctrZ(wr)], rot: [0, -Math.PI / 2, 0], size: 0.28, maxW: gW };
-      labels.push(gl);
-
-      // preview artwork on the gallery's far wall (shown until the full
-      // collection streams in as you approach)
-      const previewPos: [number, number, number] =
-        cs === "N"
-          ? [ctrX(r), ART_Y, r.z0 + 0.12]
-          : cs === "S"
-          ? [ctrX(r), ART_Y, r.z1 - 0.12]
-          : cs === "W"
-          ? [r.x0 + 0.12, ART_Y, ctrZ(r)]
-          : [r.x1 - 0.12, ART_Y, ctrZ(r)];
-      galleries.push({
-        slug: coll.slug,
-        name: coll.name,
-        room: r,
-        entrySide: opp(cs),
-        previewPos,
-        previewRot: faceRot(cs),
-        pieces: coll.pieces,
-      });
-      // No free-placement anchors inside galleries: a gallery holds only its
-      // own collection (up to GALLERY_CAP pieces), so its 3D room and 2D page
-      // always match. Curate it with the "Add" button in the edit panel.
-
-      // teleport target: just inside the doorway, facing the far wall
-      const spawn: [number, number, number] =
-        cs === "N"
-          ? [ctrX(r), EYE_Y, r.z1 - 1.8]
-          : cs === "S"
-          ? [ctrX(r), EYE_Y, r.z0 + 1.8]
-          : cs === "W"
-          ? [r.x1 - 1.8, EYE_Y, ctrZ(r)]
-          : [r.x0 + 1.8, EYE_Y, ctrZ(r)];
-      nav.push({ wing: wing.name, name: coll.name, spawn, yaw: outwardYaw(cs) });
-    });
-  });
-
-  return { rooms, walk, labels, galleries, lights, nav, hints, wallAnchors };
-}
-
-// Distribute a collection's pieces across the three non-doorway walls of a
-// gallery room, spacing by each piece's real width, centred per wall.
-function hangRoom(
-  room: AABB,
-  entrySide: Side,
-  pieces: GalleryPiece[]
-): { position: [number, number, number]; rotation: [number, number, number] }[] {
-  const M = 1.1; // corner margin
-  // Reserve at least as much width as ProxyArtwork will actually RENDER, or wide
-  // pieces (screens, handscrolls) overrun their slot and overlap a neighbour.
-  // The renderer caps width at MAX_W (5.5) and, when a piece has no real
-  // dimensions, at ~3.2 — so mirror both caps here instead of the old 4.8 / 2.2.
-  const REN_MAX_W = 5.5;
-  const sizeOf = (p: GalleryPiece) =>
-    p.realW && p.realH
-      ? { w: Math.min(REN_MAX_W, Math.max(1.2, p.realW)), h: Math.min(2.8, Math.max(0.35, p.realH)) }
-      : // No real dimensions: reserve a MODERATE width. (Reserving the renderer's
-        // 3.2 worst case made two such pieces overflow a short wall and get shoved
-        // into the corners. Most no-dimension pieces render ~1.3–2.2 wide.)
-        { w: 2.2, h: 1.6 };
-  const out: { position: [number, number, number]; rotation: [number, number, number] }[] =
-    new Array(pieces.length);
-
-  // First GALLERY_CAP-2 pieces auto-arrange across the 3 solid walls; the last
-  // up-to-2 hang on the ENTRY wall, flanking the doorway (where the old
-  // free-placement slots were).
-  const mainCount = Math.min(pieces.length, GALLERY_CAP - 2);
-
-  const sides = (["N", "S", "W", "E"] as Side[]).filter((s) => s !== entrySide);
-  const bins = sides.map((side) => {
-    const horiz = side === "N" || side === "S";
-    const a = horiz ? room.x0 + M : room.z0 + M;
-    const b = horiz ? room.x1 - M : room.z1 - M;
-    const place = (c: number, y: number) => {
-      const position: [number, number, number] =
-        side === "N"
-          ? [c, y, room.z0 + 0.12]
-          : side === "S"
-          ? [c, y, room.z1 - 0.12]
-          : side === "W"
-          ? [room.x0 + 0.12, y, c]
-          : [room.x1 - 0.12, y, c];
-      return { position, rotation: faceRot(side) };
-    };
-    return { a, b, len: b - a, place, items: [] as number[], used: 0 };
-  });
-  const GAP = 1.2; // nominal, only for balancing pieces across the walls
-  for (let i = 0; i < mainCount; i++) {
-    const w = sizeOf(pieces[i]).w;
-    let best = 0;
-    let bestScore = Infinity;
-    bins.forEach((bin, k) => {
-      const need = bin.used + (bin.items.length ? GAP : 0) + w;
-      const score = need / bin.len;
-      if (score < bestScore) {
-        bestScore = score;
-        best = k;
-      }
-    });
-    bins[best].used += (bins[best].items.length ? GAP : 0) + w;
-    bins[best].items.push(i);
-  }
-  bins.forEach((bin) => {
-    const n = bin.items.length;
-    const widths = bin.items.map((i) => sizeOf(pieces[i]).w);
-    const sumW = widths.reduce((s, w) => s + w, 0);
-    // Even spacing, bounded at both ends: pieces must never touch, and must not
-    // drift so far apart that a wall of small works reads as two stamps in a
-    // field. Letting the gap grow to fill the wall was tried and looked worse —
-    // Cleveland's landscapes are genuinely 0.25-0.5m, and spreading them corner
-    // to corner made the room look abandoned. The bare wall that prompted this
-    // came from every piece rendering at the same 1.7m fallback height, which
-    // real dimensions fix at the source.
-    const gap = n > 1 ? Math.max(0.8, Math.min(2.4, (bin.len - sumW) / (n - 1))) : 0;
-    let cursor = (bin.a + bin.b) / 2 - (sumW + gap * (n - 1)) / 2;
-    bin.items.forEach((i, k) => {
-      const h = sizeOf(pieces[i]).h;
-      out[i] = bin.place(cursor + widths[k] / 2, Math.max(ART_Y, h / 2 + 0.35));
-      cursor += widths[k] + gap;
-    });
-  });
-
-  // Overflow: the last up-to-2 pieces flank the doorway on the entry wall.
-  // Width-aware: push each piece far enough that its inner edge clears the
-  // doorway and its outer edge stays off the corner, so two wide pieces don't
-  // collide over the entrance.
-  const horiz = entrySide === "N" || entrySide === "S";
-  const cx = (room.x0 + room.x1) / 2;
-  const cz = (room.z0 + room.z1) / 2;
-  const wallHalf = (horiz ? room.x1 - room.x0 : room.z1 - room.z0) / 2;
-  // Two slots only — one each side of the doorway. Anything beyond that has
-  // nowhere to go, and silently stacking it produced two paintings sharing a
-  // point: z-fighting rendered them as an interleaved checkerboard of both
-  // images. `sign` only ever distinguished idx 0, so every surplus piece landed
-  // on the same spot. Callers cap at GALLERY_CAP; this guard makes the limit
-  // structural rather than a convention a caller can forget — which is exactly
-  // how the source museums slipped past it.
-  const entrySlots = Math.min(pieces.length - mainCount, 2);
-  for (let i = mainCount; i < mainCount + entrySlots; i++) {
-    const idx = i - mainCount;
-    const sign = idx === 0 ? -1 : 1;
-    const w = sizeOf(pieces[i]).w;
-    // Ideal: inner edge past the doorway (+0.4 breathing room). Clamp so the
-    // outer edge stays inside the wall (off the corner).
-    const ideal = DOOR_HALF + 0.4 + w / 2;
-    const maxC = Math.max(0, wallHalf - M - w / 2);
-    const c = sign * Math.min(ideal, maxC);
-    const position: [number, number, number] =
-      entrySide === "N"
-        ? [cx + c, ART_Y, room.z0 + 0.12]
-        : entrySide === "S"
-        ? [cx + c, ART_Y, room.z1 - 0.12]
-        : entrySide === "W"
-        ? [room.x0 + 0.12, ART_Y, cz + c]
-        : [room.x1 - 0.12, ART_Y, cz + c];
-    out[i] = { position, rotation: faceRot(entrySide) };
-  }
-  return out;
-}
-
 // Full-collection loader for one gallery. Fetches (and caches) the pieces and
 // hangs them; ProxyArtwork disposes its textures on unmount, freeing VRAM.
 const pieceCache = new Map<string, GalleryPiece[]>();
@@ -1025,6 +568,7 @@ function GalleryFull({
             piece={p}
             position={spots[i].position}
             rotation={spots[i].rotation}
+            scale={spots[i].scale}
             onSelect={onSelect}
           />
         ) : null

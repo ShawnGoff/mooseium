@@ -1,7 +1,7 @@
 name: CI
 
 # Two safety nets:
-#   • type-check every push and PR (the gate that was manual until now)
+#   • type-check and unit-test every push and PR (the gate that was manual until now)
 #   • smoke-test the LIVE site daily and on-demand (read-only; never writes data)
 #
 # Lint is intentionally omitted: ESLint isn't configured in this repo and
@@ -17,7 +17,7 @@ on:
 
 jobs:
   typecheck:
-    name: Type-check
+    name: Type-check and test
     if: github.event_name == 'push' || github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
@@ -28,6 +28,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run typecheck
+      - run: npm test
 
   smoke:
     name: Smoke test (production)

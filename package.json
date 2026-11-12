@@ -19,6 +19,7 @@
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
+    "test": "vitest run",
     "smoke": "node scripts/smoke.mjs"
   },
   "dependencies": {
@@ -42,7 +43,8 @@
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@types/three": "^0.170.0",
-    "typescript": "^5.7.0"
+    "typescript": "^5.7.0",
+    "vitest": "^5.1.0"
   },
   "overrides": {
     "postcss": "^8.5.10"
